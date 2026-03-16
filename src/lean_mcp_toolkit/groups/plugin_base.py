@@ -13,12 +13,70 @@ ToolHandler = Callable[[JsonDict], JsonDict]
 
 
 @dataclass(slots=True, frozen=True)
+class ToolParamSpec:
+    name: str
+    type_hint: str
+    description: str
+    required: bool = False
+    default_value: str | None = None
+
+    def to_doc_line(self) -> str:
+        required_text = "required" if self.required else "optional"
+        line = (
+            f"- `{self.name}` (`{self.type_hint}`, {required_text}): "
+            f"{self.description.strip()}"
+        )
+        if self.default_value is not None:
+            line += f" Default: `{self.default_value}`."
+        return line
+
+    def to_dict(self) -> JsonDict:
+        return {
+            "name": self.name,
+            "type": self.type_hint,
+            "description": self.description,
+            "required": self.required,
+            "default": self.default_value,
+        }
+
+
+@dataclass(slots=True, frozen=True)
+class ToolReturnSpec:
+    field_path: str
+    type_hint: str
+    description: str
+    children: tuple["ToolReturnSpec", ...] = tuple()
+
+    def to_doc_lines(self, *, level: int = 0) -> list[str]:
+        indent = "  " * max(0, level)
+        lines = [
+            (
+                f"{indent}- `{self.field_path}` (`{self.type_hint}`): "
+                f"{self.description.strip()}"
+            )
+        ]
+        for child in self.children:
+            lines.extend(child.to_doc_lines(level=level + 1))
+        return lines
+
+    def to_dict(self) -> JsonDict:
+        return {
+            "field_path": self.field_path,
+            "type": self.type_hint,
+            "description": self.description,
+            "children": [item.to_dict() for item in self.children],
+        }
+
+
+@dataclass(slots=True, frozen=True)
 class GroupToolSpec:
     group_name: str
     canonical_name: str
     raw_name: str
     api_path: str
     description: str
+    params: tuple[ToolParamSpec, ...] = tuple()
+    returns: tuple[ToolReturnSpec, ...] = tuple()
 
     def match_tokens(self) -> set[str]:
         tokens = {
@@ -28,6 +86,61 @@ class GroupToolSpec:
             self.api_path.strip().lstrip("/"),
         }
         return {token for token in tokens if token}
+
+    def render_mcp_description(self) -> str:
+        return self._render_description(
+            include_endpoint=False,
+            include_params=False,
+            include_returns=True,
+        )
+
+    def render_api_description(self) -> str:
+        return self._render_description(
+            include_endpoint=True,
+            include_params=False,
+            include_returns=True,
+        )
+
+    def to_dict(self, *, aliases: tuple[str, ...] = tuple()) -> JsonDict:
+        return {
+            "group_name": self.group_name,
+            "canonical_name": self.canonical_name,
+            "raw_name": self.raw_name,
+            "aliases": list(aliases),
+            "api_path": self.api_path,
+            "description": self.description,
+            "params": [item.to_dict() for item in self.params],
+            "returns": [item.to_dict() for item in self.returns],
+            "mcp_description": self.render_mcp_description(),
+            "api_description": self.render_api_description(),
+        }
+
+    def _render_description(
+        self,
+        *,
+        include_endpoint: bool,
+        include_params: bool,
+        include_returns: bool,
+    ) -> str:
+        parts: list[str] = [self.description.strip()]
+        if include_endpoint:
+            parts.extend(
+                [
+                    "",
+                    f"Canonical tool: `{self.canonical_name}`",
+                    f"API path: `{self.api_path}`",
+                ]
+            )
+        if include_params and self.params:
+            parts.append("")
+            parts.append("Parameters:")
+            parts.extend(param.to_doc_line() for param in self.params)
+        if include_returns and self.returns:
+            parts.append("")
+            parts.append("Returns:")
+            for ret in self.returns:
+                parts.extend(ret.to_doc_lines())
+        return "\n".join(parts).strip()
 
 
 class GroupPlugin(Protocol):
@@ -128,6 +241,8 @@ def _aliases_for_mode(*, spec: GroupToolSpec, naming_mode: str) -> tuple[str, ..
 
 __all__ = [
     "ToolHandler",
+    "ToolParamSpec",
+    "ToolReturnSpec",
     "GroupToolSpec",
     "GroupPlugin",
     "resolve_active_group_names",

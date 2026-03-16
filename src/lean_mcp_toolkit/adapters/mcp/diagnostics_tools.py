@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 from ...contracts.base import JsonDict
 from ...core.services import DiagnosticsService
+from ...groups.diagnostics.plugin import DiagnosticsGroupPlugin
 from ..http import (
     handle_diagnostics_build,
     handle_diagnostics_lint,
@@ -23,20 +24,18 @@ class MCPToolSpec:
     description: str
 
 
-DIAGNOSTICS_TOOL_SPECS: tuple[MCPToolSpec, ...] = (
-    MCPToolSpec(
-        name="diagnostics.build",
-        description="Run multi-file Lean build diagnostics with structured output.",
-    ),
-    MCPToolSpec(
-        name="diagnostics.lint",
-        description="Run configured lint checks and return all check results.",
-    ),
-    MCPToolSpec(
-        name="diagnostics.lint.no_sorry",
-        description="Run sorry-only lint check and return all sorry diagnostics.",
-    ),
-)
+def _build_tool_specs() -> tuple[MCPToolSpec, ...]:
+    plugin = DiagnosticsGroupPlugin()
+    return tuple(
+        MCPToolSpec(
+            name=item.canonical_name,
+            description=item.render_mcp_description(),
+        )
+        for item in plugin.tool_specs()
+    )
+
+
+DIAGNOSTICS_TOOL_SPECS: tuple[MCPToolSpec, ...] = _build_tool_specs()
 
 
 

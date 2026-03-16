@@ -9,6 +9,7 @@ from typing import Any
 from ..config import ToolkitConfig, load_toolkit_config
 from ..groups import GroupPlugin, ToolHandler, builtin_group_plugins
 from ..groups.diagnostics import DiagnosticsServiceImpl
+from ..groups.plugin_base import GroupToolSpec
 from ..groups.plugin_base import resolve_active_group_names, resolve_aliases_by_canonical
 
 
@@ -28,6 +29,9 @@ class ToolkitServer:
     _canonical_handlers: dict[str, ToolHandler] = field(default_factory=dict, repr=False)
     _tool_alias_handlers: dict[str, ToolHandler] = field(default_factory=dict, repr=False)
     _api_route_handlers: dict[str, ToolHandler] = field(default_factory=dict, repr=False)
+    _tool_specs_by_canonical: dict[str, GroupToolSpec] = field(default_factory=dict, repr=False)
+    _tool_specs_by_alias: dict[str, GroupToolSpec] = field(default_factory=dict, repr=False)
+    _tool_specs_by_api_path: dict[str, GroupToolSpec] = field(default_factory=dict, repr=False)
     _aliases_by_group: dict[str, dict[str, tuple[str, ...]]] = field(
         default_factory=dict, repr=False
     )
@@ -91,6 +95,20 @@ class ToolkitServer:
     def available_http_routes(self) -> tuple[str, ...]:
         return tuple(sorted(self._api_route_handlers.keys()))
 
+    def describe_tools(self) -> tuple[dict[str, Any], ...]:
+        rows: list[dict[str, Any]] = []
+        for canonical_name in sorted(self._tool_specs_by_canonical.keys()):
+            spec = self._tool_specs_by_canonical[canonical_name]
+            aliases = tuple(
+                sorted(
+                    alias
+                    for alias, alias_spec in self._tool_specs_by_alias.items()
+                    if alias_spec.canonical_name == canonical_name
+                )
+            )
+            rows.append(spec.to_dict(aliases=aliases))
+        return tuple(rows)
+
     def create_fastapi_app(self):
         """Create FastAPI app with toolkit JSON API routes."""
         try:
@@ -100,13 +118,33 @@ class ToolkitServer:
 
         app = FastAPI(title="lean-mcp-toolkit")
 
+        @app.get(
+            f"{self.api_prefix}/meta/tools",
+            summary="List active tools metadata",
+            description="Return active tool contracts including params and returns.",
+        )
+        def _meta_tools():
+            return {"tools": list(self.describe_tools())}
+
         for route_path, handler in sorted(self._api_route_handlers.items()):
             endpoint = self._make_fastapi_endpoint(handler=handler, route_path=route_path)
+            spec = self._tool_specs_by_api_path.get(route_path)
             app.add_api_route(
                 f"{self.api_prefix}{route_path}",
                 endpoint=endpoint,
                 methods=["POST"],
                 name=endpoint.__name__,
+                summary=(spec.canonical_name if spec is not None else route_path),
+                description=(
+                    spec.render_api_description()
+                    if spec is not None
+                    else "Tool API endpoint."
+                ),
+                response_description=(
+                    "Tool response payload."
+                    if spec is None
+                    else "See `Returns` section in description."
+                ),
             )
 
         return app
@@ -288,10 +326,10 @@ class ToolkitServer:
                         f"missing tool spec for canonical tool `{canonical_name}` in group `{plugin.group_name}`"
                     )
 
-                self._register_canonical_handler(canonical_name, handler)
-                self._register_api_route_handler(spec.api_path, handler)
+                self._register_canonical_handler(canonical_name, handler, spec=spec)
+                self._register_api_route_handler(spec.api_path, handler, spec=spec)
                 for alias in aliases:
-                    self._register_alias_handler(alias, handler)
+                    self._register_alias_handler(alias, handler, spec=spec)
 
     def _dispatch_canonical(self, canonical_name: str, payload: dict[str, Any]) -> dict[str, Any]:
         handler = self._canonical_handlers.get(canonical_name)
@@ -299,23 +337,44 @@ class ToolkitServer:
             raise KeyError(f"tool is not active: {canonical_name}")
         return handler(payload)
 
-    def _register_canonical_handler(self, canonical_name: str, handler: ToolHandler) -> None:
+    def _register_canonical_handler(
+        self,
+        canonical_name: str,
+        handler: ToolHandler,
+        *,
+        spec: GroupToolSpec,
+    ) -> None:
         existing = self._canonical_handlers.get(canonical_name)
         if existing is not None and existing is not handler:
             raise ValueError(f"duplicate canonical handler: {canonical_name}")
         self._canonical_handlers[canonical_name] = handler
+        self._tool_specs_by_canonical[canonical_name] = spec
 
-    def _register_alias_handler(self, alias: str, handler: ToolHandler) -> None:
+    def _register_alias_handler(
+        self,
+        alias: str,
+        handler: ToolHandler,
+        *,
+        spec: GroupToolSpec,
+    ) -> None:
         existing = self._tool_alias_handlers.get(alias)
         if existing is not None and existing is not handler:
             raise ValueError(f"tool alias collision: {alias}")
         self._tool_alias_handlers[alias] = handler
+        self._tool_specs_by_alias[alias] = spec
 
-    def _register_api_route_handler(self, route_path: str, handler: ToolHandler) -> None:
+    def _register_api_route_handler(
+        self,
+        route_path: str,
+        handler: ToolHandler,
+        *,
+        spec: GroupToolSpec,
+    ) -> None:
         existing = self._api_route_handlers.get(route_path)
         if existing is not None and existing is not handler:
             raise ValueError(f"http route collision: {route_path}")
         self._api_route_handlers[route_path] = handler
+        self._tool_specs_by_api_path[route_path] = spec
 
     @staticmethod
     def _make_fastapi_endpoint(*, handler: ToolHandler, route_path: str):
