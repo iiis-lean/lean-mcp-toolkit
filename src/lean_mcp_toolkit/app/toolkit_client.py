@@ -1,0 +1,194 @@
+"""Top-level HTTP toolkit client wrapper."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any
+
+from ..adapters.http import (
+    handle_diagnostics_build,
+    handle_diagnostics_lint,
+    handle_diagnostics_lint_no_sorry,
+)
+from ..config import ToolkitConfig
+from ..core.services import DiagnosticsService
+from ..groups import GroupPlugin, ToolHandler, builtin_group_plugins
+from ..groups.plugin_base import resolve_active_group_names, resolve_aliases_by_canonical
+from ..transport.http import HttpConfig
+
+
+@dataclass(slots=True)
+class ToolkitHttpClient:
+    """HTTP client wrapper for all exposed toolkit groups."""
+
+    config: ToolkitConfig = field(default_factory=ToolkitConfig)
+    http_config: HttpConfig | None = None
+    diagnostics: DiagnosticsService | None = None
+    _group_plugins: tuple[GroupPlugin, ...] = field(default_factory=tuple, repr=False)
+    _group_clients: dict[str, Any] = field(default_factory=dict, repr=False)
+    _canonical_handlers: dict[str, ToolHandler] = field(default_factory=dict, repr=False)
+    _tool_alias_handlers: dict[str, ToolHandler] = field(default_factory=dict, repr=False)
+    _api_route_handlers: dict[str, ToolHandler] = field(default_factory=dict, repr=False)
+    _aliases_by_group: dict[str, dict[str, tuple[str, ...]]] = field(
+        default_factory=dict, repr=False
+    )
+
+    def __post_init__(self) -> None:
+        if self.http_config is None and self.diagnostics is not None and not self._canonical_handlers:
+            self._register_legacy_diagnostics(self.diagnostics)
+
+    @classmethod
+    def from_http_config(
+        cls,
+        http_config: HttpConfig,
+        *,
+        config: ToolkitConfig | None = None,
+        plugins: tuple[GroupPlugin, ...] | None = None,
+    ) -> "ToolkitHttpClient":
+        resolved = config or ToolkitConfig()
+        client = cls(config=resolved, http_config=http_config)
+        client._wire_plugins(plugins or builtin_group_plugins())
+        return client
+
+    def diagnostics_build(self, payload: dict) -> dict:
+        return self._dispatch_canonical("diagnostics.build", payload)
+
+    def diagnostics_lint(self, payload: dict) -> dict:
+        return self._dispatch_canonical("diagnostics.lint", payload)
+
+    def diagnostics_lint_no_sorry(self, payload: dict) -> dict:
+        return self._dispatch_canonical("diagnostics.lint.no_sorry", payload)
+
+    def dispatch_api(self, route_path: str, payload: dict) -> dict:
+        route = route_path.strip()
+        if route in self._tool_alias_handlers:
+            return self._tool_alias_handlers[route](payload)
+
+        api_prefix = self._normalized_api_prefix()
+        if api_prefix and route.startswith(api_prefix + "/"):
+            route = route[len(api_prefix) :]
+            if not route.startswith("/"):
+                route = "/" + route
+        if route in self._api_route_handlers:
+            return self._api_route_handlers[route](payload)
+
+        if not route.startswith("/"):
+            slash_route = "/" + route
+            if slash_route in self._api_route_handlers:
+                return self._api_route_handlers[slash_route](payload)
+        raise KeyError(f"unsupported route/tool: {route_path}")
+
+    def available_tool_aliases(self) -> tuple[str, ...]:
+        return tuple(sorted(self._tool_alias_handlers.keys()))
+
+    def available_http_routes(self) -> tuple[str, ...]:
+        return tuple(sorted(self._api_route_handlers.keys()))
+
+    def _wire_plugins(self, plugins: tuple[GroupPlugin, ...]) -> None:
+        if self.http_config is None:
+            raise ValueError("http_config is required for plugin-based ToolkitHttpClient")
+
+        plugin_by_name: dict[str, GroupPlugin] = {}
+        for plugin in plugins:
+            if plugin.group_name not in plugin_by_name:
+                plugin_by_name[plugin.group_name] = plugin
+
+        active_group_names = resolve_active_group_names(
+            config=self.config,
+            available_group_names=tuple(plugin_by_name.keys()),
+        )
+        self._group_plugins = tuple(plugin_by_name[name] for name in active_group_names)
+
+        for plugin in self._group_plugins:
+            group_client = plugin.create_http_client(config=self.config, http_config=self.http_config)
+            self._group_clients[plugin.group_name] = group_client
+            if plugin.group_name == "diagnostics":
+                self.diagnostics = group_client
+
+            specs = plugin.tool_specs()
+            spec_by_canonical = {spec.canonical_name: spec for spec in specs}
+            handler_by_canonical = dict(plugin.tool_handlers(group_client))
+            aliases_by_canonical = resolve_aliases_by_canonical(
+                specs=specs,
+                naming_mode=self.config.groups.tool_naming_mode,
+                include_tools=self.config.groups.include_tools,
+                exclude_tools=self.config.groups.exclude_tools,
+            )
+            self._aliases_by_group[plugin.group_name] = aliases_by_canonical
+
+            for canonical_name, aliases in aliases_by_canonical.items():
+                handler = handler_by_canonical.get(canonical_name)
+                if handler is None:
+                    raise KeyError(
+                        f"missing handler for canonical tool `{canonical_name}` in group `{plugin.group_name}`"
+                    )
+                spec = spec_by_canonical.get(canonical_name)
+                if spec is None:
+                    raise KeyError(
+                        f"missing tool spec for canonical tool `{canonical_name}` in group `{plugin.group_name}`"
+                    )
+
+                self._register_canonical_handler(canonical_name, handler)
+                self._register_api_route_handler(spec.api_path, handler)
+                for alias in aliases:
+                    self._register_alias_handler(alias, handler)
+
+    def _dispatch_canonical(self, canonical_name: str, payload: dict) -> dict:
+        handler = self._canonical_handlers.get(canonical_name)
+        if handler is None:
+            raise KeyError(f"tool is not active: {canonical_name}")
+        return handler(payload)
+
+    def _register_canonical_handler(self, canonical_name: str, handler: ToolHandler) -> None:
+        existing = self._canonical_handlers.get(canonical_name)
+        if existing is not None and existing is not handler:
+            raise ValueError(f"duplicate canonical handler: {canonical_name}")
+        self._canonical_handlers[canonical_name] = handler
+
+    def _register_alias_handler(self, alias: str, handler: ToolHandler) -> None:
+        existing = self._tool_alias_handlers.get(alias)
+        if existing is not None and existing is not handler:
+            raise ValueError(f"tool alias collision: {alias}")
+        self._tool_alias_handlers[alias] = handler
+
+    def _register_api_route_handler(self, route_path: str, handler: ToolHandler) -> None:
+        existing = self._api_route_handlers.get(route_path)
+        if existing is not None and existing is not handler:
+            raise ValueError(f"http route collision: {route_path}")
+        self._api_route_handlers[route_path] = handler
+
+    def _normalized_api_prefix(self) -> str:
+        prefix = (self.http_config.api_prefix if self.http_config is not None else "").strip()
+        if not prefix:
+            return ""
+        if not prefix.startswith("/"):
+            prefix = "/" + prefix
+        if len(prefix) > 1 and prefix.endswith("/"):
+            prefix = prefix[:-1]
+        return prefix
+
+    def _register_legacy_diagnostics(self, diagnostics: DiagnosticsService) -> None:
+        self._register_canonical_handler(
+            "diagnostics.build",
+            lambda payload: handle_diagnostics_build(diagnostics, payload),
+        )
+        self._register_canonical_handler(
+            "diagnostics.lint",
+            lambda payload: handle_diagnostics_lint(diagnostics, payload),
+        )
+        self._register_canonical_handler(
+            "diagnostics.lint.no_sorry",
+            lambda payload: handle_diagnostics_lint_no_sorry(diagnostics, payload),
+        )
+        self._register_api_route_handler("/diagnostics/build", self._canonical_handlers["diagnostics.build"])
+        self._register_api_route_handler("/diagnostics/lint", self._canonical_handlers["diagnostics.lint"])
+        self._register_api_route_handler(
+            "/diagnostics/lint/no_sorry",
+            self._canonical_handlers["diagnostics.lint.no_sorry"],
+        )
+        self._register_alias_handler("diagnostics.build", self._canonical_handlers["diagnostics.build"])
+        self._register_alias_handler("diagnostics.lint", self._canonical_handlers["diagnostics.lint"])
+        self._register_alias_handler(
+            "diagnostics.lint.no_sorry",
+            self._canonical_handlers["diagnostics.lint.no_sorry"],
+        )
