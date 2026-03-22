@@ -1,21 +1,18 @@
-"""Shared request/response contracts."""
+"""Contracts for declarations group."""
 
-from .base import DictModel, JsonDict, JsonValue, MarkdownRenderable
-from .declarations import (
+from .extract import (
     DeclarationExtractRequest,
     DeclarationExtractResponse,
     DeclarationItem,
+    DeclarationPosition,
+)
+from .locate import (
     DeclarationLocateRange,
     DeclarationLocateRequest,
     DeclarationLocateResponse,
-    DeclarationPosition,
 )
 
 __all__ = [
-    "DictModel",
-    "JsonDict",
-    "JsonValue",
-    "MarkdownRenderable",
     "DeclarationExtractRequest",
     "DeclarationExtractResponse",
     "DeclarationItem",

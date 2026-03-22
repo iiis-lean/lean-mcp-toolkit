@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from lean_mcp_toolkit.groups.diagnostics.paths import TargetResolver
+from lean_mcp_toolkit.backends.lean.path import TargetResolver
 
 
 
