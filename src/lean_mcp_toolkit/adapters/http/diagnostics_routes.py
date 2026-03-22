@@ -30,3 +30,9 @@ def handle_diagnostics_lint_no_sorry(service: DiagnosticsService, payload: JsonD
     req = LintRequest.from_dict(payload)
     resp = service.run_lint_no_sorry(req)
     return resp.to_dict()
+
+
+def handle_diagnostics_lint_axiom_audit(service: DiagnosticsService, payload: JsonDict) -> JsonDict:
+    req = LintRequest.from_dict(payload)
+    resp = service.run_lint_axiom_audit(req)
+    return resp.to_dict()

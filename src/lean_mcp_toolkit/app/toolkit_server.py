@@ -6,9 +6,10 @@ import contextlib
 from dataclasses import dataclass, field
 from typing import Any
 
+from ..backends import BackendContext, build_backend_context
 from ..config import ToolkitConfig, load_toolkit_config
+from ..core.services import DeclarationsService, DiagnosticsService, LspCoreService, SearchCoreService
 from ..groups import GroupPlugin, ToolHandler, builtin_group_plugins
-from ..groups.diagnostics import DiagnosticsServiceImpl
 from ..groups.plugin_base import GroupToolSpec
 from ..groups.plugin_base import resolve_active_group_names, resolve_aliases_by_canonical
 
@@ -23,7 +24,10 @@ class ToolkitServer:
 
     config: ToolkitConfig
     api_prefix: str = "/api/v1"
-    diagnostics: DiagnosticsServiceImpl | None = None
+    diagnostics: DiagnosticsService | None = None
+    declarations: DeclarationsService | None = None
+    lsp_core: LspCoreService | None = None
+    search_core: SearchCoreService | None = None
     _group_plugins: tuple[GroupPlugin, ...] = field(default_factory=tuple, repr=False)
     _group_services: dict[str, Any] = field(default_factory=dict, repr=False)
     _canonical_handlers: dict[str, ToolHandler] = field(default_factory=dict, repr=False)
@@ -35,6 +39,7 @@ class ToolkitServer:
     _aliases_by_group: dict[str, dict[str, tuple[str, ...]]] = field(
         default_factory=dict, repr=False
     )
+    _backend_context: BackendContext | None = field(default=None, repr=False)
 
     @classmethod
     def from_config(
@@ -60,16 +65,6 @@ class ToolkitServer:
     ) -> "ToolkitServer":
         config = load_toolkit_config(config_path=config_path)
         return cls.from_config(config, plugins=plugins)
-
-    # Server-style methods for tool invocation
-    def diagnostics_build(self, payload: dict[str, Any]) -> dict[str, Any]:
-        return self._dispatch_canonical("diagnostics.build", payload)
-
-    def diagnostics_lint(self, payload: dict[str, Any]) -> dict[str, Any]:
-        return self._dispatch_canonical("diagnostics.lint", payload)
-
-    def diagnostics_lint_no_sorry(self, payload: dict[str, Any]) -> dict[str, Any]:
-        return self._dispatch_canonical("diagnostics.lint.no_sorry", payload)
 
     def dispatch_api(self, route_path: str, payload: dict[str, Any]) -> dict[str, Any]:
         route = route_path.strip()
@@ -296,12 +291,28 @@ class ToolkitServer:
             available_group_names=tuple(plugin_by_name.keys()),
         )
         self._group_plugins = tuple(plugin_by_name[name] for name in active_group_names)
+        required_backend_keys: list[str] = []
+        for plugin in self._group_plugins:
+            required_backend_keys.extend(plugin.backend_dependencies())
+        self._backend_context = build_backend_context(
+            config=self.config,
+            required_backend_keys=tuple(required_backend_keys),
+        )
 
         for plugin in self._group_plugins:
-            service = plugin.create_local_service(self.config)
+            service = plugin.create_local_service(
+                self.config,
+                backends=self._backend_context,
+            )
             self._group_services[plugin.group_name] = service
-            if plugin.group_name == "diagnostics" and isinstance(service, DiagnosticsServiceImpl):
+            if plugin.group_name == "diagnostics":
                 self.diagnostics = service
+            if plugin.group_name == "declarations":
+                self.declarations = service
+            if plugin.group_name == "lsp_core":
+                self.lsp_core = service
+            if plugin.group_name == "search_core":
+                self.search_core = service
 
             specs = plugin.tool_specs()
             spec_by_canonical = {spec.canonical_name: spec for spec in specs}
@@ -330,12 +341,6 @@ class ToolkitServer:
                 self._register_api_route_handler(spec.api_path, handler, spec=spec)
                 for alias in aliases:
                     self._register_alias_handler(alias, handler, spec=spec)
-
-    def _dispatch_canonical(self, canonical_name: str, payload: dict[str, Any]) -> dict[str, Any]:
-        handler = self._canonical_handlers.get(canonical_name)
-        if handler is None:
-            raise KeyError(f"tool is not active: {canonical_name}")
-        return handler(payload)
 
     def _register_canonical_handler(
         self,

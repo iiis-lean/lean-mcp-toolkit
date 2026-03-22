@@ -13,8 +13,12 @@ from lean_mcp_toolkit.groups.plugin_base import GroupToolSpec
 class _FakePlugin:
     group_name: str = "fake"
 
-    def create_local_service(self, config: ToolkitConfig):
+    def backend_dependencies(self) -> tuple[str, ...]:
+        return tuple()
+
+    def create_local_service(self, config: ToolkitConfig, *, backends=None):
         _ = config
+        _ = backends
         return object()
 
     def tool_specs(self) -> tuple[GroupToolSpec, ...]:

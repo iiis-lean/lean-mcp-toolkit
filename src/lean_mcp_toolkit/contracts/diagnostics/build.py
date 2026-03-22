@@ -114,11 +114,16 @@ class BuildResponse(DictModel):
         chunks.append(f"- failed_stage: `{self.failed_stage or 'none'}`")
         if self.stage_error_message:
             chunks.append(f"- stage_error_message: {self.stage_error_message}")
-        if not self.files:
-            chunks.append("- files: (empty)")
+        error_files = [
+            file_result
+            for file_result in self.files
+            if any((item.severity or "").strip().lower() == "error" for item in file_result.items)
+        ]
+        if not error_files:
+            chunks.append("- files: (no files with errors)")
             return "\n\n".join(chunks)
 
-        chunks.append(f"- files: `{len(self.files)}`")
-        for file_result in self.files:
+        chunks.append(f"- files: `{len(error_files)}`")
+        for file_result in error_files:
             chunks.append(file_result.to_markdown(title_level=title_level + 1))
         return "\n\n".join(chunks)

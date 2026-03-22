@@ -59,18 +59,34 @@ class DiagnosticItem(DictModel):
         }
 
     def to_markdown(self) -> str:
-        prefix = f"[{self.severity}]"
-        loc = ""
-        if self.fileName:
-            loc = self.fileName
-            if self.pos is not None:
-                loc = f"{loc}:{self.pos.line}:{self.pos.column}"
-            loc = f" ({loc})"
-        kind = f" <{self.kind}>" if self.kind else ""
-        line = f"- {prefix}{kind}{loc} {self.data}".rstrip()
+        severity = (self.severity or "error").strip().lower() or "error"
+        location = _display_file_name(self.fileName)
+        if self.pos is not None:
+            if location:
+                location = f"{location}:{self.pos.line}:{self.pos.column}"
+            else:
+                location = f"{self.pos.line}:{self.pos.column}"
+
+        if location:
+            line = f"{severity}: {location}: {self.data}".rstrip()
+        else:
+            line = f"{severity}: {self.data}".rstrip()
         if not self.content:
             return line
         return f"{line}\n\n```lean\n{self.content}\n```"
+
+
+def _display_file_name(file_name: str | None) -> str | None:
+    if not file_name:
+        return None
+    name = file_name.strip()
+    if not name:
+        return None
+    if "/" in name or "\\" in name or name.endswith(".lean"):
+        return name
+    if "." in name:
+        return f"{name.replace('.', '/')}.lean"
+    return name
 
 
 @dataclass(slots=True, frozen=True)

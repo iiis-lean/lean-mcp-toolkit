@@ -4,11 +4,29 @@ from __future__ import annotations
 
 from ..config import ToolkitConfig, load_toolkit_config
 from ..groups import GroupPlugin
+from ..groups.declarations import (
+    DeclarationsHttpClient,
+    DeclarationsServiceImpl,
+    create_declarations_client as _create_group_declarations_client,
+    create_declarations_service as _create_group_declarations_service,
+)
 from ..groups.diagnostics import (
     DiagnosticsHttpClient,
     DiagnosticsServiceImpl,
     create_diagnostics_client as _create_group_diagnostics_client,
     create_diagnostics_service as _create_group_diagnostics_service,
+)
+from ..groups.lsp_core import (
+    LspCoreHttpClient,
+    LspCoreServiceImpl,
+    create_lsp_core_client as _create_group_lsp_core_client,
+    create_lsp_core_service as _create_group_lsp_core_service,
+)
+from ..groups.search_core import (
+    SearchCoreHttpClient,
+    SearchCoreServiceImpl,
+    create_search_core_client as _create_group_search_core_client,
+    create_search_core_service as _create_group_search_core_service,
 )
 from ..transport.http import HttpConfig
 from .toolkit_client import ToolkitHttpClient
@@ -55,6 +73,42 @@ def create_default_diagnostics_client(*, http_config: HttpConfig) -> Diagnostics
     return _create_group_diagnostics_client(http_config=http_config)
 
 
+def create_default_declarations_service(
+    *,
+    config: ToolkitConfig | None = None,
+    config_path: str | None = None,
+) -> DeclarationsServiceImpl:
+    return _create_group_declarations_service(config=config, config_path=config_path)
+
+
+def create_default_declarations_client(*, http_config: HttpConfig) -> DeclarationsHttpClient:
+    return _create_group_declarations_client(http_config=http_config)
+
+
+def create_default_lsp_core_service(
+    *,
+    config: ToolkitConfig | None = None,
+    config_path: str | None = None,
+) -> LspCoreServiceImpl:
+    return _create_group_lsp_core_service(config=config, config_path=config_path)
+
+
+def create_default_lsp_core_client(*, http_config: HttpConfig) -> LspCoreHttpClient:
+    return _create_group_lsp_core_client(http_config=http_config)
+
+
+def create_default_search_core_service(
+    *,
+    config: ToolkitConfig | None = None,
+    config_path: str | None = None,
+) -> SearchCoreServiceImpl:
+    return _create_group_search_core_service(config=config, config_path=config_path)
+
+
+def create_default_search_core_client(*, http_config: HttpConfig) -> SearchCoreHttpClient:
+    return _create_group_search_core_client(http_config=http_config)
+
+
 def create_diagnostics_service(
     *,
     config: ToolkitConfig | None = None,
@@ -67,11 +121,59 @@ def create_diagnostics_client(*, http_config: HttpConfig) -> DiagnosticsHttpClie
     return create_default_diagnostics_client(http_config=http_config)
 
 
+def create_declarations_service(
+    *,
+    config: ToolkitConfig | None = None,
+    config_path: str | None = None,
+) -> DeclarationsServiceImpl:
+    return create_default_declarations_service(config=config, config_path=config_path)
+
+
+def create_declarations_client(*, http_config: HttpConfig) -> DeclarationsHttpClient:
+    return create_default_declarations_client(http_config=http_config)
+
+
+def create_lsp_core_service(
+    *,
+    config: ToolkitConfig | None = None,
+    config_path: str | None = None,
+) -> LspCoreServiceImpl:
+    return create_default_lsp_core_service(config=config, config_path=config_path)
+
+
+def create_lsp_core_client(*, http_config: HttpConfig) -> LspCoreHttpClient:
+    return create_default_lsp_core_client(http_config=http_config)
+
+
+def create_search_core_service(
+    *,
+    config: ToolkitConfig | None = None,
+    config_path: str | None = None,
+) -> SearchCoreServiceImpl:
+    return create_default_search_core_service(config=config, config_path=config_path)
+
+
+def create_search_core_client(*, http_config: HttpConfig) -> SearchCoreHttpClient:
+    return create_default_search_core_client(http_config=http_config)
+
+
 __all__ = [
     "create_local_toolkit_server",
     "create_toolkit_http_client",
     "create_default_diagnostics_service",
     "create_default_diagnostics_client",
+    "create_default_declarations_service",
+    "create_default_declarations_client",
+    "create_default_lsp_core_service",
+    "create_default_lsp_core_client",
+    "create_default_search_core_service",
+    "create_default_search_core_client",
     "create_diagnostics_service",
     "create_diagnostics_client",
+    "create_declarations_service",
+    "create_declarations_client",
+    "create_lsp_core_service",
+    "create_lsp_core_client",
+    "create_search_core_service",
+    "create_search_core_client",
 ]

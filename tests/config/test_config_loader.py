@@ -23,22 +23,49 @@ def test_cli_override_priority() -> None:
         mode="http",
         port=20001,
         enable_groups=["diagnostics"],
-        set_items=["diagnostics.max_concurrent_lean_checks=9"],
+        set_items=["backends.lean_command.max_concurrent_lean_checks=9"],
     )
     overrides = cli_args_to_overrides(args)
     cfg = load_toolkit_config(cli_overrides=overrides)
     assert cfg.server.mode == "http"
     assert cfg.server.port == 20001
     assert cfg.groups.enabled_groups == ("diagnostics",)
-    assert cfg.diagnostics.max_concurrent_lean_checks == 9
+    assert cfg.backends.lean_command.max_concurrent_lean_checks == 9
 
 
 def test_default_diagnostics_config() -> None:
     cfg = load_toolkit_config()
     assert cfg.diagnostics.default_build_deps is True
     assert cfg.diagnostics.default_emit_artifacts is True
-    assert cfg.diagnostics.default_enabled_checks == (
-        "no_sorry",
-        "no_axiom_decl",
-        "axiom_usage",
+    assert cfg.diagnostics.default_enabled_checks == ("no_sorry", "axiom_audit")
+    assert cfg.diagnostics.axiom_audit_allowed_axioms == (
+        "propext",
+        "Classical.choice",
+        "Quot.sound",
     )
+    assert cfg.diagnostics.axiom_audit_include_sorry_ax is False
+
+
+def test_declarations_config_override() -> None:
+    cfg = load_toolkit_config(
+        cli_overrides={
+            "declarations": {
+                "default_backend": "lean_interact",
+                "default_include_value": True,
+            },
+            "backends": {
+                "lean_interact": {
+                    "use_auto_server": True,
+                    "project_auto_build": True,
+                    "build_repl": False,
+                    "verbose": True,
+                }
+            },
+        }
+    )
+    assert cfg.declarations.default_backend == "lean_interact"
+    assert cfg.declarations.default_include_value is True
+    assert cfg.backends.lean_interact.use_auto_server is True
+    assert cfg.backends.lean_interact.project_auto_build is True
+    assert cfg.backends.lean_interact.build_repl is False
+    assert cfg.backends.lean_interact.verbose is True

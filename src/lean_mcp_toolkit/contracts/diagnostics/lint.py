@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from ..base import DictModel, JsonDict, to_bool, to_int, to_list_of_str
-from .common import DiagnosticItem
+from .common import DiagnosticItem, Position
 
 
 @dataclass(slots=True, frozen=True)
@@ -32,7 +32,9 @@ class LintRequest(DictModel):
             else None
         )
         return cls(
-            project_root=(str(data["project_root"]) if data.get("project_root") is not None else None),
+            project_root=(
+                str(data["project_root"]) if data.get("project_root") is not None else None
+            ),
             targets=(tuple(targets) if targets is not None else None),
             enabled_checks=(tuple(enabled_checks) if enabled_checks is not None else None),
             include_content=include_content,
@@ -60,50 +62,174 @@ class CheckResult(DictModel):
     check_id: str
     success: bool
     message: str
-    fields: JsonDict = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, data: JsonDict) -> "CheckResult":
-        known = {"check_id", "success", "message"}
-        rest: JsonDict = {
-            k: v
-            for k, v in data.items()
-            if k not in known
-        }
         return cls(
             check_id=str(data.get("check_id") or ""),
             success=bool(data.get("success", False)),
             message=str(data.get("message") or ""),
-            fields=rest,
         )
 
     def to_dict(self) -> JsonDict:
-        merged: JsonDict = {
+        return {
             "check_id": self.check_id,
             "success": self.success,
             "message": self.message,
         }
-        merged.update(self.fields)
-        return merged
+
+    def to_markdown(self) -> str:
+        return "\n".join(
+            [
+                f"- success: `{str(self.success).lower()}`",
+                f"- message: {self.message}",
+            ]
+        )
+
+
+@dataclass(slots=True, frozen=True)
+class AxiomDeclaredItem(DictModel):
+    fileName: str | None
+    declaration: str | None
+    kind: str | None
+    pos: Position | None = None
+    endPos: Position | None = None
+    content: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: JsonDict) -> "AxiomDeclaredItem":
+        return cls(
+            fileName=(str(data["fileName"]) if data.get("fileName") is not None else None),
+            declaration=(
+                str(data["declaration"]) if data.get("declaration") is not None else None
+            ),
+            kind=(str(data["kind"]) if data.get("kind") is not None else None),
+            pos=Position.from_dict(data["pos"]) if isinstance(data.get("pos"), dict) else None,
+            endPos=(
+                Position.from_dict(data["endPos"])
+                if isinstance(data.get("endPos"), dict)
+                else None
+            ),
+            content=(str(data["content"]) if data.get("content") is not None else None),
+        )
+
+    def to_dict(self) -> JsonDict:
+        return {
+            "fileName": self.fileName,
+            "declaration": self.declaration,
+            "kind": self.kind,
+            "pos": self.pos.to_dict() if self.pos is not None else None,
+            "endPos": self.endPos.to_dict() if self.endPos is not None else None,
+            "content": self.content,
+        }
+
+
+@dataclass(slots=True, frozen=True)
+class AxiomUsageIssue(DictModel):
+    fileName: str | None
+    declaration: str | None
+    risky_axioms: tuple[str, ...] = field(default_factory=tuple)
+
+    @classmethod
+    def from_dict(cls, data: JsonDict) -> "AxiomUsageIssue":
+        risky = to_list_of_str(data.get("risky_axioms")) or []
+        return cls(
+            fileName=(str(data["fileName"]) if data.get("fileName") is not None else None),
+            declaration=(str(data["declaration"]) if data.get("declaration") is not None else None),
+            risky_axioms=tuple(risky),
+        )
+
+    def to_dict(self) -> JsonDict:
+        return {
+            "fileName": self.fileName,
+            "declaration": self.declaration,
+            "risky_axioms": list(self.risky_axioms),
+        }
+
+
+@dataclass(slots=True, frozen=True)
+class AxiomUsageUnresolved(DictModel):
+    fileName: str | None
+    declaration: str | None
+    reason: str
+
+    @classmethod
+    def from_dict(cls, data: JsonDict) -> "AxiomUsageUnresolved":
+        return cls(
+            fileName=(str(data["fileName"]) if data.get("fileName") is not None else None),
+            declaration=(str(data["declaration"]) if data.get("declaration") is not None else None),
+            reason=str(data.get("reason") or ""),
+        )
+
+    def to_dict(self) -> JsonDict:
+        return {
+            "fileName": self.fileName,
+            "declaration": self.declaration,
+            "reason": self.reason,
+        }
+
+
+@dataclass(slots=True, frozen=True)
+class AxiomAuditResult(CheckResult):
+    declared_axioms: tuple[AxiomDeclaredItem, ...] = field(default_factory=tuple)
+    usage_issues: tuple[AxiomUsageIssue, ...] = field(default_factory=tuple)
+    unresolved: tuple[AxiomUsageUnresolved, ...] = field(default_factory=tuple)
+
+    @classmethod
+    def from_dict(cls, data: JsonDict) -> "AxiomAuditResult":
+        raw_declared = data.get("declared_axioms")
+        parsed_declared: list[AxiomDeclaredItem] = []
+        if isinstance(raw_declared, list):
+            for item in raw_declared:
+                if isinstance(item, dict):
+                    parsed_declared.append(AxiomDeclaredItem.from_dict(item))
+
+        raw_issues = data.get("usage_issues")
+        parsed_issues: list[AxiomUsageIssue] = []
+        if isinstance(raw_issues, list):
+            for item in raw_issues:
+                if isinstance(item, dict):
+                    parsed_issues.append(AxiomUsageIssue.from_dict(item))
+
+        raw_unresolved = data.get("unresolved")
+        parsed_unresolved: list[AxiomUsageUnresolved] = []
+        if isinstance(raw_unresolved, list):
+            for item in raw_unresolved:
+                if isinstance(item, dict):
+                    parsed_unresolved.append(AxiomUsageUnresolved.from_dict(item))
+
+        return cls(
+            check_id=str(data.get("check_id") or "axiom_audit"),
+            success=bool(data.get("success", False)),
+            message=str(data.get("message") or ""),
+            declared_axioms=tuple(parsed_declared),
+            usage_issues=tuple(parsed_issues),
+            unresolved=tuple(parsed_unresolved),
+        )
+
+    def to_dict(self) -> JsonDict:
+        return {
+            "check_id": self.check_id,
+            "success": self.success,
+            "message": self.message,
+            "declared_axioms": [item.to_dict() for item in self.declared_axioms],
+            "usage_issues": [item.to_dict() for item in self.usage_issues],
+            "unresolved": [item.to_dict() for item in self.unresolved],
+        }
 
     def to_markdown(self) -> str:
         lines = [
-            f"- check_id: `{self.check_id}`",
             f"- success: `{str(self.success).lower()}`",
             f"- message: {self.message}",
+            f"- declared_axioms: `{len(self.declared_axioms)}`",
+            f"- usage_issues: `{len(self.usage_issues)}`",
+            f"- unresolved: `{len(self.unresolved)}`",
         ]
-        if self.fields:
-            lines.append("- extra_fields:")
-            for key, value in self.fields.items():
-                lines.append(f"  - {key}: `{value}`")
         return "\n".join(lines)
 
 
 @dataclass(slots=True, frozen=True)
-class NoSorryResult(DictModel):
-    check_id: str
-    success: bool
-    message: str
+class NoSorryResult(CheckResult):
     sorries: tuple[DiagnosticItem, ...] = field(default_factory=tuple)
 
     @classmethod
@@ -131,7 +257,6 @@ class NoSorryResult(DictModel):
 
     def to_markdown(self) -> str:
         lines = [
-            f"- check_id: `{self.check_id}`",
             f"- success: `{str(self.success).lower()}`",
             f"- message: {self.message}",
             f"- sorries: `{len(self.sorries)}`",
@@ -145,11 +270,11 @@ class NoSorryResult(DictModel):
 @dataclass(slots=True, frozen=True)
 class LintResponse(DictModel):
     success: bool
-    checks: tuple[CheckResult | NoSorryResult, ...] = field(default_factory=tuple)
+    checks: tuple[CheckResult, ...] = field(default_factory=tuple)
 
     @classmethod
     def from_dict(cls, data: JsonDict) -> "LintResponse":
-        parsed: list[CheckResult | NoSorryResult] = []
+        parsed: list[CheckResult] = []
         raw = data.get("checks")
         if isinstance(raw, list):
             for item in raw:
@@ -158,6 +283,8 @@ class LintResponse(DictModel):
                 check_id = str(item.get("check_id") or "")
                 if check_id == "no_sorry":
                     parsed.append(NoSorryResult.from_dict(item))
+                elif check_id == "axiom_audit":
+                    parsed.append(AxiomAuditResult.from_dict(item))
                 else:
                     parsed.append(CheckResult.from_dict(item))
         return cls(success=bool(data.get("success", False)), checks=tuple(parsed))
@@ -173,8 +300,8 @@ class LintResponse(DictModel):
         if title:
             chunks.append(f"{'#' * max(1, title_level)} {title}")
         chunks.append(f"- success: `{str(self.success).lower()}`")
-        chunks.append(f"- checks: `{len(self.checks)}`")
-        for idx, check in enumerate(self.checks, start=1):
-            chunks.append(f"{'#' * max(1, title_level + 1)} Check {idx}")
+        for check in self.checks:
+            check_id = getattr(check, "check_id", "").strip() or "unknown_check"
+            chunks.append(f"{'#' * max(1, title_level + 1)} `{check_id}`")
             chunks.append(check.to_markdown())
         return "\n\n".join(chunks)

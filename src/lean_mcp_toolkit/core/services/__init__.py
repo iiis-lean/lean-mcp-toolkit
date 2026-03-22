@@ -1,5 +1,15 @@
 """Service layer package."""
 
-from .protocols import DiagnosticsService
+from .protocols import (
+    DeclarationsService,
+    DiagnosticsService,
+    LspCoreService,
+    SearchCoreService,
+)
 
-__all__ = ["DiagnosticsService"]
+__all__ = [
+    "DiagnosticsService",
+    "DeclarationsService",
+    "LspCoreService",
+    "SearchCoreService",
+]

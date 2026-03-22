@@ -1,12 +1,24 @@
 """Application entrypoints."""
 
 from .service_factory import (
+    create_declarations_client,
+    create_declarations_service,
+    create_default_declarations_client,
+    create_default_declarations_service,
     create_diagnostics_client,
     create_diagnostics_service,
     create_default_diagnostics_client,
     create_default_diagnostics_service,
+    create_default_lsp_core_client,
+    create_default_lsp_core_service,
+    create_default_search_core_client,
+    create_default_search_core_service,
     create_local_toolkit_server,
     create_toolkit_http_client,
+    create_lsp_core_client,
+    create_lsp_core_service,
+    create_search_core_client,
+    create_search_core_service,
 )
 from .toolkit_client import ToolkitHttpClient
 from .toolkit_server import ToolkitServer
@@ -14,10 +26,22 @@ from .toolkit_server import ToolkitServer
 __all__ = [
     "ToolkitServer",
     "ToolkitHttpClient",
+    "create_declarations_service",
+    "create_declarations_client",
+    "create_default_declarations_service",
+    "create_default_declarations_client",
     "create_diagnostics_service",
     "create_diagnostics_client",
     "create_default_diagnostics_service",
     "create_default_diagnostics_client",
+    "create_default_lsp_core_service",
+    "create_default_lsp_core_client",
+    "create_default_search_core_service",
+    "create_default_search_core_client",
     "create_local_toolkit_server",
     "create_toolkit_http_client",
+    "create_lsp_core_service",
+    "create_lsp_core_client",
+    "create_search_core_service",
+    "create_search_core_client",
 ]

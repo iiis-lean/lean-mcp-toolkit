@@ -5,15 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
-from .adapters.http import (
-    handle_diagnostics_build,
-    handle_diagnostics_lint,
-    handle_diagnostics_lint_no_sorry,
-)
-from .app import create_diagnostics_service, create_toolkit_http_client
+from .app import create_local_toolkit_server, create_toolkit_http_client
 from .config import ToolkitConfig, load_toolkit_config
 from .contracts.base import JsonDict
-from .core.services import DiagnosticsService
+from .core.services import DeclarationsService, DiagnosticsService, LspCoreService, SearchCoreService
 from .transport.http import HttpConfig
 
 ToolkitRuntimeMode = Literal["local", "http"]
@@ -22,43 +17,13 @@ ToolkitRuntimeMode = Literal["local", "http"]
 class ToolkitInvoker(Protocol):
     """Tool-style invoker API shared by local and http runtime handles."""
 
-    diagnostics: DiagnosticsService
-
-    def diagnostics_build(self, payload: JsonDict) -> JsonDict:
-        ...
-
-    def diagnostics_lint(self, payload: JsonDict) -> JsonDict:
-        ...
-
-    def diagnostics_lint_no_sorry(self, payload: JsonDict) -> JsonDict:
-        ...
+    diagnostics: DiagnosticsService | None
+    declarations: DeclarationsService | None
+    lsp_core: LspCoreService | None
+    search_core: SearchCoreService | None
 
     def dispatch_api(self, route_path: str, payload: JsonDict) -> JsonDict:
         ...
-
-
-@dataclass(slots=True)
-class _LocalToolkitInvoker(ToolkitInvoker):
-    diagnostics: DiagnosticsService
-
-    def diagnostics_build(self, payload: JsonDict) -> JsonDict:
-        return handle_diagnostics_build(self.diagnostics, payload)
-
-    def diagnostics_lint(self, payload: JsonDict) -> JsonDict:
-        return handle_diagnostics_lint(self.diagnostics, payload)
-
-    def diagnostics_lint_no_sorry(self, payload: JsonDict) -> JsonDict:
-        return handle_diagnostics_lint_no_sorry(self.diagnostics, payload)
-
-    def dispatch_api(self, route_path: str, payload: JsonDict) -> JsonDict:
-        route = route_path.strip()
-        if route in {"/diagnostics/build", "diagnostics.build"}:
-            return self.diagnostics_build(payload)
-        if route in {"/diagnostics/lint", "diagnostics.lint"}:
-            return self.diagnostics_lint(payload)
-        if route in {"/diagnostics/lint/no_sorry", "diagnostics.lint.no_sorry"}:
-            return self.diagnostics_lint_no_sorry(payload)
-        raise KeyError(f"unsupported route/tool: {route_path}")
 
 
 @dataclass(slots=True)
@@ -67,18 +32,12 @@ class ToolkitRuntime:
 
     mode: ToolkitRuntimeMode
     config: ToolkitConfig
-    diagnostics: DiagnosticsService
+    diagnostics: DiagnosticsService | None
+    declarations: DeclarationsService | None
+    lsp_core: LspCoreService | None
+    search_core: SearchCoreService | None
     toolkit: ToolkitInvoker
     http_config: HttpConfig | None = None
-
-    def diagnostics_build(self, payload: JsonDict) -> JsonDict:
-        return self.toolkit.diagnostics_build(payload)
-
-    def diagnostics_lint(self, payload: JsonDict) -> JsonDict:
-        return self.toolkit.diagnostics_lint(payload)
-
-    def diagnostics_lint_no_sorry(self, payload: JsonDict) -> JsonDict:
-        return self.toolkit.diagnostics_lint_no_sorry(payload)
 
     def dispatch_api(self, route_path: str, payload: JsonDict) -> JsonDict:
         return self.toolkit.dispatch_api(route_path, payload)
@@ -95,13 +54,15 @@ def create_toolkit_runtime(
     config = load_toolkit_config(config_path=config_path)
 
     if mode == "local":
-        diagnostics = create_diagnostics_service(config=config)
-        invoker = _LocalToolkitInvoker(diagnostics=diagnostics)
+        server = create_local_toolkit_server(config=config)
         return ToolkitRuntime(
             mode="local",
             config=config,
-            diagnostics=diagnostics,
-            toolkit=invoker,
+            diagnostics=server.diagnostics,
+            declarations=server.declarations,
+            lsp_core=server.lsp_core,
+            search_core=server.search_core,
+            toolkit=server,
             http_config=None,
         )
 
@@ -115,6 +76,9 @@ def create_toolkit_runtime(
             mode="http",
             config=config,
             diagnostics=toolkit_client.diagnostics,
+            declarations=toolkit_client.declarations,
+            lsp_core=toolkit_client.lsp_core,
+            search_core=toolkit_client.search_core,
             toolkit=toolkit_client,
             http_config=http_config,
         )

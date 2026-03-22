@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from ....backends.lean.path import LeanPath
 from ....contracts.diagnostics import DiagnosticItem, Position
-from ..paths.lean_path import LeanPath
 
 
 @dataclass(slots=True)

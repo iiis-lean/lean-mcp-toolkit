@@ -19,8 +19,12 @@ class _FakeGroupClient:
 class _FakePlugin:
     group_name: str = "fake"
 
-    def create_local_service(self, config: ToolkitConfig):
+    def backend_dependencies(self) -> tuple[str, ...]:
+        return tuple()
+
+    def create_local_service(self, config: ToolkitConfig, *, backends=None):
         _ = config
+        _ = backends
         return object()
 
     def create_http_client(self, *, config: ToolkitConfig, http_config: HttpConfig):

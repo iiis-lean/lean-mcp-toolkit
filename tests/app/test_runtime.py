@@ -1,13 +1,17 @@
 from dataclasses import dataclass
 
 from lean_mcp_toolkit.config import ToolkitConfig
+from lean_mcp_toolkit.contracts.declarations import DeclarationExtractRequest, DeclarationExtractResponse
 from lean_mcp_toolkit.contracts.diagnostics import (
+    AxiomAuditResult,
     BuildRequest,
     BuildResponse,
     LintRequest,
     LintResponse,
     NoSorryResult,
 )
+from lean_mcp_toolkit.contracts.lsp_core import LspGoalRequest, LspGoalResponse
+from lean_mcp_toolkit.contracts.search_core import LocalDeclSearchRequest, LocalDeclSearchResponse
 from lean_mcp_toolkit.runtime import create_toolkit_runtime
 
 
@@ -30,35 +34,89 @@ class _FakeDiagnostics:
             sorries=tuple(),
         )
 
+    def run_lint_axiom_audit(self, req: LintRequest) -> AxiomAuditResult:
+        _ = req
+        return AxiomAuditResult(
+            check_id="axiom_audit",
+            success=True,
+            message="ok",
+            declared_axioms=tuple(),
+            usage_issues=tuple(),
+            unresolved=tuple(),
+        )
+
+
+@dataclass(slots=True)
+class _FakeDeclarations:
+    def extract(self, req: DeclarationExtractRequest) -> DeclarationExtractResponse:
+        _ = req
+        return DeclarationExtractResponse(success=True, total_declarations=0, declarations=tuple())
+
+
+@dataclass(slots=True)
+class _FakeLspCore:
+    def run_goal(self, req: LspGoalRequest) -> LspGoalResponse:
+        _ = req
+        return LspGoalResponse(success=True)
+
+
+@dataclass(slots=True)
+class _FakeSearchCore:
+    def run_local_decl_search(self, req: LocalDeclSearchRequest) -> LocalDeclSearchResponse:
+        _ = req
+        return LocalDeclSearchResponse(query="", count=0, items=tuple())
+
 
 @dataclass(slots=True)
 class _FakeToolkitHttpClient:
     diagnostics: _FakeDiagnostics
-
-    def diagnostics_build(self, payload: dict) -> dict:
-        return {"route": "build", "payload": payload}
-
-    def diagnostics_lint(self, payload: dict) -> dict:
-        return {"route": "lint", "payload": payload}
-
-    def diagnostics_lint_no_sorry(self, payload: dict) -> dict:
-        return {"route": "lint.no_sorry", "payload": payload}
+    declarations: _FakeDeclarations
+    lsp_core: _FakeLspCore
+    search_core: _FakeSearchCore
 
     def dispatch_api(self, route_path: str, payload: dict) -> dict:
         return {"route_path": route_path, "payload": payload}
 
 
+@dataclass(slots=True)
+class _FakeToolkitServer:
+    diagnostics: _FakeDiagnostics
+    declarations: _FakeDeclarations
+    lsp_core: _FakeLspCore
+    search_core: _FakeSearchCore
+
+    def dispatch_api(self, route_path: str, payload: dict) -> dict:
+        if route_path == "declarations.extract":
+            return self.declarations.extract(DeclarationExtractRequest.from_dict(payload)).to_dict()
+        if route_path == "diagnostics.build":
+            return self.diagnostics.run_build(BuildRequest.from_dict(payload)).to_dict()
+        if route_path == "diagnostics.lint":
+            return self.diagnostics.run_lint(LintRequest.from_dict(payload)).to_dict()
+        if route_path == "diagnostics.lint.no_sorry":
+            return self.diagnostics.run_lint_no_sorry(LintRequest.from_dict(payload)).to_dict()
+        raise KeyError(route_path)
+
+
 def test_create_toolkit_runtime_local(monkeypatch) -> None:
     fake_cfg = ToolkitConfig.from_dict({"server": {"default_project_root": "/tmp"}})
     fake_diagnostics = _FakeDiagnostics()
+    fake_declarations = _FakeDeclarations()
+    fake_lsp_core = _FakeLspCore()
+    fake_search_core = _FakeSearchCore()
+    fake_server = _FakeToolkitServer(
+        diagnostics=fake_diagnostics,
+        declarations=fake_declarations,
+        lsp_core=fake_lsp_core,
+        search_core=fake_search_core,
+    )
 
     monkeypatch.setattr(
         "lean_mcp_toolkit.runtime.load_toolkit_config",
         lambda config_path=None: fake_cfg,
     )
     monkeypatch.setattr(
-        "lean_mcp_toolkit.runtime.create_diagnostics_service",
-        lambda config: fake_diagnostics,
+        "lean_mcp_toolkit.runtime.create_local_toolkit_server",
+        lambda config: fake_server,
     )
 
     runtime = create_toolkit_runtime(mode="local", config_path="unused.toml")
@@ -66,11 +124,16 @@ def test_create_toolkit_runtime_local(monkeypatch) -> None:
     assert runtime.config == fake_cfg
     assert runtime.http_config is None
     assert runtime.diagnostics is fake_diagnostics
+    assert runtime.declarations is fake_declarations
+    assert runtime.lsp_core is fake_lsp_core
+    assert runtime.search_core is fake_search_core
 
-    build_out = runtime.diagnostics_build({})
-    lint_out = runtime.diagnostics_lint({})
-    no_sorry_out = runtime.diagnostics_lint_no_sorry({})
+    extract_out = runtime.dispatch_api("declarations.extract", {"target": "A.B"})
+    build_out = runtime.dispatch_api("diagnostics.build", {})
+    lint_out = runtime.dispatch_api("diagnostics.lint", {})
+    no_sorry_out = runtime.dispatch_api("diagnostics.lint.no_sorry", {})
 
+    assert extract_out["success"] is True
     assert build_out["success"] is True
     assert lint_out["success"] is True
     assert no_sorry_out["check_id"] == "no_sorry"
@@ -89,12 +152,20 @@ def test_create_toolkit_runtime_http(monkeypatch) -> None:
         }
     )
     fake_diagnostics = _FakeDiagnostics()
+    fake_declarations = _FakeDeclarations()
+    fake_lsp_core = _FakeLspCore()
+    fake_search_core = _FakeSearchCore()
     captured = {}
 
     def _fake_http_factory(*, http_config, config=None):
         captured["http_config"] = http_config
         captured["config"] = config
-        return _FakeToolkitHttpClient(diagnostics=fake_diagnostics)
+        return _FakeToolkitHttpClient(
+            diagnostics=fake_diagnostics,
+            declarations=fake_declarations,
+            lsp_core=fake_lsp_core,
+            search_core=fake_search_core,
+        )
 
     monkeypatch.setattr(
         "lean_mcp_toolkit.runtime.load_toolkit_config",
@@ -114,9 +185,12 @@ def test_create_toolkit_runtime_http(monkeypatch) -> None:
     assert runtime.mode == "http"
     assert runtime.config == fake_cfg
     assert runtime.diagnostics is fake_diagnostics
+    assert runtime.declarations is fake_declarations
+    assert runtime.lsp_core is fake_lsp_core
+    assert runtime.search_core is fake_search_core
     assert runtime.http_config is not None
     assert runtime.http_config.base_url == "http://remote:19000"
     assert captured["http_config"].base_url == "http://remote:19000"
     assert captured["config"] == fake_cfg
-    assert runtime.diagnostics_build({"k": 1})["route"] == "build"
+    assert runtime.dispatch_api("diagnostics.build", {"k": 1})["route_path"] == "diagnostics.build"
     assert runtime.dispatch_api("/diagnostics/lint", {})["route_path"] == "/diagnostics/lint"

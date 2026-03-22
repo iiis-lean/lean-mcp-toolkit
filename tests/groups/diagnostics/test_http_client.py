@@ -14,6 +14,15 @@ class _FakeHttpJsonClient:
             return {"success": True, "checks": []}
         if path == "/diagnostics/lint/no_sorry":
             return {"check_id": "no_sorry", "success": True, "message": "ok", "sorries": []}
+        if path == "/diagnostics/lint/axiom_audit":
+            return {
+                "check_id": "axiom_audit",
+                "success": True,
+                "message": "ok",
+                "declared_axioms": [],
+                "usage_issues": [],
+                "unresolved": [],
+            }
         raise AssertionError(f"unexpected path: {path}")
 
 
@@ -30,3 +39,6 @@ def test_diagnostics_http_client_roundtrip() -> None:
 
     no_sorry = client.run_lint_no_sorry(LintRequest.from_dict({}))
     assert no_sorry.check_id == "no_sorry"
+
+    axiom_audit = client.run_lint_axiom_audit(LintRequest.from_dict({}))
+    assert axiom_audit.check_id == "axiom_audit"

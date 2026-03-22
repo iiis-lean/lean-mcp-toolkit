@@ -1,4 +1,5 @@
 from lean_mcp_toolkit.contracts.diagnostics import (
+    AxiomAuditResult,
     BuildRequest,
     BuildResponse,
     DiagnosticItem,
@@ -39,9 +40,10 @@ def test_build_response_markdown() -> None:
         content="theorem t : True := by\n  exact False.elim ?h",
     )
     file_diag = FileDiagnostics(file="A.B", success=False, items=(item,))
+    ok_diag = FileDiagnostics(file="A.C", success=True, items=tuple())
     resp = BuildResponse(
         success=False,
-        files=(file_diag,),
+        files=(file_diag, ok_diag),
         failed_stage="diagnostics",
         stage_error_message=None,
     )
@@ -51,6 +53,8 @@ def test_build_response_markdown() -> None:
     assert "A.B" in md
     assert "type mismatch" in md
     assert "failed_stage" in md
+    assert "error: A/B.lean:1:2: type mismatch" in md
+    assert "A.C" not in md
 
 
 def test_lint_response_parsing_no_sorry() -> None:
@@ -82,6 +86,42 @@ def test_lint_response_parsing_no_sorry() -> None:
     assert isinstance(first, NoSorryResult)
     assert first.check_id == "no_sorry"
     assert len(first.sorries) == 1
+
+
+def test_lint_response_parsing_axiom_audit() -> None:
+    raw = {
+        "success": False,
+        "checks": [
+            {
+                "check_id": "axiom_audit",
+                "success": False,
+                "message": "found 1 risky axiom usage item(s); 1 declaration(s) unresolved",
+                "declared_axioms": [],
+                "usage_issues": [
+                    {
+                        "fileName": "A.C",
+                        "declaration": "A.C.t",
+                        "risky_axioms": ["MyAxiom"],
+                    }
+                ],
+                "unresolved": [
+                    {
+                        "fileName": "A.C",
+                        "declaration": "A.C.u",
+                        "reason": "axiom report not found in probe output",
+                    }
+                ],
+            }
+        ],
+    }
+    resp = LintResponse.from_dict(raw)
+    assert resp.success is False
+    assert len(resp.checks) == 1
+    first = resp.checks[0]
+    assert isinstance(first, AxiomAuditResult)
+    assert first.usage_issues[0].declaration == "A.C.t"
+    assert first.usage_issues[0].risky_axioms == ("MyAxiom",)
+    assert first.unresolved[0].reason == "axiom report not found in probe output"
 
 
 def test_build_response_stage_fields_roundtrip() -> None:

@@ -5,13 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..adapters.http import (
-    handle_diagnostics_build,
-    handle_diagnostics_lint,
-    handle_diagnostics_lint_no_sorry,
-)
 from ..config import ToolkitConfig
-from ..core.services import DiagnosticsService
+from ..core.services import DeclarationsService, DiagnosticsService, LspCoreService, SearchCoreService
 from ..groups import GroupPlugin, ToolHandler, builtin_group_plugins
 from ..groups.plugin_base import resolve_active_group_names, resolve_aliases_by_canonical
 from ..transport.http import HttpConfig
@@ -24,6 +19,9 @@ class ToolkitHttpClient:
     config: ToolkitConfig = field(default_factory=ToolkitConfig)
     http_config: HttpConfig | None = None
     diagnostics: DiagnosticsService | None = None
+    declarations: DeclarationsService | None = None
+    lsp_core: LspCoreService | None = None
+    search_core: SearchCoreService | None = None
     _group_plugins: tuple[GroupPlugin, ...] = field(default_factory=tuple, repr=False)
     _group_clients: dict[str, Any] = field(default_factory=dict, repr=False)
     _canonical_handlers: dict[str, ToolHandler] = field(default_factory=dict, repr=False)
@@ -32,10 +30,6 @@ class ToolkitHttpClient:
     _aliases_by_group: dict[str, dict[str, tuple[str, ...]]] = field(
         default_factory=dict, repr=False
     )
-
-    def __post_init__(self) -> None:
-        if self.http_config is None and self.diagnostics is not None and not self._canonical_handlers:
-            self._register_legacy_diagnostics(self.diagnostics)
 
     @classmethod
     def from_http_config(
@@ -49,15 +43,6 @@ class ToolkitHttpClient:
         client = cls(config=resolved, http_config=http_config)
         client._wire_plugins(plugins or builtin_group_plugins())
         return client
-
-    def diagnostics_build(self, payload: dict) -> dict:
-        return self._dispatch_canonical("diagnostics.build", payload)
-
-    def diagnostics_lint(self, payload: dict) -> dict:
-        return self._dispatch_canonical("diagnostics.lint", payload)
-
-    def diagnostics_lint_no_sorry(self, payload: dict) -> dict:
-        return self._dispatch_canonical("diagnostics.lint.no_sorry", payload)
 
     def dispatch_api(self, route_path: str, payload: dict) -> dict:
         route = route_path.strip()
@@ -104,6 +89,12 @@ class ToolkitHttpClient:
             self._group_clients[plugin.group_name] = group_client
             if plugin.group_name == "diagnostics":
                 self.diagnostics = group_client
+            if plugin.group_name == "declarations":
+                self.declarations = group_client
+            if plugin.group_name == "lsp_core":
+                self.lsp_core = group_client
+            if plugin.group_name == "search_core":
+                self.search_core = group_client
 
             specs = plugin.tool_specs()
             spec_by_canonical = {spec.canonical_name: spec for spec in specs}
@@ -133,12 +124,6 @@ class ToolkitHttpClient:
                 for alias in aliases:
                     self._register_alias_handler(alias, handler)
 
-    def _dispatch_canonical(self, canonical_name: str, payload: dict) -> dict:
-        handler = self._canonical_handlers.get(canonical_name)
-        if handler is None:
-            raise KeyError(f"tool is not active: {canonical_name}")
-        return handler(payload)
-
     def _register_canonical_handler(self, canonical_name: str, handler: ToolHandler) -> None:
         existing = self._canonical_handlers.get(canonical_name)
         if existing is not None and existing is not handler:
@@ -166,29 +151,3 @@ class ToolkitHttpClient:
         if len(prefix) > 1 and prefix.endswith("/"):
             prefix = prefix[:-1]
         return prefix
-
-    def _register_legacy_diagnostics(self, diagnostics: DiagnosticsService) -> None:
-        self._register_canonical_handler(
-            "diagnostics.build",
-            lambda payload: handle_diagnostics_build(diagnostics, payload),
-        )
-        self._register_canonical_handler(
-            "diagnostics.lint",
-            lambda payload: handle_diagnostics_lint(diagnostics, payload),
-        )
-        self._register_canonical_handler(
-            "diagnostics.lint.no_sorry",
-            lambda payload: handle_diagnostics_lint_no_sorry(diagnostics, payload),
-        )
-        self._register_api_route_handler("/diagnostics/build", self._canonical_handlers["diagnostics.build"])
-        self._register_api_route_handler("/diagnostics/lint", self._canonical_handlers["diagnostics.lint"])
-        self._register_api_route_handler(
-            "/diagnostics/lint/no_sorry",
-            self._canonical_handlers["diagnostics.lint.no_sorry"],
-        )
-        self._register_alias_handler("diagnostics.build", self._canonical_handlers["diagnostics.build"])
-        self._register_alias_handler("diagnostics.lint", self._canonical_handlers["diagnostics.lint"])
-        self._register_alias_handler(
-            "diagnostics.lint.no_sorry",
-            self._canonical_handlers["diagnostics.lint.no_sorry"],
-        )

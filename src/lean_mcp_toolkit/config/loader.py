@@ -63,6 +63,7 @@ def load_toolkit_config(
     """Load resolved config with precedence: defaults < file < env < cli."""
 
     resolved: JsonDict = ToolkitConfig().to_dict()
+
     file_data = _load_file_dict(config_path)
     if file_data:
         resolved = _deep_merge(resolved, file_data)

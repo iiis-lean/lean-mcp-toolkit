@@ -3,7 +3,14 @@
 from __future__ import annotations
 
 from ...contracts.base import JsonDict
-from ...contracts.diagnostics import BuildRequest, BuildResponse, LintRequest, LintResponse, NoSorryResult
+from ...contracts.diagnostics import (
+    AxiomAuditResult,
+    BuildRequest,
+    BuildResponse,
+    LintRequest,
+    LintResponse,
+    NoSorryResult,
+)
 from ...core.services import DiagnosticsService
 from ...transport.http import HttpConfig, HttpJsonClient
 
@@ -29,6 +36,11 @@ class DiagnosticsHttpClient(DiagnosticsService):
         payload = req.to_dict()
         data = self._post("/diagnostics/lint/no_sorry", payload)
         return NoSorryResult.from_dict(data)
+
+    def run_lint_axiom_audit(self, req: LintRequest) -> AxiomAuditResult:
+        payload = req.to_dict()
+        data = self._post("/diagnostics/lint/axiom_audit", payload)
+        return AxiomAuditResult.from_dict(data)
 
     def _post(self, path: str, payload: JsonDict) -> JsonDict:
         result = self.http_client.post_json(path, payload)

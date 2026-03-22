@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Protocol
 
+from ..backends.context import BackendContext
 from ..config import ToolkitConfig
 from ..contracts.base import JsonDict
 from ..transport.http import HttpConfig
@@ -146,7 +147,15 @@ class GroupToolSpec:
 class GroupPlugin(Protocol):
     group_name: str
 
-    def create_local_service(self, config: ToolkitConfig) -> Any:
+    def backend_dependencies(self) -> tuple[str, ...]:
+        ...
+
+    def create_local_service(
+        self,
+        config: ToolkitConfig,
+        *,
+        backends: BackendContext | None = None,
+    ) -> Any:
         ...
 
     def create_http_client(self, *, config: ToolkitConfig, http_config: HttpConfig) -> Any:

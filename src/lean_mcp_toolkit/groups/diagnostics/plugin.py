@@ -16,8 +16,11 @@ except Exception:  # pragma: no cover - optional runtime dependency
 from ...adapters.http import (
     handle_diagnostics_build,
     handle_diagnostics_lint,
+    handle_diagnostics_lint_axiom_audit,
     handle_diagnostics_lint_no_sorry,
 )
+from ...backends.context import BackendContext
+from ...backends.keys import BackendKey
 from ...config import ToolkitConfig
 from ...contracts.base import JsonDict
 from ...transport.http import HttpConfig
@@ -123,8 +126,8 @@ _LINT_PARAMS: tuple[ToolParamSpec, ...] = (
         required=False,
         default_value="diagnostics.default_enabled_checks",
         description=(
-            "Enabled lint checks. Current implementation supports no_sorry; unsupported checks "
-            "return check-level not implemented results."
+            "Enabled lint checks. Implemented checks: no_sorry and axiom_audit. "
+            "Unsupported checks return check-level not implemented results."
         ),
     ),
     ToolParamSpec(
@@ -220,9 +223,19 @@ _LINT_RETURNS: tuple[ToolReturnSpec, ...] = (
                 children=_DIAGNOSTIC_ITEM_FIELDS,
             ),
             ToolReturnSpec(
-                "<extra fields>",
-                "object",
-                "Check-specific fields for other lint checks.",
+                "declared_axioms",
+                "list[{fileName:str|null,declaration:str|null,kind:str|null,pos:{line:int,column:int}|null,endPos:{line:int,column:int}|null,content:str|null}] | absent",
+                "Present for `axiom_audit` check.",
+            ),
+            ToolReturnSpec(
+                "usage_issues",
+                "list[{fileName:str|null,declaration:str|null,risky_axioms:list[str]}] | absent",
+                "Present for `axiom_audit` check.",
+            ),
+            ToolReturnSpec(
+                "unresolved",
+                "list[{fileName:str|null,declaration:str|null,reason:str}] | absent",
+                "Present for `axiom_audit` check.",
             ),
         ),
     ),
@@ -237,6 +250,27 @@ _LINT_NO_SORRY_RETURNS: tuple[ToolReturnSpec, ...] = (
         "list[DiagnosticItem]",
         "All diagnostics classified as sorry.",
         children=_DIAGNOSTIC_ITEM_FIELDS,
+    ),
+)
+
+_LINT_AXIOM_AUDIT_RETURNS: tuple[ToolReturnSpec, ...] = (
+    ToolReturnSpec("check_id", "str", "Always `axiom_audit`."),
+    ToolReturnSpec("success", "bool", "Whether declared axioms/risky usage are absent."),
+    ToolReturnSpec("message", "str", "Summary of axiom_audit check result."),
+    ToolReturnSpec(
+        "declared_axioms",
+        "list[{fileName:str|null,declaration:str|null,kind:str|null,pos:{line:int,column:int}|null,endPos:{line:int,column:int}|null,content:str|null}]",
+        "Declared axioms/constant declarations found in targets.",
+    ),
+    ToolReturnSpec(
+        "usage_issues",
+        "list[{fileName:str|null,declaration:str|null,risky_axioms:list[str]}]",
+        "Declarations depending on risky axioms.",
+    ),
+    ToolReturnSpec(
+        "unresolved",
+        "list[{fileName:str|null,declaration:str|null,reason:str}]",
+        "Declarations/files that could not be audited.",
     ),
 )
 
@@ -276,6 +310,17 @@ _TOOL_SPECS: tuple[GroupToolSpec, ...] = (
         params=_LINT_NO_SORRY_PARAMS,
         returns=_LINT_NO_SORRY_RETURNS,
     ),
+    GroupToolSpec(
+        group_name="diagnostics",
+        canonical_name="diagnostics.lint.axiom_audit",
+        raw_name="lint.axiom_audit",
+        api_path="/diagnostics/lint/axiom_audit",
+        description=(
+            "Run axiom_audit lint check and return declared-axiom and risky-usage findings."
+        ),
+        params=_LINT_NO_SORRY_PARAMS,
+        returns=_LINT_AXIOM_AUDIT_RETURNS,
+    ),
 )
 
 _TOOL_SPEC_MAP: dict[str, GroupToolSpec] = {spec.canonical_name: spec for spec in _TOOL_SPECS}
@@ -292,8 +337,20 @@ def _param_desc(spec: GroupToolSpec, name: str) -> str:
 class DiagnosticsGroupPlugin(GroupPlugin):
     group_name: str = "diagnostics"
 
-    def create_local_service(self, config: ToolkitConfig):
-        return create_diagnostics_service(config=config)
+    def backend_dependencies(self) -> tuple[str, ...]:
+        return (
+            BackendKey.LEAN_COMMAND_RUNTIME,
+            BackendKey.LEAN_TARGET_RESOLVER,
+            BackendKey.DECLARATIONS_BACKENDS,
+        )
+
+    def create_local_service(
+        self,
+        config: ToolkitConfig,
+        *,
+        backends: BackendContext | None = None,
+    ):
+        return create_diagnostics_service(config=config, backends=backends)
 
     def create_http_client(self, *, config: ToolkitConfig, http_config: HttpConfig):
         _ = config
@@ -309,6 +366,9 @@ class DiagnosticsGroupPlugin(GroupPlugin):
             "diagnostics.lint.no_sorry": (
                 lambda payload: handle_diagnostics_lint_no_sorry(service, payload)
             ),
+            "diagnostics.lint.axiom_audit": (
+                lambda payload: handle_diagnostics_lint_axiom_audit(service, payload)
+            ),
         }
 
     def register_mcp_tools(
@@ -323,6 +383,7 @@ class DiagnosticsGroupPlugin(GroupPlugin):
         build_spec = _TOOL_SPEC_MAP["diagnostics.build"]
         lint_spec = _TOOL_SPEC_MAP["diagnostics.lint"]
         lint_no_sorry_spec = _TOOL_SPEC_MAP["diagnostics.lint.no_sorry"]
+        lint_axiom_audit_spec = _TOOL_SPEC_MAP["diagnostics.lint.axiom_audit"]
 
         for alias in aliases_by_canonical.get("diagnostics.build", ()):
             self._register_build(
@@ -347,6 +408,15 @@ class DiagnosticsGroupPlugin(GroupPlugin):
                 mcp=mcp,
                 alias=alias,
                 spec=lint_no_sorry_spec,
+                service=service,
+                normalize_str_list=normalize_str_list,
+                prune_none=prune_none,
+            )
+        for alias in aliases_by_canonical.get("diagnostics.lint.axiom_audit", ()):
+            self._register_lint_axiom_audit(
+                mcp=mcp,
+                alias=alias,
+                spec=lint_axiom_audit_spec,
                 service=service,
                 normalize_str_list=normalize_str_list,
                 prune_none=prune_none,
@@ -501,6 +571,51 @@ class DiagnosticsGroupPlugin(GroupPlugin):
                 "timeout_seconds": timeout_seconds,
             }
             return handle_diagnostics_lint_no_sorry(service, prune_none(payload))
+
+    @staticmethod
+    def _register_lint_axiom_audit(
+        *,
+        mcp: Any,
+        alias: str,
+        spec: GroupToolSpec,
+        service: Any,
+        normalize_str_list,
+        prune_none,
+    ) -> None:
+        @mcp.tool(
+            name=alias,
+            description=spec.render_mcp_description(),
+        )
+        def _diagnostics_lint_axiom_audit(
+            project_root: Annotated[
+                str | None,
+                Field(description=_param_desc(spec, "project_root")),
+            ] = None,
+            targets: Annotated[
+                list[str] | str | None,
+                Field(description=_param_desc(spec, "targets")),
+            ] = None,
+            include_content: Annotated[
+                bool | None,
+                Field(description=_param_desc(spec, "include_content")),
+            ] = None,
+            context_lines: Annotated[
+                int | None,
+                Field(description=_param_desc(spec, "context_lines")),
+            ] = None,
+            timeout_seconds: Annotated[
+                int | None,
+                Field(description=_param_desc(spec, "timeout_seconds")),
+            ] = None,
+        ) -> JsonDict:
+            payload = {
+                "project_root": project_root,
+                "targets": normalize_str_list(targets),
+                "include_content": include_content,
+                "context_lines": context_lines,
+                "timeout_seconds": timeout_seconds,
+            }
+            return handle_diagnostics_lint_axiom_audit(service, prune_none(payload))
 
 
 __all__ = ["DiagnosticsGroupPlugin"]
