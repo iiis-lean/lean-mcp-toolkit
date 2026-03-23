@@ -123,6 +123,37 @@ def test_warmup_runner_success_and_cleanup(tmp_path: Path) -> None:
     assert not (tmp_path / probe_rel).exists()
 
 
+def test_warmup_runner_supports_legacy_search_call_name(tmp_path: Path) -> None:
+    cfg = ToolkitConfig.from_dict(
+        {
+            "warmup": {
+                "policy": {"enabled": True},
+                "plan": {"order": ["search.mathlib_decl.search"]},
+                "calls": {
+                    "search.mathlib_decl.search": {
+                        "enabled": True,
+                        "request": {"query": "Nat.succ", "limit": 1, "rerank_top": 0},
+                    }
+                },
+            }
+        }
+    )
+    fake_search = _FakeSearch()
+    runner = ToolkitWarmupRunner(
+        config=cfg,
+        diagnostics=None,
+        declarations=None,
+        search_core=fake_search,
+    )
+
+    report = runner.run()
+    assert report.success is True
+    assert len(report.steps) == 1
+    assert report.steps[0].call_name == "search.mathlib_decl.search"
+    assert report.steps[0].success is True
+    assert len(fake_search.calls) == 1
+
+
 def test_warmup_runner_probe_conflict_uses_suffix(tmp_path: Path) -> None:
     existing_rel = "LeanMcpToolkitWarmup/Probe.lean"
     existing_abs = tmp_path / existing_rel
