@@ -16,6 +16,7 @@ from ...backends.declarations import (
 )
 from ...backends.lean import CommandResult, LeanCommandRuntime
 from ...backends.lean.path import LeanPath, TargetResolver
+from ...backends.lsp import LeanLSPClientManager
 from ...config import ToolkitConfig
 from ...contracts.diagnostics import (
     AxiomAuditResult,
@@ -26,6 +27,8 @@ from ...contracts.diagnostics import (
     BuildResponse,
     CheckResult,
     DiagnosticItem,
+    FileRequest,
+    FileResponse,
     FileDiagnostics,
     LintRequest,
     LintResponse,
@@ -76,6 +79,7 @@ class DiagnosticsServiceImpl(DiagnosticsService):
     parser: LeanDiagnosticParser
     context_extractor: ContextExtractor
     declarations_backends: dict[str, DeclarationsBackend]
+    lsp_client_manager: LeanLSPClientManager
 
     def __init__(
         self,
@@ -86,6 +90,7 @@ class DiagnosticsServiceImpl(DiagnosticsService):
         parser: LeanDiagnosticParser | None = None,
         context_extractor: ContextExtractor | None = None,
         declarations_backends: dict[str, DeclarationsBackend] | None = None,
+        lsp_client_manager: LeanLSPClientManager | None = None,
     ):
         self.config = config
         self.runtime = runtime or LeanCommandRuntime(
@@ -102,6 +107,9 @@ class DiagnosticsServiceImpl(DiagnosticsService):
             ),
             "native": NativeDeclarationsBackend(),
         }
+        self.lsp_client_manager = lsp_client_manager or LeanLSPClientManager(
+            backend_config=config.backends.lsp
+        )
 
     def run_build(self, req: BuildRequest) -> BuildResponse:
         options = self._effective_build_options(req)
@@ -185,6 +193,97 @@ class DiagnosticsServiceImpl(DiagnosticsService):
             failed_stage=(None if success else "diagnostics"),
             stage_error_message=None,
         )
+
+    def run_file(self, req: FileRequest) -> FileResponse:
+        module: LeanPath | None = None
+        try:
+            project_root = self._resolve_project_root(req.project_root)
+            resolved = self.resolver.resolve(
+                project_root=project_root,
+                targets=[req.file_path],
+            )
+            if len(resolved.modules) != 1:
+                raise ValueError("diagnostics.file expects exactly one Lean file target")
+            module = resolved.modules[0]
+
+            include_content = (
+                req.include_content
+                if req.include_content is not None
+                else self.config.diagnostics.default_include_content
+            )
+            context_lines = (
+                req.context_lines
+                if req.context_lines is not None
+                else self.config.diagnostics.default_context_lines
+            )
+            timeout_seconds = (
+                req.timeout_seconds
+                if req.timeout_seconds is not None
+                else self.config.diagnostics.default_timeout_seconds
+            )
+
+            client = self.lsp_client_manager.get_client(project_root)
+            rel_file = module.to_rel_file()
+            client.open_file(rel_file)
+
+            inactivity_timeout = float(
+                timeout_seconds
+                if timeout_seconds is not None
+                else self.config.backends.lsp.diagnostics_timeout_seconds
+            )
+            raw_result = client.get_diagnostics(
+                rel_file,
+                inactivity_timeout=inactivity_timeout,
+            )
+            raw_items = self._extract_lsp_diagnostics_list(raw_result)
+            items = [self._map_lsp_diagnostic_item(item, fallback_file=module.dot) for item in raw_items]
+
+            if include_content:
+                items = self._attach_content(
+                    module=module,
+                    items=items,
+                    project_root=project_root,
+                    context_lines=context_lines,
+                )
+
+            error_count = 0
+            warning_count = 0
+            info_count = 0
+            sorry_count = 0
+            for item in items:
+                sev = (item.severity or "").strip().lower()
+                if sev == "error":
+                    error_count += 1
+                elif sev == "warning":
+                    warning_count += 1
+                else:
+                    info_count += 1
+                if self._is_sorry(item):
+                    sorry_count += 1
+
+            return FileResponse(
+                success=error_count == 0,
+                error_message=None,
+                file=module.dot,
+                items=tuple(items),
+                total_items=len(items),
+                error_count=error_count,
+                warning_count=warning_count,
+                info_count=info_count,
+                sorry_count=sorry_count,
+            )
+        except Exception as exc:
+            return FileResponse(
+                success=False,
+                error_message=str(exc),
+                file=(module.dot if module is not None else ""),
+                items=tuple(),
+                total_items=0,
+                error_count=0,
+                warning_count=0,
+                info_count=0,
+                sorry_count=0,
+            )
 
     def run_lint_no_sorry(self, req: LintRequest) -> NoSorryResult:
         lint_options = self._effective_lint_options(req)
@@ -851,6 +950,82 @@ class DiagnosticsServiceImpl(DiagnosticsService):
                 path.unlink(missing_ok=True)
             except Exception:
                 continue
+
+    @staticmethod
+    def _extract_lsp_diagnostics_list(result: object) -> list[dict]:
+        if isinstance(result, list):
+            return [item for item in result if isinstance(item, dict)]
+        if isinstance(result, dict):
+            raw = result.get("diagnostics")
+            if isinstance(raw, list):
+                return [item for item in raw if isinstance(item, dict)]
+            return []
+        diagnostics = getattr(result, "diagnostics", None)
+        if isinstance(diagnostics, list):
+            return [item for item in diagnostics if isinstance(item, dict)]
+        return []
+
+    @classmethod
+    def _map_lsp_diagnostic_item(
+        cls,
+        item: dict,
+        *,
+        fallback_file: str,
+    ) -> DiagnosticItem:
+        severity = item.get("severity")
+        if isinstance(severity, int):
+            severity_map = {
+                1: "error",
+                2: "warning",
+                3: "information",
+                4: "hint",
+            }
+            severity_text = severity_map.get(severity, str(severity))
+        else:
+            severity_text = str(severity or "").strip().lower() or "error"
+
+        file_name = item.get("fileName")
+        file_name_text = (
+            str(file_name).strip()
+            if file_name is not None and str(file_name).strip()
+            else fallback_file
+        )
+
+        start_pos: Position | None = None
+        end_pos: Position | None = None
+        raw_range = item.get("fullRange") or item.get("range")
+        if isinstance(raw_range, dict):
+            raw_start = raw_range.get("start")
+            raw_end = raw_range.get("end")
+            if isinstance(raw_start, dict):
+                try:
+                    start_pos = Position(
+                        line=int(raw_start.get("line", 0)) + 1,
+                        column=int(raw_start.get("character", 0)) + 1,
+                    )
+                except Exception:
+                    start_pos = None
+            if isinstance(raw_end, dict):
+                try:
+                    end_pos = Position(
+                        line=int(raw_end.get("line", 0)) + 1,
+                        column=int(raw_end.get("character", 0)) + 1,
+                    )
+                except Exception:
+                    end_pos = None
+
+        message = str(item.get("message") or item.get("data") or "")
+        kind = item.get("kind")
+        kind_text = str(kind).strip() if kind is not None and str(kind).strip() else None
+        return DiagnosticItem(
+            severity=severity_text,
+            pos=start_pos,
+            endPos=end_pos,
+            kind=kind_text,
+            data=message,
+            fileName=file_name_text,
+            content=None,
+        )
 
     def _attach_content(
         self,

@@ -1,20 +1,16 @@
-"""Search-core contracts."""
+"""search_core contracts."""
 
-from .local_decl_search import LocalDeclSearchItem, LocalDeclSearchRequest, LocalDeclSearchResponse
-from .mathlib_decl_get import MathlibDeclGetRequest, MathlibDeclGetResponse
-from .mathlib_decl_search import (
-    MathlibDeclSearchRequest,
-    MathlibDeclSearchResponse,
+from .mathlib_decl_find import (
+    MathlibDeclFindRequest,
+    MathlibDeclFindResponse,
     MathlibDeclSummaryItem,
 )
+from .mathlib_decl_get import MathlibDeclGetRequest, MathlibDeclGetResponse
 
 __all__ = [
-    "MathlibDeclSearchRequest",
-    "MathlibDeclSearchResponse",
+    "MathlibDeclFindRequest",
+    "MathlibDeclFindResponse",
     "MathlibDeclSummaryItem",
     "MathlibDeclGetRequest",
     "MathlibDeclGetResponse",
-    "LocalDeclSearchRequest",
-    "LocalDeclSearchResponse",
-    "LocalDeclSearchItem",
 ]

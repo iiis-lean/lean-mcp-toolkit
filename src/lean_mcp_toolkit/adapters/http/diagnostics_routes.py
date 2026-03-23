@@ -7,7 +7,7 @@ Actual execution belongs to the injected service implementation.
 from __future__ import annotations
 
 from ...contracts.base import JsonDict
-from ...contracts.diagnostics import BuildRequest, LintRequest
+from ...contracts.diagnostics import BuildRequest, FileRequest, LintRequest
 from ...core.services import DiagnosticsService
 
 
@@ -15,6 +15,12 @@ from ...core.services import DiagnosticsService
 def handle_diagnostics_build(service: DiagnosticsService, payload: JsonDict) -> JsonDict:
     req = BuildRequest.from_dict(payload)
     resp = service.run_build(req)
+    return resp.to_dict()
+
+
+def handle_diagnostics_file(service: DiagnosticsService, payload: JsonDict) -> JsonDict:
+    req = FileRequest.from_dict(payload)
+    resp = service.run_file(req)
     return resp.to_dict()
 
 

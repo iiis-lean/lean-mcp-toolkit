@@ -8,7 +8,15 @@ from typing import Literal, Protocol
 from .app import create_local_toolkit_server, create_toolkit_http_client
 from .config import ToolkitConfig, load_toolkit_config
 from .contracts.base import JsonDict
-from .core.services import DeclarationsService, DiagnosticsService, LspCoreService, SearchCoreService
+from .core.services import (
+    DeclarationsService,
+    DiagnosticsService,
+    LspAssistService,
+    LspCoreService,
+    MathlibNavService,
+    SearchCoreService,
+    SearchNavService,
+)
 from .transport.http import HttpConfig
 
 ToolkitRuntimeMode = Literal["local", "http"]
@@ -20,7 +28,10 @@ class ToolkitInvoker(Protocol):
     diagnostics: DiagnosticsService | None
     declarations: DeclarationsService | None
     lsp_core: LspCoreService | None
+    lsp_assist: LspAssistService | None
     search_core: SearchCoreService | None
+    mathlib_nav: MathlibNavService | None
+    search_nav: SearchNavService | None
 
     def dispatch_api(self, route_path: str, payload: JsonDict) -> JsonDict:
         ...
@@ -35,7 +46,10 @@ class ToolkitRuntime:
     diagnostics: DiagnosticsService | None
     declarations: DeclarationsService | None
     lsp_core: LspCoreService | None
+    lsp_assist: LspAssistService | None
     search_core: SearchCoreService | None
+    mathlib_nav: MathlibNavService | None
+    search_nav: SearchNavService | None
     toolkit: ToolkitInvoker
     http_config: HttpConfig | None = None
 
@@ -61,7 +75,10 @@ def create_toolkit_runtime(
             diagnostics=server.diagnostics,
             declarations=server.declarations,
             lsp_core=server.lsp_core,
+            lsp_assist=getattr(server, "lsp_assist", None),
             search_core=server.search_core,
+            mathlib_nav=getattr(server, "mathlib_nav", None),
+            search_nav=server.search_nav,
             toolkit=server,
             http_config=None,
         )
@@ -78,7 +95,10 @@ def create_toolkit_runtime(
             diagnostics=toolkit_client.diagnostics,
             declarations=toolkit_client.declarations,
             lsp_core=toolkit_client.lsp_core,
+            lsp_assist=getattr(toolkit_client, "lsp_assist", None),
             search_core=toolkit_client.search_core,
+            mathlib_nav=getattr(toolkit_client, "mathlib_nav", None),
+            search_nav=toolkit_client.search_nav,
             toolkit=toolkit_client,
             http_config=http_config,
         )

@@ -1,4 +1,4 @@
-"""Contracts for search.mathlib_decl.search."""
+"""Contracts for search.mathlib_decl.find."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from ..base import DictModel, JsonDict, to_bool, to_int, to_list_of_str
 
 
 @dataclass(slots=True, frozen=True)
-class MathlibDeclSearchRequest(DictModel):
+class MathlibDeclFindRequest(DictModel):
     query: str = ""
     limit: int | None = None
     rerank_top: int | None = None
@@ -21,7 +21,7 @@ class MathlibDeclSearchRequest(DictModel):
     include_informalization: bool = False
 
     @classmethod
-    def from_dict(cls, data: JsonDict) -> "MathlibDeclSearchRequest":
+    def from_dict(cls, data: JsonDict) -> "MathlibDeclFindRequest":
         return cls(
             query=str(data.get("query") or ""),
             limit=to_int(data.get("limit"), default=None),
@@ -113,14 +113,14 @@ class MathlibDeclSummaryItem(DictModel):
 
 
 @dataclass(slots=True, frozen=True)
-class MathlibDeclSearchResponse(DictModel):
+class MathlibDeclFindResponse(DictModel):
     query: str
     count: int
     processing_time_ms: int | None = None
     results: tuple[MathlibDeclSummaryItem, ...] = field(default_factory=tuple)
 
     @classmethod
-    def from_dict(cls, data: JsonDict) -> "MathlibDeclSearchResponse":
+    def from_dict(cls, data: JsonDict) -> "MathlibDeclFindResponse":
         parsed: list[MathlibDeclSummaryItem] = []
         raw = data.get("results")
         if isinstance(raw, list):

@@ -1,17 +1,14 @@
 from lean_mcp_toolkit.contracts.search_core import (
-    LocalDeclSearchItem,
-    LocalDeclSearchRequest,
-    LocalDeclSearchResponse,
+    MathlibDeclFindRequest,
+    MathlibDeclFindResponse,
     MathlibDeclGetRequest,
     MathlibDeclGetResponse,
-    MathlibDeclSearchRequest,
-    MathlibDeclSearchResponse,
     MathlibDeclSummaryItem,
 )
 
 
-def test_mathlib_decl_search_request_roundtrip() -> None:
-    req = MathlibDeclSearchRequest.from_dict(
+def test_mathlib_decl_find_request_roundtrip() -> None:
+    req = MathlibDeclFindRequest.from_dict(
         {
             "query": "Nat.succ",
             "limit": 5,
@@ -39,43 +36,21 @@ def test_mathlib_decl_responses_roundtrip() -> None:
         dependencies="[]",
         informalization="succ",
     )
-    search_resp = MathlibDeclSearchResponse(
+    find_resp = MathlibDeclFindResponse(
         query="Nat.succ",
         count=1,
         processing_time_ms=12,
         results=(item,),
     )
-    loaded_search = MathlibDeclSearchResponse.from_dict(search_resp.to_dict())
-    assert loaded_search.count == 1
-    assert loaded_search.results[0].name == "Nat.succ"
+    loaded_find = MathlibDeclFindResponse.from_dict(find_resp.to_dict())
+    assert loaded_find.count == 1
+    assert loaded_find.results[0].name == "Nat.succ"
 
     get_resp = MathlibDeclGetResponse(found=True, item=item)
     loaded_get = MathlibDeclGetResponse.from_dict(get_resp.to_dict())
     assert loaded_get.found is True
     assert loaded_get.item is not None
     assert loaded_get.item.id == 1
-
-
-
-def test_local_decl_search_roundtrip() -> None:
-    req = LocalDeclSearchRequest.from_dict(
-        {
-            "query": "map",
-            "project_root": "/tmp/proj",
-            "limit": 10,
-            "include_dependencies": True,
-            "include_stdlib": False,
-        }
-    )
-    dumped = req.to_dict()
-    assert dumped["query"] == "map"
-    assert dumped["project_root"] == "/tmp/proj"
-
-    item = LocalDeclSearchItem(name="List.map", kind="def", file="A/B.lean", origin="project")
-    resp = LocalDeclSearchResponse(query="map", count=1, items=(item,))
-    loaded = LocalDeclSearchResponse.from_dict(resp.to_dict())
-    assert loaded.count == 1
-    assert loaded.items[0].name == "List.map"
 
 
 

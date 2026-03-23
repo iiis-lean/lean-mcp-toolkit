@@ -1,0 +1,134 @@
+"""mathlib_nav service implementation."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+import os
+from pathlib import Path
+
+from ...config import ToolkitConfig
+from ...contracts.mathlib_nav import (
+    MathlibNavFileOutlineRequest,
+    MathlibNavFileOutlineResponse,
+    MathlibNavReadRequest,
+    MathlibNavReadResponse,
+    MathlibNavTreeRequest,
+    MathlibNavTreeResponse,
+)
+from ...contracts.search_nav import (
+    RepoNavFileOutlineRequest,
+    RepoNavReadRequest,
+    RepoNavTreeRequest,
+)
+from ...core.services import MathlibNavService
+from ..search_nav.service_impl import SearchNavServiceImpl
+
+
+@dataclass(slots=True)
+class MathlibNavServiceImpl(MathlibNavService):
+    config: ToolkitConfig
+    repo_nav_service: SearchNavServiceImpl = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.repo_nav_service = SearchNavServiceImpl(config=self.config)
+
+    def run_mathlib_nav_tree(self, req: MathlibNavTreeRequest) -> MathlibNavTreeResponse:
+        try:
+            mathlib_root = self._resolve_mathlib_root(
+                project_root=req.project_root,
+                mathlib_root=req.mathlib_root,
+            )
+            inner_req = RepoNavTreeRequest(
+                repo_root=str(mathlib_root),
+                base=req.base,
+                depth=req.depth,
+                name_filter=req.name_filter,
+                limit=req.limit,
+                offset=req.offset,
+            )
+            return self.repo_nav_service.run_repo_nav_tree(inner_req)
+        except Exception as exc:
+            return MathlibNavTreeResponse(success=False, error_message=str(exc))
+
+    def run_mathlib_nav_file_outline(
+        self,
+        req: MathlibNavFileOutlineRequest,
+    ) -> MathlibNavFileOutlineResponse:
+        try:
+            mathlib_root = self._resolve_mathlib_root(
+                project_root=req.project_root,
+                mathlib_root=req.mathlib_root,
+            )
+            inner_req = RepoNavFileOutlineRequest(
+                repo_root=str(mathlib_root),
+                target=req.target,
+                include_imports=req.include_imports,
+                include_module_doc=req.include_module_doc,
+                include_section_doc=req.include_section_doc,
+                include_decl_headers=req.include_decl_headers,
+                include_scope_cmds=req.include_scope_cmds,
+                limit_decls=req.limit_decls,
+            )
+            return self.repo_nav_service.run_repo_nav_file_outline(inner_req)
+        except Exception as exc:
+            return MathlibNavFileOutlineResponse(success=False, error_message=str(exc))
+
+    def run_mathlib_nav_read(self, req: MathlibNavReadRequest) -> MathlibNavReadResponse:
+        try:
+            mathlib_root = self._resolve_mathlib_root(
+                project_root=req.project_root,
+                mathlib_root=req.mathlib_root,
+            )
+            inner_req = RepoNavReadRequest(
+                repo_root=str(mathlib_root),
+                target=req.target,
+                start_line=req.start_line,
+                end_line=req.end_line,
+                max_lines=req.max_lines,
+                with_line_numbers=req.with_line_numbers,
+            )
+            return self.repo_nav_service.run_repo_nav_read(inner_req)
+        except Exception as exc:
+            return MathlibNavReadResponse(success=False, error_message=str(exc))
+
+    def _resolve_mathlib_root(self, *, project_root: str | None, mathlib_root: str | None) -> Path:
+        if mathlib_root is not None and mathlib_root.strip():
+            raw = Path(mathlib_root).expanduser().resolve()
+            if not raw.exists() or not raw.is_dir():
+                raise FileNotFoundError(f"mathlib_root is not a directory: {raw}")
+            if raw.name == "Mathlib":
+                return raw
+            nested = raw / "Mathlib"
+            if nested.exists() and nested.is_dir():
+                return nested.resolve()
+            raise FileNotFoundError(
+                f"mathlib_root must be Mathlib directory or contain Mathlib/: {raw}"
+            )
+
+        raw_project = (
+            (project_root or "").strip()
+            or (self.config.server.default_project_root or "").strip()
+            or os.getcwd()
+        )
+        project = Path(raw_project).expanduser().resolve()
+        if not project.exists() or not project.is_dir():
+            raise FileNotFoundError(f"project_root is not a directory: {project}")
+
+        candidates = (
+            project / ".lake" / "packages" / "mathlib" / "Mathlib",
+            project / "Mathlib",
+            project if project.name == "Mathlib" else None,
+        )
+        for candidate in candidates:
+            if candidate is None:
+                continue
+            if candidate.exists() and candidate.is_dir():
+                return candidate.resolve()
+
+        raise FileNotFoundError(
+            f"cannot locate Mathlib source root under project_root={project}; "
+            "tried .lake/packages/mathlib/Mathlib and project_root/Mathlib"
+        )
+
+
+__all__ = ["MathlibNavServiceImpl"]

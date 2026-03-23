@@ -7,6 +7,8 @@ from ...contracts.diagnostics import (
     AxiomAuditResult,
     BuildRequest,
     BuildResponse,
+    FileRequest,
+    FileResponse,
     LintRequest,
     LintResponse,
     NoSorryResult,
@@ -26,6 +28,11 @@ class DiagnosticsHttpClient(DiagnosticsService):
         payload = req.to_dict()
         data = self._post("/diagnostics/build", payload)
         return BuildResponse.from_dict(data)
+
+    def run_file(self, req: FileRequest) -> FileResponse:
+        payload = req.to_dict()
+        data = self._post("/diagnostics/file", payload)
+        return FileResponse.from_dict(data)
 
     def run_lint(self, req: LintRequest) -> LintResponse:
         payload = req.to_dict()

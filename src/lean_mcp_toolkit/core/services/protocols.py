@@ -14,6 +14,8 @@ from ...contracts.diagnostics import (
     AxiomAuditResult,
     BuildRequest,
     BuildResponse,
+    FileRequest,
+    FileResponse,
     LintRequest,
     LintResponse,
     NoSorryResult,
@@ -31,13 +33,49 @@ from ...contracts.lsp_core import (
     LspTermGoalResponse,
     MarkdownResponse,
 )
+from ...contracts.lsp_assist import (
+    LspCompletionsRequest,
+    LspCompletionsResponse,
+    LspDeclarationFileRequest,
+    LspDeclarationFileResponse,
+    LspMultiAttemptRequest,
+    LspMultiAttemptResponse,
+    LspRunSnippetRequest,
+    LspRunSnippetResponse,
+    LspTheoremSoundnessRequest,
+    LspTheoremSoundnessResponse,
+)
+from ...contracts.mathlib_nav import (
+    MathlibNavFileOutlineRequest,
+    MathlibNavFileOutlineResponse,
+    MathlibNavReadRequest,
+    MathlibNavReadResponse,
+    MathlibNavTreeRequest,
+    MathlibNavTreeResponse,
+)
 from ...contracts.search_core import (
-    LocalDeclSearchRequest,
-    LocalDeclSearchResponse,
+    MathlibDeclFindRequest,
+    MathlibDeclFindResponse,
     MathlibDeclGetRequest,
     MathlibDeclGetResponse,
-    MathlibDeclSearchRequest,
-    MathlibDeclSearchResponse,
+)
+from ...contracts.search_nav import (
+    LocalDeclFindRequest,
+    LocalDeclFindResponse,
+    LocalImportFindRequest,
+    LocalImportFindResponse,
+    LocalRefsFindRequest,
+    LocalRefsFindResponse,
+    LocalScopeFindRequest,
+    LocalScopeFindResponse,
+    LocalTextFindRequest,
+    LocalTextFindResponse,
+    RepoNavFileOutlineRequest,
+    RepoNavFileOutlineResponse,
+    RepoNavReadRequest,
+    RepoNavReadResponse,
+    RepoNavTreeRequest,
+    RepoNavTreeResponse,
 )
 
 
@@ -45,6 +83,9 @@ class DiagnosticsService(Protocol):
     """Service API expected by HTTP/MCP adapters."""
 
     def run_build(self, req: BuildRequest) -> BuildResponse:
+        ...
+
+    def run_file(self, req: FileRequest) -> FileResponse:
         ...
 
     def run_lint(self, req: LintRequest) -> LintResponse:
@@ -95,17 +136,86 @@ class LspCoreService(Protocol):
         ...
 
 
+class LspAssistService(Protocol):
+    """LSP-assist service API expected by HTTP/MCP adapters."""
+
+    def run_completions(self, req: LspCompletionsRequest) -> LspCompletionsResponse:
+        ...
+
+    def run_declaration_file(
+        self,
+        req: LspDeclarationFileRequest,
+    ) -> LspDeclarationFileResponse:
+        ...
+
+    def run_multi_attempt(self, req: LspMultiAttemptRequest) -> LspMultiAttemptResponse:
+        ...
+
+    def run_snippet(self, req: LspRunSnippetRequest) -> LspRunSnippetResponse:
+        ...
+
+    def run_theorem_soundness(
+        self,
+        req: LspTheoremSoundnessRequest,
+    ) -> LspTheoremSoundnessResponse:
+        ...
+
+
 class SearchCoreService(Protocol):
     """Search-core service API expected by HTTP/MCP adapters."""
 
-    def run_mathlib_decl_search(
+    def run_mathlib_decl_find(
         self,
-        req: MathlibDeclSearchRequest,
-    ) -> MathlibDeclSearchResponse:
+        req: MathlibDeclFindRequest,
+    ) -> MathlibDeclFindResponse:
         ...
 
     def run_mathlib_decl_get(self, req: MathlibDeclGetRequest) -> MathlibDeclGetResponse:
         ...
 
-    def run_local_decl_search(self, req: LocalDeclSearchRequest) -> LocalDeclSearchResponse:
+
+class MathlibNavService(Protocol):
+    """Mathlib-nav service API expected by HTTP/MCP adapters."""
+
+    def run_mathlib_nav_tree(self, req: MathlibNavTreeRequest) -> MathlibNavTreeResponse:
+        ...
+
+    def run_mathlib_nav_file_outline(
+        self,
+        req: MathlibNavFileOutlineRequest,
+    ) -> MathlibNavFileOutlineResponse:
+        ...
+
+    def run_mathlib_nav_read(self, req: MathlibNavReadRequest) -> MathlibNavReadResponse:
+        ...
+
+
+class SearchNavService(Protocol):
+    """Search-nav service API expected by HTTP/MCP adapters."""
+
+    def run_repo_nav_tree(self, req: RepoNavTreeRequest) -> RepoNavTreeResponse:
+        ...
+
+    def run_repo_nav_file_outline(
+        self,
+        req: RepoNavFileOutlineRequest,
+    ) -> RepoNavFileOutlineResponse:
+        ...
+
+    def run_repo_nav_read(self, req: RepoNavReadRequest) -> RepoNavReadResponse:
+        ...
+
+    def run_local_decl_find(self, req: LocalDeclFindRequest) -> LocalDeclFindResponse:
+        ...
+
+    def run_local_import_find(self, req: LocalImportFindRequest) -> LocalImportFindResponse:
+        ...
+
+    def run_local_scope_find(self, req: LocalScopeFindRequest) -> LocalScopeFindResponse:
+        ...
+
+    def run_local_text_find(self, req: LocalTextFindRequest) -> LocalTextFindResponse:
+        ...
+
+    def run_local_refs_find(self, req: LocalRefsFindRequest) -> LocalRefsFindResponse:
         ...

@@ -1,23 +1,17 @@
 """search_core group plugin."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import Annotated, Any, Mapping
 
 try:
     from pydantic import Field
-except Exception:  # pragma: no cover - optional runtime dependency
+except Exception:  # pragma: no cover
 
     def Field(*args: Any, **kwargs: Any) -> Any:  # type: ignore[misc]
         _ = args, kwargs
         return None
 
-from ...adapters.http import (
-    handle_search_local_decl_search,
-    handle_search_mathlib_decl_get,
-    handle_search_mathlib_decl_search,
-)
+from ...adapters.http import handle_search_mathlib_decl_find, handle_search_mathlib_decl_get
 from ...backends.context import BackendContext
 from ...backends.keys import BackendKey
 from ...config import ToolkitConfig
@@ -110,7 +104,7 @@ _GET_PARAMS: tuple[ToolParamSpec, ...] = (
         name="declaration_id",
         type_hint="int",
         required=True,
-        description="Declaration id returned by search.mathlib_decl.search.",
+        description="Declaration id returned by search.mathlib_decl.find.",
     ),
     ToolParamSpec(
         name="include_module",
@@ -156,43 +150,6 @@ _GET_PARAMS: tuple[ToolParamSpec, ...] = (
     ),
 )
 
-_LOCAL_SEARCH_PARAMS: tuple[ToolParamSpec, ...] = (
-    ToolParamSpec(
-        name="query",
-        type_hint="str",
-        required=True,
-        description="Declaration name or prefix to search in local Lean files.",
-    ),
-    ToolParamSpec(
-        name="project_root",
-        type_hint="str | null",
-        required=False,
-        default_value="server default project root",
-        description="Lean project root directory for local search scope.",
-    ),
-    ToolParamSpec(
-        name="limit",
-        type_hint="int | null",
-        required=False,
-        default_value="search_core.local_decl_default_limit",
-        description="Maximum number of local declaration matches.",
-    ),
-    ToolParamSpec(
-        name="include_dependencies",
-        type_hint="bool | null",
-        required=False,
-        default_value="search_core.local_decl_include_dependencies",
-        description="Whether to include .lake/packages declarations.",
-    ),
-    ToolParamSpec(
-        name="include_stdlib",
-        type_hint="bool | null",
-        required=False,
-        default_value="search_core.local_decl_include_stdlib",
-        description="Whether to include Lean stdlib declarations.",
-    ),
-)
-
 _MATHLIB_ITEM_FIELDS: tuple[ToolReturnSpec, ...] = (
     ToolReturnSpec("id", "int", "Declaration id."),
     ToolReturnSpec("name", "str", "Declaration full name."),
@@ -226,28 +183,12 @@ _GET_RETURNS: tuple[ToolReturnSpec, ...] = (
     ),
 )
 
-_LOCAL_RETURNS: tuple[ToolReturnSpec, ...] = (
-    ToolReturnSpec("query", "str", "Resolved query string."),
-    ToolReturnSpec("count", "int", "Returned result count."),
-    ToolReturnSpec(
-        "items",
-        "list[LocalDeclSearchItem]",
-        "Local declaration matches.",
-        children=(
-            ToolReturnSpec("name", "str", "Declaration name."),
-            ToolReturnSpec("kind", "str", "Declaration kind token."),
-            ToolReturnSpec("file", "str", "Source file path."),
-            ToolReturnSpec("origin", "project | dependency | stdlib", "Source origin."),
-        ),
-    ),
-)
-
 _TOOL_SPECS: tuple[GroupToolSpec, ...] = (
     GroupToolSpec(
         group_name="search_core",
-        canonical_name="search.mathlib_decl.search",
-        raw_name="mathlib_decl.search",
-        api_path="/search/mathlib_decl/search",
+        canonical_name="search.mathlib_decl.find",
+        raw_name="mathlib_decl.find",
+        api_path="/search/mathlib_decl/find",
         description="Search declaration index (LeanExplore backend) and return summary items.",
         params=_SEARCH_PARAMS,
         returns=_SEARCH_RETURNS,
@@ -260,15 +201,6 @@ _TOOL_SPECS: tuple[GroupToolSpec, ...] = (
         description="Get one declaration detail by declaration id.",
         params=_GET_PARAMS,
         returns=_GET_RETURNS,
-    ),
-    GroupToolSpec(
-        group_name="search_core",
-        canonical_name="search.local_decl.search",
-        raw_name="local_decl.search",
-        api_path="/search/local_decl/search",
-        description="Fast local declaration-name search in project/dependency/stdlib Lean files.",
-        params=_LOCAL_SEARCH_PARAMS,
-        returns=_LOCAL_RETURNS,
     ),
 )
 
@@ -306,14 +238,11 @@ class SearchCoreGroupPlugin(GroupPlugin):
 
     def tool_handlers(self, service: Any) -> Mapping[str, ToolHandler]:
         return {
-            "search.mathlib_decl.search": (
-                lambda payload: handle_search_mathlib_decl_search(service, payload)
+            "search.mathlib_decl.find": (
+                lambda payload: handle_search_mathlib_decl_find(service, payload)
             ),
             "search.mathlib_decl.get": (
                 lambda payload: handle_search_mathlib_decl_get(service, payload)
-            ),
-            "search.local_decl.search": (
-                lambda payload: handle_search_local_decl_search(service, payload)
             ),
         }
 
@@ -326,12 +255,11 @@ class SearchCoreGroupPlugin(GroupPlugin):
         normalize_str_list,
         prune_none,
     ) -> None:
-        search_spec = _TOOL_SPEC_MAP["search.mathlib_decl.search"]
+        search_spec = _TOOL_SPEC_MAP["search.mathlib_decl.find"]
         get_spec = _TOOL_SPEC_MAP["search.mathlib_decl.get"]
-        local_spec = _TOOL_SPEC_MAP["search.local_decl.search"]
 
-        for alias in aliases_by_canonical.get("search.mathlib_decl.search", ()): 
-            self._register_mathlib_search(
+        for alias in aliases_by_canonical.get("search.mathlib_decl.find", ()): 
+            self._register_mathlib_find(
                 mcp=mcp,
                 alias=alias,
                 spec=search_spec,
@@ -347,17 +275,9 @@ class SearchCoreGroupPlugin(GroupPlugin):
                 service=service,
                 prune_none=prune_none,
             )
-        for alias in aliases_by_canonical.get("search.local_decl.search", ()): 
-            self._register_local_search(
-                mcp=mcp,
-                alias=alias,
-                spec=local_spec,
-                service=service,
-                prune_none=prune_none,
-            )
 
     @staticmethod
-    def _register_mathlib_search(
+    def _register_mathlib_find(
         *,
         mcp: Any,
         alias: str,
@@ -367,7 +287,7 @@ class SearchCoreGroupPlugin(GroupPlugin):
         prune_none,
     ) -> None:
         @mcp.tool(name=alias, description=spec.render_mcp_description())
-        def _search_mathlib_decl_search(
+        def _search_mathlib_decl_find(
             query: Annotated[str, Field(description=_param_desc(spec, "query"))],
             limit: Annotated[int | None, Field(description=_param_desc(spec, "limit"))] = None,
             rerank_top: Annotated[
@@ -415,7 +335,7 @@ class SearchCoreGroupPlugin(GroupPlugin):
                 "include_dependencies": include_dependencies,
                 "include_informalization": include_informalization,
             }
-            return handle_search_mathlib_decl_search(service, prune_none(payload))
+            return handle_search_mathlib_decl_find(service, prune_none(payload))
 
     @staticmethod
     def _register_mathlib_get(
@@ -464,41 +384,6 @@ class SearchCoreGroupPlugin(GroupPlugin):
                 "include_informalization": include_informalization,
             }
             return handle_search_mathlib_decl_get(service, prune_none(payload))
-
-    @staticmethod
-    def _register_local_search(
-        *,
-        mcp: Any,
-        alias: str,
-        spec: GroupToolSpec,
-        service: Any,
-        prune_none,
-    ) -> None:
-        @mcp.tool(name=alias, description=spec.render_mcp_description())
-        def _search_local_decl_search(
-            query: Annotated[str, Field(description=_param_desc(spec, "query"))],
-            project_root: Annotated[
-                str | None,
-                Field(description=_param_desc(spec, "project_root")),
-            ] = None,
-            limit: Annotated[int | None, Field(description=_param_desc(spec, "limit"))] = None,
-            include_dependencies: Annotated[
-                bool | None,
-                Field(description=_param_desc(spec, "include_dependencies")),
-            ] = None,
-            include_stdlib: Annotated[
-                bool | None,
-                Field(description=_param_desc(spec, "include_stdlib")),
-            ] = None,
-        ) -> JsonDict:
-            payload = {
-                "query": query,
-                "project_root": project_root,
-                "limit": limit,
-                "include_dependencies": include_dependencies,
-                "include_stdlib": include_stdlib,
-            }
-            return handle_search_local_decl_search(service, prune_none(payload))
 
 
 __all__ = ["SearchCoreGroupPlugin"]

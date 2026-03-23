@@ -95,6 +95,9 @@ class LeanInteractDeclarationsBackend:
             project=project,
             build_repl=self.backend_config.build_repl,
             force_pull_repl=self.backend_config.force_pull_repl,
+            repl_rev=self.backend_config.repl_rev,
+            repl_git=self.backend_config.repl_git,
+            cache_dir=self.backend_config.cache_dir,
             lake_path=self.toolchain_config.lake_bin,
             memory_hard_limit_mb=self.backend_config.memory_hard_limit_mb,
             enable_incremental_optimization=(
@@ -172,4 +175,3 @@ class LeanInteractDeclarationsBackend:
         if isinstance(value, tuple):
             return value
         return tuple()
-

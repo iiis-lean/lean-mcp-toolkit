@@ -8,6 +8,7 @@ from lean_mcp_toolkit.config import ToolkitConfig
 from lean_mcp_toolkit.contracts.diagnostics import (
     AxiomAuditResult,
     BuildRequest,
+    FileRequest,
     LintRequest,
 )
 from lean_mcp_toolkit.groups.diagnostics.service_impl import DiagnosticsServiceImpl
@@ -234,6 +235,55 @@ class _BatchOnlyRuntime:
         return tuple(out)
 
 
+@dataclass(slots=True)
+class _FakeLspDiagResult:
+    diagnostics: list[dict]
+
+
+@dataclass(slots=True)
+class _FakeLspClient:
+    def open_file(self, rel_path: str) -> None:
+        _ = rel_path
+
+    def get_diagnostics(self, rel_path: str, inactivity_timeout: float = 15.0):
+        _ = inactivity_timeout
+        if rel_path == "A/File.lean":
+            return _FakeLspDiagResult(
+                diagnostics=[
+                    {
+                        "severity": 2,
+                        "message": "declaration uses sorry",
+                        "kind": "hasSorry",
+                        "range": {
+                            "start": {"line": 1, "character": 2},
+                            "end": {"line": 1, "character": 7},
+                        },
+                    }
+                ]
+            )
+        return _FakeLspDiagResult(
+            diagnostics=[
+                {
+                    "severity": 1,
+                    "message": "type mismatch",
+                    "range": {
+                        "start": {"line": 0, "character": 0},
+                        "end": {"line": 0, "character": 4},
+                    },
+                }
+            ]
+        )
+
+
+@dataclass(slots=True)
+class _FakeLspClientManager:
+    client: _FakeLspClient
+
+    def get_client(self, project_root: Path):
+        _ = project_root
+        return self.client
+
+
 
 def _write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -265,6 +315,32 @@ def test_run_build_and_lint(tmp_path: Path) -> None:
     assert lint_resp.checks[1].check_id == "axiom_audit"
     assert lint_resp.checks[1].success is True
     assert "eligible" in lint_resp.checks[1].message
+
+
+def test_run_file_with_lsp_diagnostics(tmp_path: Path) -> None:
+    _write(tmp_path / "A" / "File.lean", "theorem t : True := by\n  sorry\n")
+    cfg = ToolkitConfig.from_dict({"server": {"default_project_root": str(tmp_path)}})
+    svc = DiagnosticsServiceImpl(
+        config=cfg,
+        runtime=_FakeRuntime(),
+        lsp_client_manager=_FakeLspClientManager(client=_FakeLspClient()),
+    )
+
+    resp = svc.run_file(
+        FileRequest.from_dict(
+            {
+                "file_path": "A/File.lean",
+                "include_content": True,
+                "context_lines": 1,
+            }
+        )
+    )
+    assert resp.success is True
+    assert resp.file == "A.File"
+    assert resp.warning_count == 1
+    assert resp.sorry_count == 1
+    assert len(resp.items) == 1
+    assert resp.items[0].content is not None
 
 
 def test_run_build_build_deps_failure_short_circuit(tmp_path: Path) -> None:

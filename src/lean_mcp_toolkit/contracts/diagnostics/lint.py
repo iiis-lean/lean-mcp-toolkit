@@ -225,7 +225,91 @@ class AxiomAuditResult(CheckResult):
             f"- usage_issues: `{len(self.usage_issues)}`",
             f"- unresolved: `{len(self.unresolved)}`",
         ]
+        lines.append("")
+        lines.append("##### Declared Axioms")
+        if not self.declared_axioms:
+            lines.append("- (empty)")
+        else:
+            for item in self.declared_axioms:
+                location = _format_location(item.fileName, item.pos)
+                declaration = (item.declaration or "").strip() or "<unknown>"
+                kind = (item.kind or "").strip() or "unknown"
+                if location:
+                    lines.append(
+                        f"error: {location}: declared axiom `{declaration}` (kind={kind})"
+                    )
+                else:
+                    lines.append(f"error: declared axiom `{declaration}` (kind={kind})")
+                if item.content:
+                    lines.append("")
+                    lines.append("```lean")
+                    lines.append(item.content)
+                    lines.append("```")
+
+        lines.append("")
+        lines.append("##### Axiom Usage Issues")
+        if not self.usage_issues:
+            lines.append("- (empty)")
+        else:
+            for item in self.usage_issues:
+                location = _display_file_name(item.fileName)
+                declaration = (item.declaration or "").strip() or "<unknown>"
+                risky_text = ", ".join(ax for ax in item.risky_axioms if ax.strip()) or "(none)"
+                if location:
+                    lines.append(
+                        f"error: {location}: declaration `{declaration}` uses risky axioms: {risky_text}"
+                    )
+                else:
+                    lines.append(
+                        f"error: declaration `{declaration}` uses risky axioms: {risky_text}"
+                    )
+
+        lines.append("")
+        lines.append("##### Unresolved Declarations")
+        if not self.unresolved:
+            lines.append("- (empty)")
+        else:
+            for item in self.unresolved:
+                location = _display_file_name(item.fileName)
+                declaration = (item.declaration or "").strip()
+                reason = (item.reason or "").strip() or "unknown reason"
+                if declaration:
+                    if location:
+                        lines.append(
+                            f"error: {location}: declaration `{declaration}` unresolved: {reason}"
+                        )
+                    else:
+                        lines.append(f"error: declaration `{declaration}` unresolved: {reason}")
+                else:
+                    if location:
+                        lines.append(
+                            f"error: {location}: unresolved declaration audit: {reason}"
+                        )
+                    else:
+                        lines.append(f"error: unresolved declaration audit: {reason}")
         return "\n".join(lines)
+
+
+def _display_file_name(file_name: str | None) -> str | None:
+    if not file_name:
+        return None
+    name = file_name.strip()
+    if not name:
+        return None
+    if "/" in name or "\\" in name or name.endswith(".lean"):
+        return name
+    if "." in name:
+        return f"{name.replace('.', '/')}.lean"
+    return name
+
+
+def _format_location(file_name: str | None, pos: Position | None) -> str | None:
+    location = _display_file_name(file_name)
+    if pos is not None:
+        if location:
+            return f"{location}:{pos.line}:{pos.column}"
+        return f"{pos.line}:{pos.column}"
+    return location
 
 
 @dataclass(slots=True, frozen=True)

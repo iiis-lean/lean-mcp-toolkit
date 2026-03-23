@@ -25,11 +25,17 @@ def create_diagnostics_service(
         if backends is not None
         else None
     )
+    lsp_client_manager = (
+        backends.get(BackendKey.LSP_CLIENT_MANAGER)
+        if backends is not None
+        else None
+    )
     return DiagnosticsServiceImpl(
         config=resolved,
         runtime=runtime,
         resolver=resolver,
         declarations_backends=declarations_backends,
+        lsp_client_manager=lsp_client_manager,
     )
 
 

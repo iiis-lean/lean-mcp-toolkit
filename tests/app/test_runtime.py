@@ -11,7 +11,9 @@ from lean_mcp_toolkit.contracts.diagnostics import (
     NoSorryResult,
 )
 from lean_mcp_toolkit.contracts.lsp_core import LspGoalRequest, LspGoalResponse
-from lean_mcp_toolkit.contracts.search_core import LocalDeclSearchRequest, LocalDeclSearchResponse
+from lean_mcp_toolkit.contracts.mathlib_nav import MathlibNavTreeRequest, MathlibNavTreeResponse
+from lean_mcp_toolkit.contracts.search_core import MathlibDeclFindRequest, MathlibDeclFindResponse
+from lean_mcp_toolkit.contracts.search_nav import RepoNavTreeRequest, RepoNavTreeResponse
 from lean_mcp_toolkit.runtime import create_toolkit_runtime
 
 
@@ -62,9 +64,23 @@ class _FakeLspCore:
 
 @dataclass(slots=True)
 class _FakeSearchCore:
-    def run_local_decl_search(self, req: LocalDeclSearchRequest) -> LocalDeclSearchResponse:
+    def run_mathlib_decl_find(self, req: MathlibDeclFindRequest) -> MathlibDeclFindResponse:
         _ = req
-        return LocalDeclSearchResponse(query="", count=0, items=tuple())
+        return MathlibDeclFindResponse(query="", count=0, processing_time_ms=None, results=tuple())
+
+
+@dataclass(slots=True)
+class _FakeMathlibNav:
+    def run_mathlib_nav_tree(self, req: MathlibNavTreeRequest) -> MathlibNavTreeResponse:
+        _ = req
+        return MathlibNavTreeResponse(success=True, entries=tuple())
+
+
+@dataclass(slots=True)
+class _FakeSearchNav:
+    def run_repo_nav_tree(self, req: RepoNavTreeRequest) -> RepoNavTreeResponse:
+        _ = req
+        return RepoNavTreeResponse(success=True, entries=tuple())
 
 
 @dataclass(slots=True)
@@ -73,6 +89,8 @@ class _FakeToolkitHttpClient:
     declarations: _FakeDeclarations
     lsp_core: _FakeLspCore
     search_core: _FakeSearchCore
+    mathlib_nav: _FakeMathlibNav
+    search_nav: _FakeSearchNav
 
     def dispatch_api(self, route_path: str, payload: dict) -> dict:
         return {"route_path": route_path, "payload": payload}
@@ -84,6 +102,8 @@ class _FakeToolkitServer:
     declarations: _FakeDeclarations
     lsp_core: _FakeLspCore
     search_core: _FakeSearchCore
+    mathlib_nav: _FakeMathlibNav
+    search_nav: _FakeSearchNav
 
     def dispatch_api(self, route_path: str, payload: dict) -> dict:
         if route_path == "declarations.extract":
@@ -97,17 +117,22 @@ class _FakeToolkitServer:
         raise KeyError(route_path)
 
 
+
 def test_create_toolkit_runtime_local(monkeypatch) -> None:
     fake_cfg = ToolkitConfig.from_dict({"server": {"default_project_root": "/tmp"}})
     fake_diagnostics = _FakeDiagnostics()
     fake_declarations = _FakeDeclarations()
     fake_lsp_core = _FakeLspCore()
     fake_search_core = _FakeSearchCore()
+    fake_mathlib_nav = _FakeMathlibNav()
+    fake_search_nav = _FakeSearchNav()
     fake_server = _FakeToolkitServer(
         diagnostics=fake_diagnostics,
         declarations=fake_declarations,
         lsp_core=fake_lsp_core,
         search_core=fake_search_core,
+        mathlib_nav=fake_mathlib_nav,
+        search_nav=fake_search_nav,
     )
 
     monkeypatch.setattr(
@@ -127,6 +152,8 @@ def test_create_toolkit_runtime_local(monkeypatch) -> None:
     assert runtime.declarations is fake_declarations
     assert runtime.lsp_core is fake_lsp_core
     assert runtime.search_core is fake_search_core
+    assert runtime.mathlib_nav is fake_mathlib_nav
+    assert runtime.search_nav is fake_search_nav
 
     extract_out = runtime.dispatch_api("declarations.extract", {"target": "A.B"})
     build_out = runtime.dispatch_api("diagnostics.build", {})
@@ -138,6 +165,7 @@ def test_create_toolkit_runtime_local(monkeypatch) -> None:
     assert lint_out["success"] is True
     assert no_sorry_out["check_id"] == "no_sorry"
     assert runtime.dispatch_api("diagnostics.build", {})["success"] is True
+
 
 
 def test_create_toolkit_runtime_http(monkeypatch) -> None:
@@ -155,6 +183,8 @@ def test_create_toolkit_runtime_http(monkeypatch) -> None:
     fake_declarations = _FakeDeclarations()
     fake_lsp_core = _FakeLspCore()
     fake_search_core = _FakeSearchCore()
+    fake_mathlib_nav = _FakeMathlibNav()
+    fake_search_nav = _FakeSearchNav()
     captured = {}
 
     def _fake_http_factory(*, http_config, config=None):
@@ -165,6 +195,8 @@ def test_create_toolkit_runtime_http(monkeypatch) -> None:
             declarations=fake_declarations,
             lsp_core=fake_lsp_core,
             search_core=fake_search_core,
+            mathlib_nav=fake_mathlib_nav,
+            search_nav=fake_search_nav,
         )
 
     monkeypatch.setattr(
@@ -188,6 +220,8 @@ def test_create_toolkit_runtime_http(monkeypatch) -> None:
     assert runtime.declarations is fake_declarations
     assert runtime.lsp_core is fake_lsp_core
     assert runtime.search_core is fake_search_core
+    assert runtime.mathlib_nav is fake_mathlib_nav
+    assert runtime.search_nav is fake_search_nav
     assert runtime.http_config is not None
     assert runtime.http_config.base_url == "http://remote:19000"
     assert captured["http_config"].base_url == "http://remote:19000"

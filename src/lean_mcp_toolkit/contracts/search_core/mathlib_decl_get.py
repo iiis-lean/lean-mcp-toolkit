@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ..base import DictModel, JsonDict, to_bool
-from .mathlib_decl_search import MathlibDeclSummaryItem
+from .mathlib_decl_find import MathlibDeclSummaryItem
 
 
 @dataclass(slots=True, frozen=True)

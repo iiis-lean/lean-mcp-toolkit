@@ -75,7 +75,13 @@ class ServerConfig:
 
 @dataclass(slots=True, frozen=True)
 class GroupActivationConfig:
-    enabled_groups: tuple[str, ...] = ("diagnostics", "declarations", "lsp_core", "search_core")
+    enabled_groups: tuple[str, ...] = (
+        "diagnostics",
+        "declarations",
+        "lsp_core",
+        "search_core",
+        "mathlib_nav",
+    )
     disabled_groups: tuple[str, ...] = field(default_factory=tuple)
     include_tools: tuple[str, ...] = field(default_factory=tuple)
     exclude_tools: tuple[str, ...] = field(default_factory=tuple)
@@ -93,7 +99,10 @@ class GroupActivationConfig:
         includes = to_list_of_str(data.get("include_tools"))
         excludes = to_list_of_str(data.get("exclude_tools"))
         return cls(
-            enabled_groups=tuple(enabled or ("diagnostics", "declarations", "lsp_core", "search_core")),
+            enabled_groups=tuple(
+                enabled
+                or ("diagnostics", "declarations", "lsp_core", "search_core", "mathlib_nav")
+            ),
             disabled_groups=tuple(disabled or ()),
             include_tools=tuple(includes or ()),
             exclude_tools=tuple(excludes or ()),
@@ -243,6 +252,59 @@ class LspCoreConfig:
 
 
 @dataclass(slots=True, frozen=True)
+class LspAssistConfig:
+    enabled: bool = False
+    default_max_completions: int = 32
+    multi_attempt_default_max_attempts: int | None = None
+    multi_attempt_max_snippets_hard_limit: int = 16
+    run_snippet_default_timeout_seconds: int | None = None
+    run_snippet_max_code_chars: int = 20000
+    theorem_soundness_scan_source_default: bool = True
+    declaration_file_include_content_default: bool = False
+
+    @classmethod
+    def from_dict(cls, data: JsonDict) -> "LspAssistConfig":
+        return cls(
+            enabled=to_bool(data.get("enabled"), default=False),
+            default_max_completions=to_int(data.get("default_max_completions"), default=32) or 32,
+            multi_attempt_default_max_attempts=to_int(
+                data.get("multi_attempt_default_max_attempts"),
+                default=None,
+            ),
+            multi_attempt_max_snippets_hard_limit=(
+                to_int(data.get("multi_attempt_max_snippets_hard_limit"), default=16) or 16
+            ),
+            run_snippet_default_timeout_seconds=to_int(
+                data.get("run_snippet_default_timeout_seconds"),
+                default=None,
+            ),
+            run_snippet_max_code_chars=(
+                to_int(data.get("run_snippet_max_code_chars"), default=20000) or 20000
+            ),
+            theorem_soundness_scan_source_default=to_bool(
+                data.get("theorem_soundness_scan_source_default"),
+                default=True,
+            ),
+            declaration_file_include_content_default=to_bool(
+                data.get("declaration_file_include_content_default"),
+                default=False,
+            ),
+        )
+
+    def to_dict(self) -> JsonDict:
+        return {
+            "enabled": self.enabled,
+            "default_max_completions": self.default_max_completions,
+            "multi_attempt_default_max_attempts": self.multi_attempt_default_max_attempts,
+            "multi_attempt_max_snippets_hard_limit": self.multi_attempt_max_snippets_hard_limit,
+            "run_snippet_default_timeout_seconds": self.run_snippet_default_timeout_seconds,
+            "run_snippet_max_code_chars": self.run_snippet_max_code_chars,
+            "theorem_soundness_scan_source_default": self.theorem_soundness_scan_source_default,
+            "declaration_file_include_content_default": self.declaration_file_include_content_default,
+        }
+
+
+@dataclass(slots=True, frozen=True)
 class SearchCoreConfig:
     enabled: bool = True
     default_limit: int = 10
@@ -250,11 +312,6 @@ class SearchCoreConfig:
     default_packages: tuple[str, ...] = ("Mathlib",)
     mathlib_lean_version: str = "4.28.0"
     require_mathlib: bool = True
-    local_decl_default_limit: int = 10
-    local_decl_include_dependencies: bool = True
-    local_decl_include_stdlib: bool = True
-    local_decl_max_candidates: int = 2048
-    local_decl_require_rg: bool = True
 
     @classmethod
     def from_dict(cls, data: JsonDict) -> "SearchCoreConfig":
@@ -265,19 +322,6 @@ class SearchCoreConfig:
             default_packages=tuple(to_list_of_str(data.get("default_packages")) or ("Mathlib",)),
             mathlib_lean_version=str(data.get("mathlib_lean_version") or "4.28.0"),
             require_mathlib=to_bool(data.get("require_mathlib"), default=True),
-            local_decl_default_limit=to_int(data.get("local_decl_default_limit"), default=10) or 10,
-            local_decl_include_dependencies=to_bool(
-                data.get("local_decl_include_dependencies"),
-                default=True,
-            ),
-            local_decl_include_stdlib=to_bool(
-                data.get("local_decl_include_stdlib"),
-                default=True,
-            ),
-            local_decl_max_candidates=(
-                to_int(data.get("local_decl_max_candidates"), default=2048) or 2048
-            ),
-            local_decl_require_rg=to_bool(data.get("local_decl_require_rg"), default=True),
         )
 
     def to_dict(self) -> JsonDict:
@@ -288,11 +332,285 @@ class SearchCoreConfig:
             "default_packages": list(self.default_packages),
             "mathlib_lean_version": self.mathlib_lean_version,
             "require_mathlib": self.require_mathlib,
-            "local_decl_default_limit": self.local_decl_default_limit,
-            "local_decl_include_dependencies": self.local_decl_include_dependencies,
-            "local_decl_include_stdlib": self.local_decl_include_stdlib,
-            "local_decl_max_candidates": self.local_decl_max_candidates,
-            "local_decl_require_rg": self.local_decl_require_rg,
+        }
+
+
+@dataclass(slots=True, frozen=True)
+class SearchNavConfig:
+    enabled: bool = False
+    default_limit: int = 20
+    include_deps_default: bool = False
+    default_context_lines: int = 2
+    read_default_max_lines: int = 120
+    read_with_line_numbers_default: bool = True
+    outline_include_imports_default: bool = True
+    outline_include_module_doc_default: bool = True
+    outline_include_section_doc_default: bool = True
+    outline_include_decl_headers_default: bool = True
+    outline_include_scope_cmds_default: bool = True
+    outline_default_limit_decls: int = 200
+    refs_include_definition_default: bool = False
+    scan_max_file_bytes: int = 2_000_000
+    scan_max_files: int = 5000
+
+    @classmethod
+    def from_dict(cls, data: JsonDict) -> "SearchNavConfig":
+        return cls(
+            enabled=to_bool(data.get("enabled"), default=True),
+            default_limit=to_int(data.get("default_limit"), default=20) or 20,
+            include_deps_default=to_bool(data.get("include_deps_default"), default=False),
+            default_context_lines=to_int(data.get("default_context_lines"), default=2) or 2,
+            read_default_max_lines=to_int(data.get("read_default_max_lines"), default=120) or 120,
+            read_with_line_numbers_default=to_bool(
+                data.get("read_with_line_numbers_default"),
+                default=True,
+            ),
+            outline_include_imports_default=to_bool(
+                data.get("outline_include_imports_default"),
+                default=True,
+            ),
+            outline_include_module_doc_default=to_bool(
+                data.get("outline_include_module_doc_default"),
+                default=True,
+            ),
+            outline_include_section_doc_default=to_bool(
+                data.get("outline_include_section_doc_default"),
+                default=True,
+            ),
+            outline_include_decl_headers_default=to_bool(
+                data.get("outline_include_decl_headers_default"),
+                default=True,
+            ),
+            outline_include_scope_cmds_default=to_bool(
+                data.get("outline_include_scope_cmds_default"),
+                default=True,
+            ),
+            outline_default_limit_decls=(
+                to_int(data.get("outline_default_limit_decls"), default=200) or 200
+            ),
+            refs_include_definition_default=to_bool(
+                data.get("refs_include_definition_default"),
+                default=False,
+            ),
+            scan_max_file_bytes=to_int(data.get("scan_max_file_bytes"), default=2_000_000)
+            or 2_000_000,
+            scan_max_files=to_int(data.get("scan_max_files"), default=5000) or 5000,
+        )
+
+    def to_dict(self) -> JsonDict:
+        return {
+            "enabled": self.enabled,
+            "default_limit": self.default_limit,
+            "include_deps_default": self.include_deps_default,
+            "default_context_lines": self.default_context_lines,
+            "read_default_max_lines": self.read_default_max_lines,
+            "read_with_line_numbers_default": self.read_with_line_numbers_default,
+            "outline_include_imports_default": self.outline_include_imports_default,
+            "outline_include_module_doc_default": self.outline_include_module_doc_default,
+            "outline_include_section_doc_default": self.outline_include_section_doc_default,
+            "outline_include_decl_headers_default": self.outline_include_decl_headers_default,
+            "outline_include_scope_cmds_default": self.outline_include_scope_cmds_default,
+            "outline_default_limit_decls": self.outline_default_limit_decls,
+            "refs_include_definition_default": self.refs_include_definition_default,
+            "scan_max_file_bytes": self.scan_max_file_bytes,
+            "scan_max_files": self.scan_max_files,
+        }
+
+
+@dataclass(slots=True, frozen=True)
+class MathlibNavConfig:
+    enabled: bool = True
+
+    @classmethod
+    def from_dict(cls, data: JsonDict) -> "MathlibNavConfig":
+        return cls(enabled=to_bool(data.get("enabled"), default=True))
+
+    def to_dict(self) -> JsonDict:
+        return {"enabled": self.enabled}
+
+
+@dataclass(slots=True, frozen=True)
+class WarmupPolicyConfig:
+    enabled: bool = False
+    run_on_startup: bool = True
+    continue_on_error: bool = True
+    default_project_root: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: JsonDict) -> "WarmupPolicyConfig":
+        return cls(
+            enabled=to_bool(data.get("enabled"), default=False),
+            run_on_startup=to_bool(data.get("run_on_startup"), default=True),
+            continue_on_error=to_bool(data.get("continue_on_error"), default=True),
+            default_project_root=(
+                str(data["default_project_root"])
+                if data.get("default_project_root") is not None
+                else None
+            ),
+        )
+
+    def to_dict(self) -> JsonDict:
+        return {
+            "enabled": self.enabled,
+            "run_on_startup": self.run_on_startup,
+            "continue_on_error": self.continue_on_error,
+            "default_project_root": self.default_project_root,
+        }
+
+
+@dataclass(slots=True, frozen=True)
+class WarmupProbeFileConfig:
+    rel_path: str = "LeanMcpToolkitWarmup/Probe.lean"
+    conflict_strategy: str = "suffix_if_exists"
+    cleanup: bool = True
+
+    @classmethod
+    def from_dict(cls, data: JsonDict) -> "WarmupProbeFileConfig":
+        strategy = str(data.get("conflict_strategy") or "suffix_if_exists").strip()
+        if strategy not in {"suffix_if_exists"}:
+            strategy = "suffix_if_exists"
+        return cls(
+            rel_path=str(data.get("rel_path") or "LeanMcpToolkitWarmup/Probe.lean"),
+            conflict_strategy=strategy,
+            cleanup=to_bool(data.get("cleanup"), default=True),
+        )
+
+    def to_dict(self) -> JsonDict:
+        return {
+            "rel_path": self.rel_path,
+            "conflict_strategy": self.conflict_strategy,
+            "cleanup": self.cleanup,
+        }
+
+
+@dataclass(slots=True, frozen=True)
+class WarmupPlanConfig:
+    order: tuple[str, ...] = (
+        "search.mathlib_decl.find",
+        "declarations.extract",
+        "diagnostics.file",
+    )
+
+    @classmethod
+    def from_dict(cls, data: JsonDict) -> "WarmupPlanConfig":
+        return cls(
+            order=tuple(
+                to_list_of_str(data.get("order"))
+                or (
+                    "search.mathlib_decl.find",
+                    "declarations.extract",
+                    "diagnostics.file",
+                )
+            ),
+        )
+
+    def to_dict(self) -> JsonDict:
+        return {
+            "order": list(self.order),
+        }
+
+
+@dataclass(slots=True, frozen=True)
+class WarmupCallConfig:
+    enabled: bool = True
+    use_probe_file: bool = False
+    request: JsonDict = field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, data: JsonDict) -> "WarmupCallConfig":
+        raw_request = data.get("request")
+        return cls(
+            enabled=to_bool(data.get("enabled"), default=True),
+            use_probe_file=to_bool(data.get("use_probe_file"), default=False),
+            request=(dict(raw_request) if isinstance(raw_request, dict) else {}),
+        )
+
+    def to_dict(self) -> JsonDict:
+        return {
+            "enabled": self.enabled,
+            "use_probe_file": self.use_probe_file,
+            "request": dict(self.request),
+        }
+
+
+def _default_warmup_calls() -> dict[str, WarmupCallConfig]:
+    return {
+        "search.mathlib_decl.find": WarmupCallConfig(
+            enabled=True,
+            use_probe_file=False,
+            request={
+                "query": "Nat.succ",
+                "limit": 1,
+                "rerank_top": 0,
+                "packages": ["Mathlib"],
+            },
+        ),
+        "declarations.extract": WarmupCallConfig(
+            enabled=True,
+            use_probe_file=True,
+            request={},
+        ),
+        "diagnostics.file": WarmupCallConfig(
+            enabled=True,
+            use_probe_file=True,
+            request={
+                "include_content": False,
+                "context_lines": 0,
+            },
+        ),
+    }
+
+
+@dataclass(slots=True, frozen=True)
+class WarmupConfig:
+    policy: WarmupPolicyConfig = field(default_factory=WarmupPolicyConfig)
+    probe_file: WarmupProbeFileConfig = field(default_factory=WarmupProbeFileConfig)
+    plan: WarmupPlanConfig = field(default_factory=WarmupPlanConfig)
+    calls: dict[str, WarmupCallConfig] = field(default_factory=_default_warmup_calls)
+
+    @classmethod
+    def from_dict(cls, data: JsonDict) -> "WarmupConfig":
+        raw_policy = data.get("policy")
+        raw_probe = data.get("probe_file")
+        raw_plan = data.get("plan")
+        raw_calls = data.get("calls")
+
+        calls = _default_warmup_calls()
+        if isinstance(raw_calls, dict):
+            for key, value in raw_calls.items():
+                if not isinstance(key, str) or not key.strip():
+                    continue
+                if isinstance(value, dict):
+                    calls[key] = WarmupCallConfig.from_dict(value)
+
+        return cls(
+            policy=(
+                WarmupPolicyConfig.from_dict(raw_policy)
+                if isinstance(raw_policy, dict)
+                else WarmupPolicyConfig()
+            ),
+            probe_file=(
+                WarmupProbeFileConfig.from_dict(raw_probe)
+                if isinstance(raw_probe, dict)
+                else WarmupProbeFileConfig()
+            ),
+            plan=(
+                WarmupPlanConfig.from_dict(raw_plan)
+                if isinstance(raw_plan, dict)
+                else WarmupPlanConfig()
+            ),
+            calls=calls,
+        )
+
+    def to_dict(self) -> JsonDict:
+        calls_dict: JsonDict = {}
+        for key in sorted(self.calls.keys()):
+            calls_dict[key] = self.calls[key].to_dict()
+        return {
+            "policy": self.policy.to_dict(),
+            "probe_file": self.probe_file.to_dict(),
+            "plan": self.plan.to_dict(),
+            "calls": calls_dict,
         }
 
 
@@ -333,6 +651,9 @@ class LeanInteractBackendConfig:
     project_auto_build: bool = False
     build_repl: bool = True
     force_pull_repl: bool = False
+    repl_rev: str | None = None
+    repl_git: str | None = None
+    cache_dir: str | None = None
     memory_hard_limit_mb: int | None = None
     enable_incremental_optimization: bool = True
     enable_parallel_elaboration: bool = True
@@ -345,6 +666,9 @@ class LeanInteractBackendConfig:
             project_auto_build=to_bool(data.get("project_auto_build"), default=False),
             build_repl=to_bool(data.get("build_repl"), default=True),
             force_pull_repl=to_bool(data.get("force_pull_repl"), default=False),
+            repl_rev=(str(data["repl_rev"]) if data.get("repl_rev") is not None else None),
+            repl_git=(str(data["repl_git"]) if data.get("repl_git") is not None else None),
+            cache_dir=(str(data["cache_dir"]) if data.get("cache_dir") is not None else None),
             memory_hard_limit_mb=to_int(data.get("memory_hard_limit_mb"), default=None),
             enable_incremental_optimization=to_bool(
                 data.get("enable_incremental_optimization"), default=True
@@ -361,6 +685,9 @@ class LeanInteractBackendConfig:
             "project_auto_build": self.project_auto_build,
             "build_repl": self.build_repl,
             "force_pull_repl": self.force_pull_repl,
+            "repl_rev": self.repl_rev,
+            "repl_git": self.repl_git,
+            "cache_dir": self.cache_dir,
             "memory_hard_limit_mb": self.memory_hard_limit_mb,
             "enable_incremental_optimization": self.enable_incremental_optimization,
             "enable_parallel_elaboration": self.enable_parallel_elaboration,
@@ -547,7 +874,11 @@ class ToolkitConfig:
     diagnostics: DiagnosticsConfig = field(default_factory=DiagnosticsConfig)
     declarations: DeclarationsConfig = field(default_factory=DeclarationsConfig)
     lsp_core: LspCoreConfig = field(default_factory=LspCoreConfig)
+    lsp_assist: LspAssistConfig = field(default_factory=LspAssistConfig)
     search_core: SearchCoreConfig = field(default_factory=SearchCoreConfig)
+    mathlib_nav: MathlibNavConfig = field(default_factory=MathlibNavConfig)
+    search_nav: SearchNavConfig = field(default_factory=SearchNavConfig)
+    warmup: WarmupConfig = field(default_factory=WarmupConfig)
     backends: BackendsConfig = field(default_factory=BackendsConfig)
     toolchain: ToolchainConfig = field(default_factory=ToolchainConfig)
     raw_group_overrides: JsonDict = field(default_factory=dict)
@@ -559,7 +890,11 @@ class ToolkitConfig:
         raw_diag = data.get("diagnostics")
         raw_declarations = data.get("declarations")
         raw_lsp_core = data.get("lsp_core")
+        raw_lsp_assist = data.get("lsp_assist")
         raw_search_core = data.get("search_core")
+        raw_mathlib_nav = data.get("mathlib_nav")
+        raw_search_nav = data.get("search_nav")
+        raw_warmup = data.get("warmup")
         raw_backends = data.get("backends")
         raw_toolchain = data.get("toolchain")
         raw_overrides = data.get("raw_group_overrides")
@@ -579,10 +914,30 @@ class ToolkitConfig:
             if isinstance(raw_lsp_core, dict)
             else LspCoreConfig()
         )
+        lsp_assist = (
+            LspAssistConfig.from_dict(raw_lsp_assist)
+            if isinstance(raw_lsp_assist, dict)
+            else LspAssistConfig()
+        )
         search_core = (
             SearchCoreConfig.from_dict(raw_search_core)
             if isinstance(raw_search_core, dict)
             else SearchCoreConfig()
+        )
+        mathlib_nav = (
+            MathlibNavConfig.from_dict(raw_mathlib_nav)
+            if isinstance(raw_mathlib_nav, dict)
+            else MathlibNavConfig()
+        )
+        search_nav = (
+            SearchNavConfig.from_dict(raw_search_nav)
+            if isinstance(raw_search_nav, dict)
+            else SearchNavConfig()
+        )
+        warmup = (
+            WarmupConfig.from_dict(raw_warmup)
+            if isinstance(raw_warmup, dict)
+            else WarmupConfig()
         )
         backends = (
             BackendsConfig.from_dict(raw_backends)
@@ -600,7 +955,11 @@ class ToolkitConfig:
             diagnostics=diagnostics,
             declarations=declarations,
             lsp_core=lsp_core,
+            lsp_assist=lsp_assist,
             search_core=search_core,
+            mathlib_nav=mathlib_nav,
+            search_nav=search_nav,
+            warmup=warmup,
             backends=backends,
             toolchain=(
                 ToolchainConfig.from_dict(raw_toolchain)
@@ -617,7 +976,11 @@ class ToolkitConfig:
             "diagnostics": self.diagnostics.to_dict(),
             "declarations": self.declarations.to_dict(),
             "lsp_core": self.lsp_core.to_dict(),
+            "lsp_assist": self.lsp_assist.to_dict(),
             "search_core": self.search_core.to_dict(),
+            "mathlib_nav": self.mathlib_nav.to_dict(),
+            "search_nav": self.search_nav.to_dict(),
+            "warmup": self.warmup.to_dict(),
             "backends": self.backends.to_dict(),
             "toolchain": self.toolchain.to_dict(),
             "raw_group_overrides": dict(self.raw_group_overrides),

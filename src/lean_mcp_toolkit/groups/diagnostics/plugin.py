@@ -1,7 +1,5 @@
 """Diagnostics group plugin."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import Annotated, Any, Mapping
 
@@ -15,6 +13,7 @@ except Exception:  # pragma: no cover - optional runtime dependency
 
 from ...adapters.http import (
     handle_diagnostics_build,
+    handle_diagnostics_file,
     handle_diagnostics_lint,
     handle_diagnostics_lint_axiom_audit,
     handle_diagnostics_lint_no_sorry,
@@ -96,6 +95,54 @@ _BUILD_PARAMS: tuple[ToolParamSpec, ...] = (
         default_value="diagnostics.default_timeout_seconds",
         description=(
             "Command timeout (seconds) for each underlying Lean/Lake invocation."
+        ),
+    ),
+)
+
+_FILE_PARAMS: tuple[ToolParamSpec, ...] = (
+    ToolParamSpec(
+        name="project_root",
+        type_hint="str | null",
+        required=False,
+        default_value="server default project root",
+        description=(
+            "Lean project root directory. If not provided, server default root is used."
+        ),
+    ),
+    ToolParamSpec(
+        name="file_path",
+        type_hint="str",
+        required=True,
+        description=(
+            "Single Lean file target to check. Supports Lean dot path (A.B.C), "
+            "relative .lean path (A/B/C.lean), or absolute path under project root."
+        ),
+    ),
+    ToolParamSpec(
+        name="include_content",
+        type_hint="bool | null",
+        required=False,
+        default_value="diagnostics.default_include_content",
+        description=(
+            "Whether to attach source context snippet around each diagnostic item."
+        ),
+    ),
+    ToolParamSpec(
+        name="context_lines",
+        type_hint="int | null",
+        required=False,
+        default_value="diagnostics.default_context_lines",
+        description=(
+            "Number of context lines before/after diagnostic location when include_content=true."
+        ),
+    ),
+    ToolParamSpec(
+        name="timeout_seconds",
+        type_hint="int | null",
+        required=False,
+        default_value="diagnostics.default_timeout_seconds",
+        description=(
+            "Command timeout (seconds) for underlying diagnostics collection."
         ),
     ),
 )
@@ -206,6 +253,23 @@ _BUILD_RETURNS: tuple[ToolReturnSpec, ...] = (
     ),
 )
 
+_FILE_RETURNS: tuple[ToolReturnSpec, ...] = (
+    ToolReturnSpec("success", "bool", "Whether file has no error-level diagnostics."),
+    ToolReturnSpec("error_message", "str | null", "Execution failure detail, if any."),
+    ToolReturnSpec("file", "str", "Lean dot path for checked file."),
+    ToolReturnSpec(
+        "items",
+        "list[DiagnosticItem]",
+        "Diagnostics items for the file.",
+        children=_DIAGNOSTIC_ITEM_FIELDS,
+    ),
+    ToolReturnSpec("total_items", "int", "Total diagnostics items count."),
+    ToolReturnSpec("error_count", "int", "Count of error diagnostics."),
+    ToolReturnSpec("warning_count", "int", "Count of warning diagnostics."),
+    ToolReturnSpec("info_count", "int", "Count of information/hint diagnostics."),
+    ToolReturnSpec("sorry_count", "int", "Count of diagnostics identified as sorry."),
+)
+
 _LINT_RETURNS: tuple[ToolReturnSpec, ...] = (
     ToolReturnSpec("success", "bool", "Overall lint success across enabled checks."),
     ToolReturnSpec(
@@ -289,6 +353,17 @@ _TOOL_SPECS: tuple[GroupToolSpec, ...] = (
     ),
     GroupToolSpec(
         group_name="diagnostics",
+        canonical_name="diagnostics.file",
+        raw_name="file",
+        api_path="/diagnostics/file",
+        description=(
+            "Run Lean diagnostics for a single file and return structured item-level output."
+        ),
+        params=_FILE_PARAMS,
+        returns=_FILE_RETURNS,
+    ),
+    GroupToolSpec(
+        group_name="diagnostics",
         canonical_name="diagnostics.lint",
         raw_name="lint",
         api_path="/diagnostics/lint",
@@ -342,6 +417,7 @@ class DiagnosticsGroupPlugin(GroupPlugin):
             BackendKey.LEAN_COMMAND_RUNTIME,
             BackendKey.LEAN_TARGET_RESOLVER,
             BackendKey.DECLARATIONS_BACKENDS,
+            BackendKey.LSP_CLIENT_MANAGER,
         )
 
     def create_local_service(
@@ -362,6 +438,7 @@ class DiagnosticsGroupPlugin(GroupPlugin):
     def tool_handlers(self, service: Any) -> Mapping[str, ToolHandler]:
         return {
             "diagnostics.build": lambda payload: handle_diagnostics_build(service, payload),
+            "diagnostics.file": lambda payload: handle_diagnostics_file(service, payload),
             "diagnostics.lint": lambda payload: handle_diagnostics_lint(service, payload),
             "diagnostics.lint.no_sorry": (
                 lambda payload: handle_diagnostics_lint_no_sorry(service, payload)
@@ -381,6 +458,7 @@ class DiagnosticsGroupPlugin(GroupPlugin):
         prune_none,
     ) -> None:
         build_spec = _TOOL_SPEC_MAP["diagnostics.build"]
+        file_spec = _TOOL_SPEC_MAP["diagnostics.file"]
         lint_spec = _TOOL_SPEC_MAP["diagnostics.lint"]
         lint_no_sorry_spec = _TOOL_SPEC_MAP["diagnostics.lint.no_sorry"]
         lint_axiom_audit_spec = _TOOL_SPEC_MAP["diagnostics.lint.axiom_audit"]
@@ -392,6 +470,14 @@ class DiagnosticsGroupPlugin(GroupPlugin):
                 spec=build_spec,
                 service=service,
                 normalize_str_list=normalize_str_list,
+                prune_none=prune_none,
+            )
+        for alias in aliases_by_canonical.get("diagnostics.file", ()):
+            self._register_file(
+                mcp=mcp,
+                alias=alias,
+                spec=file_spec,
+                service=service,
                 prune_none=prune_none,
             )
         for alias in aliases_by_canonical.get("diagnostics.lint", ()):
@@ -476,6 +562,50 @@ class DiagnosticsGroupPlugin(GroupPlugin):
                 "timeout_seconds": timeout_seconds,
             }
             return handle_diagnostics_build(service, prune_none(payload))
+
+    @staticmethod
+    def _register_file(
+        *,
+        mcp: Any,
+        alias: str,
+        spec: GroupToolSpec,
+        service: Any,
+        prune_none,
+    ) -> None:
+        @mcp.tool(
+            name=alias,
+            description=spec.render_mcp_description(),
+        )
+        def _diagnostics_file(
+            project_root: Annotated[
+                str | None,
+                Field(description=_param_desc(spec, "project_root")),
+            ] = None,
+            file_path: Annotated[
+                str,
+                Field(description=_param_desc(spec, "file_path")),
+            ] = "",
+            include_content: Annotated[
+                bool | None,
+                Field(description=_param_desc(spec, "include_content")),
+            ] = None,
+            context_lines: Annotated[
+                int | None,
+                Field(description=_param_desc(spec, "context_lines")),
+            ] = None,
+            timeout_seconds: Annotated[
+                int | None,
+                Field(description=_param_desc(spec, "timeout_seconds")),
+            ] = None,
+        ) -> JsonDict:
+            payload = {
+                "project_root": project_root,
+                "file_path": file_path,
+                "include_content": include_content,
+                "context_lines": context_lines,
+                "timeout_seconds": timeout_seconds,
+            }
+            return handle_diagnostics_file(service, prune_none(payload))
 
     @staticmethod
     def _register_lint(

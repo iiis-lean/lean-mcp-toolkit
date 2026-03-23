@@ -1,13 +1,10 @@
 from dataclasses import dataclass
-from pathlib import Path
 
 from lean_mcp_toolkit.backends.lean_explore import LeanExploreRecord, LeanExploreSearchResult
 from lean_mcp_toolkit.config import ToolkitConfig
 from lean_mcp_toolkit.contracts.search_core import (
-    LocalDeclSearchItem,
-    LocalDeclSearchRequest,
+    MathlibDeclFindRequest,
     MathlibDeclGetRequest,
-    MathlibDeclSearchRequest,
 )
 from lean_mcp_toolkit.groups.search_core.service_impl import SearchCoreServiceImpl
 
@@ -34,26 +31,9 @@ class _FakeLeanExploreBackend:
         return None
 
 
-@dataclass(slots=True)
-class _FakeLocalDeclSearcher:
-    items: tuple[LocalDeclSearchItem, ...]
 
-    def search(
-        self,
-        *,
-        project_root: Path,
-        query: str,
-        limit: int,
-        include_dependencies: bool,
-        include_stdlib: bool,
-    ) -> tuple[LocalDeclSearchItem, ...]:
-        _ = project_root, query, limit, include_dependencies, include_stdlib
-        return self.items
-
-
-
-def test_search_core_service_mathlib_and_local(tmp_path: Path) -> None:
-    cfg = ToolkitConfig.from_dict({"server": {"default_project_root": str(tmp_path)}})
+def test_search_core_service_mathlib_find_and_get() -> None:
+    cfg = ToolkitConfig()
     item = LeanExploreRecord(
         id=1,
         name="Nat.succ",
@@ -64,20 +44,13 @@ def test_search_core_service_mathlib_and_local(tmp_path: Path) -> None:
         dependencies="[]",
         informalization="succ",
     )
-    local_item = LocalDeclSearchItem(
-        name="A.foo",
-        kind="theorem",
-        file="A/Foo.lean",
-        origin="project",
-    )
     svc = SearchCoreServiceImpl(
         config=cfg,
         lean_explore_backend=_FakeLeanExploreBackend(items=(item,)),
-        local_decl_searcher=_FakeLocalDeclSearcher(items=(local_item,)),
     )
 
-    search_resp = svc.run_mathlib_decl_search(
-        MathlibDeclSearchRequest.from_dict(
+    search_resp = svc.run_mathlib_decl_find(
+        MathlibDeclFindRequest.from_dict(
             {
                 "query": "succ",
                 "include_module": True,
@@ -100,7 +73,3 @@ def test_search_core_service_mathlib_and_local(tmp_path: Path) -> None:
     assert get_resp.found is True
     assert get_resp.item is not None
     assert get_resp.item.source_text == "def succ"
-
-    local_resp = svc.run_local_decl_search(LocalDeclSearchRequest.from_dict({"query": "foo"}))
-    assert local_resp.count == 1
-    assert local_resp.items[0].name == "A.foo"

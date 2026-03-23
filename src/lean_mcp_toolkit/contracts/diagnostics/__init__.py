@@ -2,6 +2,7 @@
 
 from .build import BuildRequest, BuildResponse
 from .common import DiagnosticItem, FileDiagnostics, Position
+from .file import FileRequest, FileResponse
 from .lint import (
     AxiomAuditResult,
     AxiomDeclaredItem,
@@ -16,6 +17,8 @@ from .lint import (
 __all__ = [
     "BuildRequest",
     "BuildResponse",
+    "FileRequest",
+    "FileResponse",
     "Position",
     "DiagnosticItem",
     "FileDiagnostics",

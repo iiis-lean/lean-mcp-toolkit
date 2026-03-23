@@ -4,15 +4,26 @@ from __future__ import annotations
 
 import contextlib
 from dataclasses import dataclass, field
+import logging
 from typing import Any
 
 from ..backends import BackendContext, build_backend_context
 from ..config import ToolkitConfig, load_toolkit_config
-from ..core.services import DeclarationsService, DiagnosticsService, LspCoreService, SearchCoreService
+from ..core.services import (
+    DeclarationsService,
+    DiagnosticsService,
+    LspAssistService,
+    LspCoreService,
+    MathlibNavService,
+    SearchCoreService,
+    SearchNavService,
+)
 from ..groups import GroupPlugin, ToolHandler, builtin_group_plugins
 from ..groups.plugin_base import GroupToolSpec
 from ..groups.plugin_base import resolve_active_group_names, resolve_aliases_by_canonical
+from .warmup import ToolkitWarmupRunner
 
+_LOG = logging.getLogger(__name__)
 
 @dataclass(slots=True)
 class ToolkitServer:
@@ -27,7 +38,10 @@ class ToolkitServer:
     diagnostics: DiagnosticsService | None = None
     declarations: DeclarationsService | None = None
     lsp_core: LspCoreService | None = None
+    lsp_assist: LspAssistService | None = None
     search_core: SearchCoreService | None = None
+    mathlib_nav: MathlibNavService | None = None
+    search_nav: SearchNavService | None = None
     _group_plugins: tuple[GroupPlugin, ...] = field(default_factory=tuple, repr=False)
     _group_services: dict[str, Any] = field(default_factory=dict, repr=False)
     _canonical_handlers: dict[str, ToolHandler] = field(default_factory=dict, repr=False)
@@ -40,6 +54,7 @@ class ToolkitServer:
         default_factory=dict, repr=False
     )
     _backend_context: BackendContext | None = field(default=None, repr=False)
+    _last_warmup_report: dict[str, Any] | None = field(default=None, repr=False)
 
     @classmethod
     def from_config(
@@ -120,6 +135,20 @@ class ToolkitServer:
         )
         def _meta_tools():
             return {"tools": list(self.describe_tools())}
+
+        @app.get(
+            f"{self.api_prefix}/meta/warmup",
+            summary="Get last startup warmup report",
+            description="Return startup warmup execution report for backend/tool pre-heating.",
+        )
+        def _meta_warmup():
+            return self._last_warmup_report or {
+                "enabled": bool(self.config.warmup.policy.enabled),
+                "executed": False,
+                "success": True,
+                "project_root": None,
+                "steps": [],
+            }
 
         for route_path, handler in sorted(self._api_route_handlers.items()):
             endpoint = self._make_fastapi_endpoint(handler=handler, route_path=route_path)
@@ -268,6 +297,7 @@ class ToolkitServer:
         )
 
     def run(self) -> None:
+        self.run_startup_warmup()
         mode = self.config.server.mode
         if mode == "http":
             self.run_http()
@@ -279,6 +309,31 @@ class ToolkitServer:
             self.run_unified()
             return
         raise ValueError(f"unsupported server mode: {mode}")
+
+    def run_startup_warmup(self) -> dict[str, Any] | None:
+        policy = self.config.warmup.policy
+        if not policy.enabled or not policy.run_on_startup:
+            return None
+
+        runner = ToolkitWarmupRunner(
+            config=self.config,
+            diagnostics=self.diagnostics,
+            declarations=self.declarations,
+            search_core=self.search_core,
+        )
+        report = runner.run()
+        payload = report.to_dict()
+        self._last_warmup_report = payload
+
+        if report.success:
+            _LOG.info("startup warmup succeeded")
+            return payload
+
+        message = "startup warmup failed"
+        if policy.continue_on_error:
+            _LOG.warning("%s (continue_on_error=true)", message)
+            return payload
+        raise RuntimeError(message)
 
     def _wire_plugins(self, plugins: tuple[GroupPlugin, ...]) -> None:
         plugin_by_name: dict[str, GroupPlugin] = {}
@@ -311,8 +366,14 @@ class ToolkitServer:
                 self.declarations = service
             if plugin.group_name == "lsp_core":
                 self.lsp_core = service
+            if plugin.group_name == "lsp_assist":
+                self.lsp_assist = service
             if plugin.group_name == "search_core":
                 self.search_core = service
+            if plugin.group_name == "mathlib_nav":
+                self.mathlib_nav = service
+            if plugin.group_name == "search_nav":
+                self.search_nav = service
 
             specs = plugin.tool_specs()
             spec_by_canonical = {spec.canonical_name: spec for spec in specs}

@@ -6,7 +6,15 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ..config import ToolkitConfig
-from ..core.services import DeclarationsService, DiagnosticsService, LspCoreService, SearchCoreService
+from ..core.services import (
+    DeclarationsService,
+    DiagnosticsService,
+    LspAssistService,
+    LspCoreService,
+    MathlibNavService,
+    SearchCoreService,
+    SearchNavService,
+)
 from ..groups import GroupPlugin, ToolHandler, builtin_group_plugins
 from ..groups.plugin_base import resolve_active_group_names, resolve_aliases_by_canonical
 from ..transport.http import HttpConfig
@@ -21,7 +29,10 @@ class ToolkitHttpClient:
     diagnostics: DiagnosticsService | None = None
     declarations: DeclarationsService | None = None
     lsp_core: LspCoreService | None = None
+    lsp_assist: LspAssistService | None = None
     search_core: SearchCoreService | None = None
+    mathlib_nav: MathlibNavService | None = None
+    search_nav: SearchNavService | None = None
     _group_plugins: tuple[GroupPlugin, ...] = field(default_factory=tuple, repr=False)
     _group_clients: dict[str, Any] = field(default_factory=dict, repr=False)
     _canonical_handlers: dict[str, ToolHandler] = field(default_factory=dict, repr=False)
@@ -93,8 +104,14 @@ class ToolkitHttpClient:
                 self.declarations = group_client
             if plugin.group_name == "lsp_core":
                 self.lsp_core = group_client
+            if plugin.group_name == "lsp_assist":
+                self.lsp_assist = group_client
             if plugin.group_name == "search_core":
                 self.search_core = group_client
+            if plugin.group_name == "mathlib_nav":
+                self.mathlib_nav = group_client
+            if plugin.group_name == "search_nav":
+                self.search_nav = group_client
 
             specs = plugin.tool_specs()
             spec_by_canonical = {spec.canonical_name: spec for spec in specs}

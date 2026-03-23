@@ -2,55 +2,44 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-import os
-from pathlib import Path
+from dataclasses import dataclass
 
 from ...backends.lean_explore import LeanExploreBackend, LeanExploreBackendAdapter
 from ...config import ToolkitConfig
 from ...contracts.search_core import (
-    LocalDeclSearchRequest,
-    LocalDeclSearchResponse,
+    MathlibDeclFindRequest,
+    MathlibDeclFindResponse,
     MathlibDeclGetRequest,
     MathlibDeclGetResponse,
-    MathlibDeclSearchRequest,
-    MathlibDeclSearchResponse,
     MathlibDeclSummaryItem,
 )
 from ...core.services import SearchCoreService
-from .local_decl_search import LocalDeclSearcher
 
 
 @dataclass(slots=True)
 class SearchCoreServiceImpl(SearchCoreService):
     config: ToolkitConfig
     lean_explore_backend: LeanExploreBackend
-    local_decl_searcher: LocalDeclSearcher = field(default_factory=LocalDeclSearcher)
 
     def __init__(
         self,
         config: ToolkitConfig,
         *,
         lean_explore_backend: LeanExploreBackend | None = None,
-        local_decl_searcher: LocalDeclSearcher | None = None,
     ):
         self.config = config
         self.lean_explore_backend = lean_explore_backend or LeanExploreBackendAdapter(
             backend_config=config.backends.lean_explore,
             search_config=config.search_core,
         )
-        self.local_decl_searcher = local_decl_searcher or LocalDeclSearcher(
-            local_decl_max_candidates=config.search_core.local_decl_max_candidates,
-            local_decl_require_rg=config.search_core.local_decl_require_rg,
-        )
 
-    def run_mathlib_decl_search(
+    def run_mathlib_decl_find(
         self,
-        req: MathlibDeclSearchRequest,
-    ) -> MathlibDeclSearchResponse:
+        req: MathlibDeclFindRequest,
+    ) -> MathlibDeclFindResponse:
         query = req.query.strip()
         if not query:
-            return MathlibDeclSearchResponse(
+            return MathlibDeclFindResponse(
                 query="",
                 count=0,
                 processing_time_ms=None,
@@ -89,7 +78,7 @@ class SearchCoreServiceImpl(SearchCoreService):
             for item in result.items
         )
 
-        return MathlibDeclSearchResponse(
+        return MathlibDeclFindResponse(
             query=result.query,
             count=len(items),
             processing_time_ms=result.processing_time_ms,
@@ -115,40 +104,6 @@ class SearchCoreServiceImpl(SearchCoreService):
             include_informalization=req.include_informalization,
         )
         return MathlibDeclGetResponse(found=True, item=projected)
-
-    def run_local_decl_search(self, req: LocalDeclSearchRequest) -> LocalDeclSearchResponse:
-        query = req.query.strip()
-        if not query:
-            return LocalDeclSearchResponse(query="", count=0, items=tuple())
-
-        project_root = self._resolve_project_root(req.project_root)
-        limit = req.limit or self.config.search_core.local_decl_default_limit
-        include_dependencies = (
-            req.include_dependencies
-            if req.include_dependencies is not None
-            else self.config.search_core.local_decl_include_dependencies
-        )
-        include_stdlib = (
-            req.include_stdlib
-            if req.include_stdlib is not None
-            else self.config.search_core.local_decl_include_stdlib
-        )
-
-        items = self.local_decl_searcher.search(
-            project_root=project_root,
-            query=query,
-            limit=max(1, int(limit)),
-            include_dependencies=bool(include_dependencies),
-            include_stdlib=bool(include_stdlib),
-        )
-        return LocalDeclSearchResponse(query=query, count=len(items), items=items)
-
-    def _resolve_project_root(self, project_root: str | None) -> Path:
-        root = project_root or self.config.server.default_project_root or os.getcwd()
-        resolved = Path(root).expanduser().resolve()
-        if not resolved.exists() or not resolved.is_dir():
-            raise ValueError(f"project_root is not a directory: {resolved}")
-        return resolved
 
     @staticmethod
     def _project_item(

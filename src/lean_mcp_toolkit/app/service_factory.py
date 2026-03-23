@@ -22,11 +22,29 @@ from ..groups.lsp_core import (
     create_lsp_core_client as _create_group_lsp_core_client,
     create_lsp_core_service as _create_group_lsp_core_service,
 )
+from ..groups.lsp_assist import (
+    LspAssistHttpClient,
+    LspAssistServiceImpl,
+    create_lsp_assist_client as _create_group_lsp_assist_client,
+    create_lsp_assist_service as _create_group_lsp_assist_service,
+)
+from ..groups.mathlib_nav import (
+    MathlibNavHttpClient,
+    MathlibNavServiceImpl,
+    create_mathlib_nav_client as _create_group_mathlib_nav_client,
+    create_mathlib_nav_service as _create_group_mathlib_nav_service,
+)
 from ..groups.search_core import (
     SearchCoreHttpClient,
     SearchCoreServiceImpl,
     create_search_core_client as _create_group_search_core_client,
     create_search_core_service as _create_group_search_core_service,
+)
+from ..groups.search_nav import (
+    SearchNavHttpClient,
+    SearchNavServiceImpl,
+    create_search_nav_client as _create_group_search_nav_client,
+    create_search_nav_service as _create_group_search_nav_service,
 )
 from ..transport.http import HttpConfig
 from .toolkit_client import ToolkitHttpClient
@@ -97,6 +115,18 @@ def create_default_lsp_core_client(*, http_config: HttpConfig) -> LspCoreHttpCli
     return _create_group_lsp_core_client(http_config=http_config)
 
 
+def create_default_lsp_assist_service(
+    *,
+    config: ToolkitConfig | None = None,
+    config_path: str | None = None,
+) -> LspAssistServiceImpl:
+    return _create_group_lsp_assist_service(config=config, config_path=config_path)
+
+
+def create_default_lsp_assist_client(*, http_config: HttpConfig) -> LspAssistHttpClient:
+    return _create_group_lsp_assist_client(http_config=http_config)
+
+
 def create_default_search_core_service(
     *,
     config: ToolkitConfig | None = None,
@@ -107,6 +137,30 @@ def create_default_search_core_service(
 
 def create_default_search_core_client(*, http_config: HttpConfig) -> SearchCoreHttpClient:
     return _create_group_search_core_client(http_config=http_config)
+
+
+def create_default_search_nav_service(
+    *,
+    config: ToolkitConfig | None = None,
+    config_path: str | None = None,
+) -> SearchNavServiceImpl:
+    return _create_group_search_nav_service(config=config, config_path=config_path)
+
+
+def create_default_search_nav_client(*, http_config: HttpConfig) -> SearchNavHttpClient:
+    return _create_group_search_nav_client(http_config=http_config)
+
+
+def create_default_mathlib_nav_service(
+    *,
+    config: ToolkitConfig | None = None,
+    config_path: str | None = None,
+) -> MathlibNavServiceImpl:
+    return _create_group_mathlib_nav_service(config=config, config_path=config_path)
+
+
+def create_default_mathlib_nav_client(*, http_config: HttpConfig) -> MathlibNavHttpClient:
+    return _create_group_mathlib_nav_client(http_config=http_config)
 
 
 def create_diagnostics_service(
@@ -145,6 +199,18 @@ def create_lsp_core_client(*, http_config: HttpConfig) -> LspCoreHttpClient:
     return create_default_lsp_core_client(http_config=http_config)
 
 
+def create_lsp_assist_service(
+    *,
+    config: ToolkitConfig | None = None,
+    config_path: str | None = None,
+) -> LspAssistServiceImpl:
+    return create_default_lsp_assist_service(config=config, config_path=config_path)
+
+
+def create_lsp_assist_client(*, http_config: HttpConfig) -> LspAssistHttpClient:
+    return create_default_lsp_assist_client(http_config=http_config)
+
+
 def create_search_core_service(
     *,
     config: ToolkitConfig | None = None,
@@ -157,6 +223,30 @@ def create_search_core_client(*, http_config: HttpConfig) -> SearchCoreHttpClien
     return create_default_search_core_client(http_config=http_config)
 
 
+def create_search_nav_service(
+    *,
+    config: ToolkitConfig | None = None,
+    config_path: str | None = None,
+) -> SearchNavServiceImpl:
+    return create_default_search_nav_service(config=config, config_path=config_path)
+
+
+def create_search_nav_client(*, http_config: HttpConfig) -> SearchNavHttpClient:
+    return create_default_search_nav_client(http_config=http_config)
+
+
+def create_mathlib_nav_service(
+    *,
+    config: ToolkitConfig | None = None,
+    config_path: str | None = None,
+) -> MathlibNavServiceImpl:
+    return create_default_mathlib_nav_service(config=config, config_path=config_path)
+
+
+def create_mathlib_nav_client(*, http_config: HttpConfig) -> MathlibNavHttpClient:
+    return create_default_mathlib_nav_client(http_config=http_config)
+
+
 __all__ = [
     "create_local_toolkit_server",
     "create_toolkit_http_client",
@@ -166,14 +256,26 @@ __all__ = [
     "create_default_declarations_client",
     "create_default_lsp_core_service",
     "create_default_lsp_core_client",
+    "create_default_lsp_assist_service",
+    "create_default_lsp_assist_client",
     "create_default_search_core_service",
     "create_default_search_core_client",
+    "create_default_mathlib_nav_service",
+    "create_default_mathlib_nav_client",
+    "create_default_search_nav_service",
+    "create_default_search_nav_client",
     "create_diagnostics_service",
     "create_diagnostics_client",
     "create_declarations_service",
     "create_declarations_client",
     "create_lsp_core_service",
     "create_lsp_core_client",
+    "create_lsp_assist_service",
+    "create_lsp_assist_client",
     "create_search_core_service",
     "create_search_core_client",
+    "create_mathlib_nav_service",
+    "create_mathlib_nav_client",
+    "create_search_nav_service",
+    "create_search_nav_client",
 ]
