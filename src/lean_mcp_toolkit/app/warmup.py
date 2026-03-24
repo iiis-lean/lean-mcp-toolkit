@@ -24,24 +24,6 @@ _DEFAULT_PROBE_CONTENT = (
     "  rfl\n\n"
     "end LeanMcpToolkitWarmup\n"
 )
-_WARMUP_CALL_ALIASES: dict[str, str] = {
-    "search.mathlib_decl.search": "search.mathlib_decl.find",
-}
-
-
-def _normalize_warmup_call_name(call_name: str) -> str:
-    return _WARMUP_CALL_ALIASES.get(call_name, call_name)
-
-
-def _warmup_call_candidates(call_name: str) -> tuple[str, ...]:
-    normalized = _normalize_warmup_call_name(call_name)
-    candidates: list[str] = [call_name]
-    if normalized not in candidates:
-        candidates.append(normalized)
-    for alias, canonical in _WARMUP_CALL_ALIASES.items():
-        if canonical == normalized and alias not in candidates:
-            candidates.append(alias)
-    return tuple(candidates)
 
 
 @dataclass(slots=True, frozen=True)
@@ -111,12 +93,7 @@ class ToolkitWarmupRunner:
 
         try:
             for call_name in self.config.warmup.plan.order:
-                resolved_name = _normalize_warmup_call_name(call_name)
-                call_cfg = None
-                for candidate in _warmup_call_candidates(call_name):
-                    call_cfg = self.config.warmup.calls.get(candidate)
-                    if call_cfg is not None:
-                        break
+                call_cfg = self.config.warmup.calls.get(call_name)
                 if call_cfg is None:
                     steps.append(
                         WarmupStepReport(
@@ -159,7 +136,7 @@ class ToolkitWarmupRunner:
                     if call_cfg.use_probe_file and probe_error is not None:
                         raise RuntimeError(probe_error)
                     self._run_single_call(
-                        call_name=resolved_name,
+                        call_name=call_name,
                         default_root=default_root,
                         call_request=call_cfg.request,
                         use_probe_file=call_cfg.use_probe_file,
@@ -250,7 +227,6 @@ class ToolkitWarmupRunner:
         use_probe_file: bool,
         probe_handle: _ProbeHandle | None,
     ) -> None:
-        call_name = _normalize_warmup_call_name(call_name)
         if call_name == "search.mathlib_decl.find":
             if self.search_core is None:
                 raise RuntimeError("search_core service is not available")

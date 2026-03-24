@@ -6,8 +6,10 @@ from dataclasses import asdict
 from typing import Any, Protocol, TypeVar
 
 JsonPrimitive = str | int | float | bool | None
-JsonValue = JsonPrimitive | list["JsonValue"] | dict[str, "JsonValue"]
-JsonDict = dict[str, JsonValue]
+# Use a non-recursive alias here so MCP/Pydantic schema generation for tool
+# signatures does not trip over unresolved recursive dict/list unions.
+JsonValue = Any
+JsonDict = dict[str, Any]
 
 T = TypeVar("T", bound="DictModel")
 
