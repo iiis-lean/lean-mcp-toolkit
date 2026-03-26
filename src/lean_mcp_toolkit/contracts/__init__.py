@@ -1,6 +1,7 @@
 """Shared request/response contracts."""
 
 from .base import DictModel, JsonDict, JsonValue, MarkdownRenderable
+from .build_base import BuildWorkspaceRequest, BuildWorkspaceResponse
 from .declarations import (
     DeclarationExtractRequest,
     DeclarationExtractResponse,
@@ -10,12 +11,48 @@ from .declarations import (
     DeclarationLocateResponse,
     DeclarationPosition,
 )
+from .lsp_heavy import (
+    LspProofProfileRequest,
+    LspProofProfileResponse,
+    LspWidgetSourceRequest,
+    LspWidgetSourceResponse,
+    LspWidgetsRequest,
+    LspWidgetsResponse,
+    ProfileCategory,
+    ProfileLine,
+    WidgetInstance,
+)
+from .proof_search_alt import (
+    HammerPremiseItem,
+    ProofSearchAltHammerPremiseRequest,
+    ProofSearchAltHammerPremiseResponse,
+    ProofSearchAltStateSearchRequest,
+    ProofSearchAltStateSearchResponse,
+    StateSearchItem,
+)
+from .search_alt import (
+    LeanDexItem,
+    LeanFinderItem,
+    LeanSearchItem,
+    LoogleItem,
+    SearchAltLeanDexRequest,
+    SearchAltLeanDexResponse,
+    SearchAltLeanFinderRequest,
+    SearchAltLeanFinderResponse,
+    SearchAltLeanSearchRequest,
+    SearchAltLeanSearchResponse,
+    SearchAltLoogleRequest,
+    SearchAltLoogleResponse,
+    SearchAltRequest,
+)
 
 __all__ = [
     "DictModel",
     "JsonDict",
     "JsonValue",
     "MarkdownRenderable",
+    "BuildWorkspaceRequest",
+    "BuildWorkspaceResponse",
     "DeclarationExtractRequest",
     "DeclarationExtractResponse",
     "DeclarationItem",
@@ -23,4 +60,32 @@ __all__ = [
     "DeclarationLocateRequest",
     "DeclarationLocateRange",
     "DeclarationLocateResponse",
+    "LspWidgetsRequest",
+    "WidgetInstance",
+    "LspWidgetsResponse",
+    "LspWidgetSourceRequest",
+    "LspWidgetSourceResponse",
+    "LspProofProfileRequest",
+    "ProfileLine",
+    "ProfileCategory",
+    "LspProofProfileResponse",
+    "SearchAltRequest",
+    "SearchAltLeanSearchRequest",
+    "LeanSearchItem",
+    "SearchAltLeanSearchResponse",
+    "SearchAltLeanDexRequest",
+    "LeanDexItem",
+    "SearchAltLeanDexResponse",
+    "SearchAltLoogleRequest",
+    "LoogleItem",
+    "SearchAltLoogleResponse",
+    "SearchAltLeanFinderRequest",
+    "LeanFinderItem",
+    "SearchAltLeanFinderResponse",
+    "ProofSearchAltStateSearchRequest",
+    "StateSearchItem",
+    "ProofSearchAltStateSearchResponse",
+    "ProofSearchAltHammerPremiseRequest",
+    "HammerPremiseItem",
+    "ProofSearchAltHammerPremiseResponse",
 ]

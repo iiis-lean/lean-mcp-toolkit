@@ -4,6 +4,12 @@ from __future__ import annotations
 
 from ..config import ToolkitConfig, load_toolkit_config
 from ..groups import GroupPlugin
+from ..groups.build_base import (
+    BuildBaseHttpClient,
+    BuildBaseServiceImpl,
+    create_build_base_client as _create_group_build_base_client,
+    create_build_base_service as _create_group_build_base_service,
+)
 from ..groups.declarations import (
     DeclarationsHttpClient,
     DeclarationsServiceImpl,
@@ -28,11 +34,29 @@ from ..groups.lsp_assist import (
     create_lsp_assist_client as _create_group_lsp_assist_client,
     create_lsp_assist_service as _create_group_lsp_assist_service,
 )
+from ..groups.lsp_heavy import (
+    LspHeavyHttpClient,
+    LspHeavyServiceImpl,
+    create_lsp_heavy_client as _create_group_lsp_heavy_client,
+    create_lsp_heavy_service as _create_group_lsp_heavy_service,
+)
 from ..groups.mathlib_nav import (
     MathlibNavHttpClient,
     MathlibNavServiceImpl,
     create_mathlib_nav_client as _create_group_mathlib_nav_client,
     create_mathlib_nav_service as _create_group_mathlib_nav_service,
+)
+from ..groups.proof_search_alt import (
+    ProofSearchAltHttpClient,
+    ProofSearchAltServiceImpl,
+    create_proof_search_alt_client as _create_group_proof_search_alt_client,
+    create_proof_search_alt_service as _create_group_proof_search_alt_service,
+)
+from ..groups.search_alt import (
+    SearchAltHttpClient,
+    SearchAltServiceImpl,
+    create_search_alt_client as _create_group_search_alt_client,
+    create_search_alt_service as _create_group_search_alt_service,
 )
 from ..groups.search_core import (
     SearchCoreHttpClient,
@@ -75,6 +99,18 @@ def create_toolkit_http_client(
         config=resolved,
         plugins=plugins,
     )
+
+
+def create_default_build_base_service(
+    *,
+    config: ToolkitConfig | None = None,
+    config_path: str | None = None,
+) -> BuildBaseServiceImpl:
+    return _create_group_build_base_service(config=config, config_path=config_path)
+
+
+def create_default_build_base_client(*, http_config: HttpConfig) -> BuildBaseHttpClient:
+    return _create_group_build_base_client(http_config=http_config)
 
 
 
@@ -127,6 +163,30 @@ def create_default_lsp_assist_client(*, http_config: HttpConfig) -> LspAssistHtt
     return _create_group_lsp_assist_client(http_config=http_config)
 
 
+def create_default_lsp_heavy_service(
+    *,
+    config: ToolkitConfig | None = None,
+    config_path: str | None = None,
+) -> LspHeavyServiceImpl:
+    return _create_group_lsp_heavy_service(config=config, config_path=config_path)
+
+
+def create_default_lsp_heavy_client(*, http_config: HttpConfig) -> LspHeavyHttpClient:
+    return _create_group_lsp_heavy_client(http_config=http_config)
+
+
+def create_default_search_alt_service(
+    *,
+    config: ToolkitConfig | None = None,
+    config_path: str | None = None,
+) -> SearchAltServiceImpl:
+    return _create_group_search_alt_service(config=config, config_path=config_path)
+
+
+def create_default_search_alt_client(*, http_config: HttpConfig) -> SearchAltHttpClient:
+    return _create_group_search_alt_client(http_config=http_config)
+
+
 def create_default_search_core_service(
     *,
     config: ToolkitConfig | None = None,
@@ -161,6 +221,33 @@ def create_default_mathlib_nav_service(
 
 def create_default_mathlib_nav_client(*, http_config: HttpConfig) -> MathlibNavHttpClient:
     return _create_group_mathlib_nav_client(http_config=http_config)
+
+
+def create_default_proof_search_alt_service(
+    *,
+    config: ToolkitConfig | None = None,
+    config_path: str | None = None,
+) -> ProofSearchAltServiceImpl:
+    return _create_group_proof_search_alt_service(config=config, config_path=config_path)
+
+
+def create_default_proof_search_alt_client(
+    *,
+    http_config: HttpConfig,
+) -> ProofSearchAltHttpClient:
+    return _create_group_proof_search_alt_client(http_config=http_config)
+
+
+def create_build_base_service(
+    *,
+    config: ToolkitConfig | None = None,
+    config_path: str | None = None,
+) -> BuildBaseServiceImpl:
+    return create_default_build_base_service(config=config, config_path=config_path)
+
+
+def create_build_base_client(*, http_config: HttpConfig) -> BuildBaseHttpClient:
+    return create_default_build_base_client(http_config=http_config)
 
 
 def create_diagnostics_service(
@@ -211,6 +298,30 @@ def create_lsp_assist_client(*, http_config: HttpConfig) -> LspAssistHttpClient:
     return create_default_lsp_assist_client(http_config=http_config)
 
 
+def create_lsp_heavy_service(
+    *,
+    config: ToolkitConfig | None = None,
+    config_path: str | None = None,
+) -> LspHeavyServiceImpl:
+    return create_default_lsp_heavy_service(config=config, config_path=config_path)
+
+
+def create_lsp_heavy_client(*, http_config: HttpConfig) -> LspHeavyHttpClient:
+    return create_default_lsp_heavy_client(http_config=http_config)
+
+
+def create_search_alt_service(
+    *,
+    config: ToolkitConfig | None = None,
+    config_path: str | None = None,
+) -> SearchAltServiceImpl:
+    return create_default_search_alt_service(config=config, config_path=config_path)
+
+
+def create_search_alt_client(*, http_config: HttpConfig) -> SearchAltHttpClient:
+    return create_default_search_alt_client(http_config=http_config)
+
+
 def create_search_core_service(
     *,
     config: ToolkitConfig | None = None,
@@ -247,9 +358,26 @@ def create_mathlib_nav_client(*, http_config: HttpConfig) -> MathlibNavHttpClien
     return create_default_mathlib_nav_client(http_config=http_config)
 
 
+def create_proof_search_alt_service(
+    *,
+    config: ToolkitConfig | None = None,
+    config_path: str | None = None,
+) -> ProofSearchAltServiceImpl:
+    return create_default_proof_search_alt_service(config=config, config_path=config_path)
+
+
+def create_proof_search_alt_client(
+    *,
+    http_config: HttpConfig,
+) -> ProofSearchAltHttpClient:
+    return create_default_proof_search_alt_client(http_config=http_config)
+
+
 __all__ = [
     "create_local_toolkit_server",
     "create_toolkit_http_client",
+    "create_default_build_base_service",
+    "create_default_build_base_client",
     "create_default_diagnostics_service",
     "create_default_diagnostics_client",
     "create_default_declarations_service",
@@ -258,12 +386,20 @@ __all__ = [
     "create_default_lsp_core_client",
     "create_default_lsp_assist_service",
     "create_default_lsp_assist_client",
+    "create_default_lsp_heavy_service",
+    "create_default_lsp_heavy_client",
+    "create_default_search_alt_service",
+    "create_default_search_alt_client",
     "create_default_search_core_service",
     "create_default_search_core_client",
     "create_default_mathlib_nav_service",
     "create_default_mathlib_nav_client",
     "create_default_search_nav_service",
     "create_default_search_nav_client",
+    "create_default_proof_search_alt_service",
+    "create_default_proof_search_alt_client",
+    "create_build_base_service",
+    "create_build_base_client",
     "create_diagnostics_service",
     "create_diagnostics_client",
     "create_declarations_service",
@@ -272,10 +408,16 @@ __all__ = [
     "create_lsp_core_client",
     "create_lsp_assist_service",
     "create_lsp_assist_client",
+    "create_lsp_heavy_service",
+    "create_lsp_heavy_client",
+    "create_search_alt_service",
+    "create_search_alt_client",
     "create_search_core_service",
     "create_search_core_client",
     "create_mathlib_nav_service",
     "create_mathlib_nav_client",
     "create_search_nav_service",
     "create_search_nav_client",
+    "create_proof_search_alt_service",
+    "create_proof_search_alt_client",
 ]

@@ -7,11 +7,15 @@ from typing import Any
 
 from ..config import ToolkitConfig
 from ..core.services import (
+    BuildBaseService,
     DeclarationsService,
     DiagnosticsService,
     LspAssistService,
+    LspHeavyService,
     LspCoreService,
     MathlibNavService,
+    ProofSearchAltService,
+    SearchAltService,
     SearchCoreService,
     SearchNavService,
 )
@@ -26,13 +30,17 @@ class ToolkitHttpClient:
 
     config: ToolkitConfig = field(default_factory=ToolkitConfig)
     http_config: HttpConfig | None = None
+    build_base: BuildBaseService | None = None
     diagnostics: DiagnosticsService | None = None
     declarations: DeclarationsService | None = None
     lsp_core: LspCoreService | None = None
     lsp_assist: LspAssistService | None = None
+    lsp_heavy: LspHeavyService | None = None
+    search_alt: SearchAltService | None = None
     search_core: SearchCoreService | None = None
     mathlib_nav: MathlibNavService | None = None
     search_nav: SearchNavService | None = None
+    proof_search_alt: ProofSearchAltService | None = None
     _group_plugins: tuple[GroupPlugin, ...] = field(default_factory=tuple, repr=False)
     _group_clients: dict[str, Any] = field(default_factory=dict, repr=False)
     _canonical_handlers: dict[str, ToolHandler] = field(default_factory=dict, repr=False)
@@ -98,6 +106,8 @@ class ToolkitHttpClient:
         for plugin in self._group_plugins:
             group_client = plugin.create_http_client(config=self.config, http_config=self.http_config)
             self._group_clients[plugin.group_name] = group_client
+            if plugin.group_name == "build_base":
+                self.build_base = group_client
             if plugin.group_name == "diagnostics":
                 self.diagnostics = group_client
             if plugin.group_name == "declarations":
@@ -106,12 +116,18 @@ class ToolkitHttpClient:
                 self.lsp_core = group_client
             if plugin.group_name == "lsp_assist":
                 self.lsp_assist = group_client
+            if plugin.group_name == "lsp_heavy":
+                self.lsp_heavy = group_client
+            if plugin.group_name == "search_alt":
+                self.search_alt = group_client
             if plugin.group_name == "search_core":
                 self.search_core = group_client
             if plugin.group_name == "mathlib_nav":
                 self.mathlib_nav = group_client
             if plugin.group_name == "search_nav":
                 self.search_nav = group_client
+            if plugin.group_name == "proof_search_alt":
+                self.proof_search_alt = group_client
 
             specs = plugin.tool_specs()
             spec_by_canonical = {spec.canonical_name: spec for spec in specs}

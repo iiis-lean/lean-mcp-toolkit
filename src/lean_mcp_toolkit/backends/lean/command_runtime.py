@@ -58,6 +58,20 @@ class LeanCommandRuntime:
                 timeout_s=timeout_s,
             )
 
+    def run_lake_clean(
+        self,
+        *,
+        project_root: Path,
+        timeout_s: int | None,
+    ) -> CommandResult:
+        cmd = self._lake_prefix() + ["clean"]
+        with self._lake_guard():
+            return self._run_command(
+                args=tuple(cmd),
+                cwd=project_root,
+                timeout_s=timeout_s,
+            )
+
     def run_lean_json(
         self,
         *,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from ...contracts.build_base import BuildWorkspaceRequest, BuildWorkspaceResponse
 from ...contracts.declarations import (
     DeclarationExtractRequest,
     DeclarationExtractResponse,
@@ -45,6 +46,14 @@ from ...contracts.lsp_assist import (
     LspTheoremSoundnessRequest,
     LspTheoremSoundnessResponse,
 )
+from ...contracts.lsp_heavy import (
+    LspProofProfileRequest,
+    LspProofProfileResponse,
+    LspWidgetSourceRequest,
+    LspWidgetSourceResponse,
+    LspWidgetsRequest,
+    LspWidgetsResponse,
+)
 from ...contracts.mathlib_nav import (
     MathlibNavFileOutlineRequest,
     MathlibNavFileOutlineResponse,
@@ -58,6 +67,16 @@ from ...contracts.search_core import (
     MathlibDeclFindResponse,
     MathlibDeclGetRequest,
     MathlibDeclGetResponse,
+)
+from ...contracts.search_alt import (
+    SearchAltLeanDexRequest,
+    SearchAltLeanDexResponse,
+    SearchAltLeanFinderRequest,
+    SearchAltLeanFinderResponse,
+    SearchAltLeanSearchRequest,
+    SearchAltLeanSearchResponse,
+    SearchAltLoogleRequest,
+    SearchAltLoogleResponse,
 )
 from ...contracts.search_nav import (
     LocalDeclFindRequest,
@@ -77,6 +96,19 @@ from ...contracts.search_nav import (
     RepoNavTreeRequest,
     RepoNavTreeResponse,
 )
+from ...contracts.proof_search_alt import (
+    ProofSearchAltHammerPremiseRequest,
+    ProofSearchAltHammerPremiseResponse,
+    ProofSearchAltStateSearchRequest,
+    ProofSearchAltStateSearchResponse,
+)
+
+
+class BuildBaseService(Protocol):
+    """Build-base service API expected by HTTP/MCP adapters."""
+
+    def run_workspace(self, req: BuildWorkspaceRequest) -> BuildWorkspaceResponse:
+        ...
 
 
 class DiagnosticsService(Protocol):
@@ -161,6 +193,19 @@ class LspAssistService(Protocol):
         ...
 
 
+class LspHeavyService(Protocol):
+    """LSP-heavy service API expected by HTTP/MCP adapters."""
+
+    def run_widgets(self, req: LspWidgetsRequest) -> LspWidgetsResponse:
+        ...
+
+    def run_widget_source(self, req: LspWidgetSourceRequest) -> LspWidgetSourceResponse:
+        ...
+
+    def run_proof_profile(self, req: LspProofProfileRequest) -> LspProofProfileResponse:
+        ...
+
+
 class SearchCoreService(Protocol):
     """Search-core service API expected by HTTP/MCP adapters."""
 
@@ -171,6 +216,22 @@ class SearchCoreService(Protocol):
         ...
 
     def run_mathlib_decl_get(self, req: MathlibDeclGetRequest) -> MathlibDeclGetResponse:
+        ...
+
+
+class SearchAltService(Protocol):
+    """Search-alt service API expected by HTTP/MCP adapters."""
+
+    def run_leansearch(self, req: SearchAltLeanSearchRequest) -> SearchAltLeanSearchResponse:
+        ...
+
+    def run_leandex(self, req: SearchAltLeanDexRequest) -> SearchAltLeanDexResponse:
+        ...
+
+    def run_loogle(self, req: SearchAltLoogleRequest) -> SearchAltLoogleResponse:
+        ...
+
+    def run_leanfinder(self, req: SearchAltLeanFinderRequest) -> SearchAltLeanFinderResponse:
         ...
 
 
@@ -218,4 +279,20 @@ class SearchNavService(Protocol):
         ...
 
     def run_local_refs_find(self, req: LocalRefsFindRequest) -> LocalRefsFindResponse:
+        ...
+
+
+class ProofSearchAltService(Protocol):
+    """Proof-search-alt service API expected by HTTP/MCP adapters."""
+
+    def run_state_search(
+        self,
+        req: ProofSearchAltStateSearchRequest,
+    ) -> ProofSearchAltStateSearchResponse:
+        ...
+
+    def run_hammer_premise(
+        self,
+        req: ProofSearchAltHammerPremiseRequest,
+    ) -> ProofSearchAltHammerPremiseResponse:
         ...

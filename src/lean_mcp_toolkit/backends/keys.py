@@ -11,6 +11,8 @@ class BackendKey:
     DECLARATIONS_BACKENDS = "declarations.backends"
     LSP_CLIENT_MANAGER = "lsp.client_manager"
     LEAN_EXPLORE_BACKEND = "search.lean_explore.backend"
+    SEARCH_ALT_MANAGER = "search.providers.search_alt_manager"
+    PROOF_SEARCH_ALT_MANAGER = "search.providers.proof_search_alt_manager"
 
 
 __all__ = ["BackendKey"]

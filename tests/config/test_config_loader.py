@@ -50,10 +50,18 @@ def test_default_diagnostics_config() -> None:
 
 def test_default_nav_group_activation() -> None:
     cfg = load_toolkit_config()
+    assert "build_base" not in cfg.groups.enabled_groups
+    assert "lsp_heavy" not in cfg.groups.enabled_groups
+    assert "search_alt" not in cfg.groups.enabled_groups
     assert "mathlib_nav" in cfg.groups.enabled_groups
     assert "search_nav" not in cfg.groups.enabled_groups
+    assert "proof_search_alt" not in cfg.groups.enabled_groups
+    assert cfg.build_base.enabled is False
+    assert cfg.lsp_heavy.enabled is False
+    assert cfg.search_alt.enabled is False
     assert cfg.mathlib_nav.enabled is True
     assert cfg.search_nav.enabled is False
+    assert cfg.proof_search_alt.enabled is False
 
 
 def test_declarations_config_override() -> None:

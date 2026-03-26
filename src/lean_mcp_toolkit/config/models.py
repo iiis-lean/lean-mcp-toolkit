@@ -122,6 +122,31 @@ class GroupActivationConfig:
 
 
 @dataclass(slots=True, frozen=True)
+class BuildBaseConfig:
+    enabled: bool = False
+    default_timeout_seconds: int | None = None
+    default_jobs: int | None = None
+    default_clean_first: bool = False
+
+    @classmethod
+    def from_dict(cls, data: JsonDict) -> "BuildBaseConfig":
+        return cls(
+            enabled=to_bool(data.get("enabled"), default=False),
+            default_timeout_seconds=to_int(data.get("default_timeout_seconds"), default=None),
+            default_jobs=to_int(data.get("default_jobs"), default=None),
+            default_clean_first=to_bool(data.get("default_clean_first"), default=False),
+        )
+
+    def to_dict(self) -> JsonDict:
+        return {
+            "enabled": self.enabled,
+            "default_timeout_seconds": self.default_timeout_seconds,
+            "default_jobs": self.default_jobs,
+            "default_clean_first": self.default_clean_first,
+        }
+
+
+@dataclass(slots=True, frozen=True)
 class DiagnosticsConfig:
     enabled: bool = True
     default_include_content: bool = True
@@ -305,6 +330,113 @@ class LspAssistConfig:
 
 
 @dataclass(slots=True, frozen=True)
+class LspHeavyConfig:
+    enabled: bool = False
+    proof_profile_default_top_n: int = 5
+    proof_profile_default_timeout_seconds: int | None = 60
+    widget_source_max_chars: int | None = None
+
+    @classmethod
+    def from_dict(cls, data: JsonDict) -> "LspHeavyConfig":
+        return cls(
+            enabled=to_bool(data.get("enabled"), default=False),
+            proof_profile_default_top_n=(
+                to_int(data.get("proof_profile_default_top_n"), default=5) or 5
+            ),
+            proof_profile_default_timeout_seconds=to_int(
+                data.get("proof_profile_default_timeout_seconds"),
+                default=60,
+            ),
+            widget_source_max_chars=to_int(data.get("widget_source_max_chars"), default=None),
+        )
+
+    def to_dict(self) -> JsonDict:
+        return {
+            "enabled": self.enabled,
+            "proof_profile_default_top_n": self.proof_profile_default_top_n,
+            "proof_profile_default_timeout_seconds": self.proof_profile_default_timeout_seconds,
+            "widget_source_max_chars": self.widget_source_max_chars,
+        }
+
+
+LoogleMode = Literal["remote", "local", "prefer_local"]
+
+
+@dataclass(slots=True, frozen=True)
+class SearchAltConfig:
+    enabled: bool = False
+    leansearch_default_num_results: int = 5
+    leandex_default_num_results: int = 5
+    loogle_default_num_results: int = 8
+    leanfinder_default_num_results: int = 5
+    include_raw_payload_default: bool = False
+
+    @classmethod
+    def from_dict(cls, data: JsonDict) -> "SearchAltConfig":
+        return cls(
+            enabled=to_bool(data.get("enabled"), default=False),
+            leansearch_default_num_results=(
+                to_int(data.get("leansearch_default_num_results"), default=5) or 5
+            ),
+            leandex_default_num_results=(
+                to_int(data.get("leandex_default_num_results"), default=5) or 5
+            ),
+            loogle_default_num_results=(
+                to_int(data.get("loogle_default_num_results"), default=8) or 8
+            ),
+            leanfinder_default_num_results=(
+                to_int(data.get("leanfinder_default_num_results"), default=5) or 5
+            ),
+            include_raw_payload_default=to_bool(
+                data.get("include_raw_payload_default"),
+                default=False,
+            ),
+        )
+
+    def to_dict(self) -> JsonDict:
+        return {
+            "enabled": self.enabled,
+            "leansearch_default_num_results": self.leansearch_default_num_results,
+            "leandex_default_num_results": self.leandex_default_num_results,
+            "loogle_default_num_results": self.loogle_default_num_results,
+            "leanfinder_default_num_results": self.leanfinder_default_num_results,
+            "include_raw_payload_default": self.include_raw_payload_default,
+        }
+
+
+@dataclass(slots=True, frozen=True)
+class ProofSearchAltConfig:
+    enabled: bool = False
+    state_search_default_num_results: int = 5
+    hammer_premise_default_num_results: int = 32
+    include_raw_payload_default: bool = False
+
+    @classmethod
+    def from_dict(cls, data: JsonDict) -> "ProofSearchAltConfig":
+        return cls(
+            enabled=to_bool(data.get("enabled"), default=False),
+            state_search_default_num_results=(
+                to_int(data.get("state_search_default_num_results"), default=5) or 5
+            ),
+            hammer_premise_default_num_results=(
+                to_int(data.get("hammer_premise_default_num_results"), default=32) or 32
+            ),
+            include_raw_payload_default=to_bool(
+                data.get("include_raw_payload_default"),
+                default=False,
+            ),
+        )
+
+    def to_dict(self) -> JsonDict:
+        return {
+            "enabled": self.enabled,
+            "state_search_default_num_results": self.state_search_default_num_results,
+            "hammer_premise_default_num_results": self.hammer_premise_default_num_results,
+            "include_raw_payload_default": self.include_raw_payload_default,
+        }
+
+
+@dataclass(slots=True, frozen=True)
 class SearchCoreConfig:
     enabled: bool = True
     default_limit: int = 10
@@ -427,6 +559,304 @@ class MathlibNavConfig:
 
     def to_dict(self) -> JsonDict:
         return {"enabled": self.enabled}
+
+
+@dataclass(slots=True, frozen=True)
+class HttpSearchCommonConfig:
+    user_agent: str = "lean-mcp-toolkit/0.1"
+    verify_ssl: bool = True
+    default_timeout_seconds: int = 10
+    connect_timeout_seconds: int | None = None
+    retry_count: int = 0
+    retry_backoff_seconds: float = 0.0
+
+    @classmethod
+    def from_dict(cls, data: JsonDict) -> "HttpSearchCommonConfig":
+        return cls(
+            user_agent=str(data.get("user_agent") or "lean-mcp-toolkit/0.1"),
+            verify_ssl=to_bool(data.get("verify_ssl"), default=True),
+            default_timeout_seconds=(
+                to_int(data.get("default_timeout_seconds"), default=10) or 10
+            ),
+            connect_timeout_seconds=to_int(data.get("connect_timeout_seconds"), default=None),
+            retry_count=to_int(data.get("retry_count"), default=0) or 0,
+            retry_backoff_seconds=float(data.get("retry_backoff_seconds") or 0.0),
+        )
+
+    def to_dict(self) -> JsonDict:
+        return {
+            "user_agent": self.user_agent,
+            "verify_ssl": self.verify_ssl,
+            "default_timeout_seconds": self.default_timeout_seconds,
+            "connect_timeout_seconds": self.connect_timeout_seconds,
+            "retry_count": self.retry_count,
+            "retry_backoff_seconds": self.retry_backoff_seconds,
+        }
+
+
+@dataclass(slots=True, frozen=True)
+class LeanSearchProviderConfig:
+    enabled: bool = True
+    base_url: str = "https://leansearch.net"
+    timeout_seconds: int = 10
+    startup_verify: bool = False
+    max_results_hard_limit: int = 20
+
+    @classmethod
+    def from_dict(cls, data: JsonDict) -> "LeanSearchProviderConfig":
+        return cls(
+            enabled=to_bool(data.get("enabled"), default=True),
+            base_url=str(data.get("base_url") or "https://leansearch.net"),
+            timeout_seconds=to_int(data.get("timeout_seconds"), default=10) or 10,
+            startup_verify=to_bool(data.get("startup_verify"), default=False),
+            max_results_hard_limit=to_int(data.get("max_results_hard_limit"), default=20) or 20,
+        )
+
+    def to_dict(self) -> JsonDict:
+        return {
+            "enabled": self.enabled,
+            "base_url": self.base_url,
+            "timeout_seconds": self.timeout_seconds,
+            "startup_verify": self.startup_verify,
+            "max_results_hard_limit": self.max_results_hard_limit,
+        }
+
+
+@dataclass(slots=True, frozen=True)
+class LeanDexProviderConfig:
+    enabled: bool = True
+    base_url: str = "https://leandex.projectnumina.ai"
+    timeout_seconds: int = 15
+    startup_verify: bool = False
+    max_results_hard_limit: int = 20
+    generate_query: bool = False
+    analyze_result: bool = False
+
+    @classmethod
+    def from_dict(cls, data: JsonDict) -> "LeanDexProviderConfig":
+        return cls(
+            enabled=to_bool(data.get("enabled"), default=True),
+            base_url=str(data.get("base_url") or "https://leandex.projectnumina.ai"),
+            timeout_seconds=to_int(data.get("timeout_seconds"), default=15) or 15,
+            startup_verify=to_bool(data.get("startup_verify"), default=False),
+            max_results_hard_limit=to_int(data.get("max_results_hard_limit"), default=20) or 20,
+            generate_query=to_bool(data.get("generate_query"), default=False),
+            analyze_result=to_bool(data.get("analyze_result"), default=False),
+        )
+
+    def to_dict(self) -> JsonDict:
+        return {
+            "enabled": self.enabled,
+            "base_url": self.base_url,
+            "timeout_seconds": self.timeout_seconds,
+            "startup_verify": self.startup_verify,
+            "max_results_hard_limit": self.max_results_hard_limit,
+            "generate_query": self.generate_query,
+            "analyze_result": self.analyze_result,
+        }
+
+
+@dataclass(slots=True, frozen=True)
+class LoogleProviderConfig:
+    enabled: bool = True
+    mode: LoogleMode = "remote"
+    remote_base_url: str = "https://loogle.lean-lang.org"
+    remote_timeout_seconds: int = 10
+    local_cache_dir: str | None = None
+    local_auto_install: bool = True
+    local_startup_verify: bool = False
+    local_fallback_to_remote: bool = True
+    local_require_unix: bool = True
+    max_results_hard_limit: int = 50
+
+    @classmethod
+    def from_dict(cls, data: JsonDict) -> "LoogleProviderConfig":
+        mode = str(data.get("mode") or "remote").strip().lower()
+        if mode not in {"remote", "local", "prefer_local"}:
+            mode = "remote"
+        return cls(
+            enabled=to_bool(data.get("enabled"), default=True),
+            mode=mode,  # type: ignore[arg-type]
+            remote_base_url=str(data.get("remote_base_url") or "https://loogle.lean-lang.org"),
+            remote_timeout_seconds=to_int(data.get("remote_timeout_seconds"), default=10) or 10,
+            local_cache_dir=(
+                str(data["local_cache_dir"]) if data.get("local_cache_dir") is not None else None
+            ),
+            local_auto_install=to_bool(data.get("local_auto_install"), default=True),
+            local_startup_verify=to_bool(data.get("local_startup_verify"), default=False),
+            local_fallback_to_remote=to_bool(data.get("local_fallback_to_remote"), default=True),
+            local_require_unix=to_bool(data.get("local_require_unix"), default=True),
+            max_results_hard_limit=to_int(data.get("max_results_hard_limit"), default=50) or 50,
+        )
+
+    def to_dict(self) -> JsonDict:
+        return {
+            "enabled": self.enabled,
+            "mode": self.mode,
+            "remote_base_url": self.remote_base_url,
+            "remote_timeout_seconds": self.remote_timeout_seconds,
+            "local_cache_dir": self.local_cache_dir,
+            "local_auto_install": self.local_auto_install,
+            "local_startup_verify": self.local_startup_verify,
+            "local_fallback_to_remote": self.local_fallback_to_remote,
+            "local_require_unix": self.local_require_unix,
+            "max_results_hard_limit": self.max_results_hard_limit,
+        }
+
+
+@dataclass(slots=True, frozen=True)
+class LeanFinderProviderConfig:
+    enabled: bool = True
+    base_url: str = "https://bxrituxuhpc70w8w.us-east-1.aws.endpoints.huggingface.cloud"
+    timeout_seconds: int = 10
+    startup_verify: bool = False
+    mathlib_docs_only: bool = True
+    max_results_hard_limit: int = 20
+
+    @classmethod
+    def from_dict(cls, data: JsonDict) -> "LeanFinderProviderConfig":
+        return cls(
+            enabled=to_bool(data.get("enabled"), default=True),
+            base_url=str(
+                data.get("base_url")
+                or "https://bxrituxuhpc70w8w.us-east-1.aws.endpoints.huggingface.cloud"
+            ),
+            timeout_seconds=to_int(data.get("timeout_seconds"), default=10) or 10,
+            startup_verify=to_bool(data.get("startup_verify"), default=False),
+            mathlib_docs_only=to_bool(data.get("mathlib_docs_only"), default=True),
+            max_results_hard_limit=to_int(data.get("max_results_hard_limit"), default=20) or 20,
+        )
+
+    def to_dict(self) -> JsonDict:
+        return {
+            "enabled": self.enabled,
+            "base_url": self.base_url,
+            "timeout_seconds": self.timeout_seconds,
+            "startup_verify": self.startup_verify,
+            "mathlib_docs_only": self.mathlib_docs_only,
+            "max_results_hard_limit": self.max_results_hard_limit,
+        }
+
+
+@dataclass(slots=True, frozen=True)
+class StateSearchProviderConfig:
+    enabled: bool = True
+    base_url: str = "https://premise-search.com"
+    timeout_seconds: int = 10
+    startup_verify: bool = False
+    revision: str = "v4.22.0"
+    max_results_hard_limit: int = 32
+
+    @classmethod
+    def from_dict(cls, data: JsonDict) -> "StateSearchProviderConfig":
+        return cls(
+            enabled=to_bool(data.get("enabled"), default=True),
+            base_url=str(data.get("base_url") or "https://premise-search.com"),
+            timeout_seconds=to_int(data.get("timeout_seconds"), default=10) or 10,
+            startup_verify=to_bool(data.get("startup_verify"), default=False),
+            revision=str(data.get("revision") or "v4.22.0"),
+            max_results_hard_limit=to_int(data.get("max_results_hard_limit"), default=32) or 32,
+        )
+
+    def to_dict(self) -> JsonDict:
+        return {
+            "enabled": self.enabled,
+            "base_url": self.base_url,
+            "timeout_seconds": self.timeout_seconds,
+            "startup_verify": self.startup_verify,
+            "revision": self.revision,
+            "max_results_hard_limit": self.max_results_hard_limit,
+        }
+
+
+@dataclass(slots=True, frozen=True)
+class HammerPremiseProviderConfig:
+    enabled: bool = True
+    base_url: str = "http://leanpremise.net"
+    timeout_seconds: int = 10
+    startup_verify: bool = False
+    max_results_hard_limit: int = 64
+
+    @classmethod
+    def from_dict(cls, data: JsonDict) -> "HammerPremiseProviderConfig":
+        return cls(
+            enabled=to_bool(data.get("enabled"), default=True),
+            base_url=str(data.get("base_url") or "http://leanpremise.net"),
+            timeout_seconds=to_int(data.get("timeout_seconds"), default=10) or 10,
+            startup_verify=to_bool(data.get("startup_verify"), default=False),
+            max_results_hard_limit=to_int(data.get("max_results_hard_limit"), default=64) or 64,
+        )
+
+    def to_dict(self) -> JsonDict:
+        return {
+            "enabled": self.enabled,
+            "base_url": self.base_url,
+            "timeout_seconds": self.timeout_seconds,
+            "startup_verify": self.startup_verify,
+            "max_results_hard_limit": self.max_results_hard_limit,
+        }
+
+
+@dataclass(slots=True, frozen=True)
+class SearchProvidersConfig:
+    http_common: HttpSearchCommonConfig = field(default_factory=HttpSearchCommonConfig)
+    leansearch: LeanSearchProviderConfig = field(default_factory=LeanSearchProviderConfig)
+    leandex: LeanDexProviderConfig = field(default_factory=LeanDexProviderConfig)
+    loogle: LoogleProviderConfig = field(default_factory=LoogleProviderConfig)
+    leanfinder: LeanFinderProviderConfig = field(default_factory=LeanFinderProviderConfig)
+    state_search: StateSearchProviderConfig = field(default_factory=StateSearchProviderConfig)
+    hammer_premise: HammerPremiseProviderConfig = field(default_factory=HammerPremiseProviderConfig)
+
+    @classmethod
+    def from_dict(cls, data: JsonDict) -> "SearchProvidersConfig":
+        return cls(
+            http_common=(
+                HttpSearchCommonConfig.from_dict(data.get("http_common"))
+                if isinstance(data.get("http_common"), dict)
+                else HttpSearchCommonConfig()
+            ),
+            leansearch=(
+                LeanSearchProviderConfig.from_dict(data.get("leansearch"))
+                if isinstance(data.get("leansearch"), dict)
+                else LeanSearchProviderConfig()
+            ),
+            leandex=(
+                LeanDexProviderConfig.from_dict(data.get("leandex"))
+                if isinstance(data.get("leandex"), dict)
+                else LeanDexProviderConfig()
+            ),
+            loogle=(
+                LoogleProviderConfig.from_dict(data.get("loogle"))
+                if isinstance(data.get("loogle"), dict)
+                else LoogleProviderConfig()
+            ),
+            leanfinder=(
+                LeanFinderProviderConfig.from_dict(data.get("leanfinder"))
+                if isinstance(data.get("leanfinder"), dict)
+                else LeanFinderProviderConfig()
+            ),
+            state_search=(
+                StateSearchProviderConfig.from_dict(data.get("state_search"))
+                if isinstance(data.get("state_search"), dict)
+                else StateSearchProviderConfig()
+            ),
+            hammer_premise=(
+                HammerPremiseProviderConfig.from_dict(data.get("hammer_premise"))
+                if isinstance(data.get("hammer_premise"), dict)
+                else HammerPremiseProviderConfig()
+            ),
+        )
+
+    def to_dict(self) -> JsonDict:
+        return {
+            "http_common": self.http_common.to_dict(),
+            "leansearch": self.leansearch.to_dict(),
+            "leandex": self.leandex.to_dict(),
+            "loogle": self.loogle.to_dict(),
+            "leanfinder": self.leanfinder.to_dict(),
+            "state_search": self.state_search.to_dict(),
+            "hammer_premise": self.hammer_premise.to_dict(),
+        }
 
 
 @dataclass(slots=True, frozen=True)
@@ -796,6 +1226,7 @@ class BackendsConfig:
     lean_interact: LeanInteractBackendConfig = field(default_factory=LeanInteractBackendConfig)
     lsp: LspBackendConfig = field(default_factory=LspBackendConfig)
     lean_explore: LeanExploreBackendConfig = field(default_factory=LeanExploreBackendConfig)
+    search_providers: SearchProvidersConfig = field(default_factory=SearchProvidersConfig)
 
     @classmethod
     def from_dict(cls, data: JsonDict) -> "BackendsConfig":
@@ -803,6 +1234,7 @@ class BackendsConfig:
         raw_lean_interact = data.get("lean_interact")
         raw_lsp = data.get("lsp")
         raw_lean_explore = data.get("lean_explore")
+        raw_search_providers = data.get("search_providers")
         return cls(
             lean_command=(
                 LeanCommandBackendConfig.from_dict(raw_lean_command)
@@ -824,6 +1256,11 @@ class BackendsConfig:
                 if isinstance(raw_lean_explore, dict)
                 else LeanExploreBackendConfig()
             ),
+            search_providers=(
+                SearchProvidersConfig.from_dict(raw_search_providers)
+                if isinstance(raw_search_providers, dict)
+                else SearchProvidersConfig()
+            ),
         )
 
     def to_dict(self) -> JsonDict:
@@ -832,6 +1269,7 @@ class BackendsConfig:
             "lean_interact": self.lean_interact.to_dict(),
             "lsp": self.lsp.to_dict(),
             "lean_explore": self.lean_explore.to_dict(),
+            "search_providers": self.search_providers.to_dict(),
         }
 
 
@@ -871,13 +1309,17 @@ class ToolchainConfig:
 class ToolkitConfig:
     server: ServerConfig = field(default_factory=ServerConfig)
     groups: GroupActivationConfig = field(default_factory=GroupActivationConfig)
+    build_base: BuildBaseConfig = field(default_factory=BuildBaseConfig)
     diagnostics: DiagnosticsConfig = field(default_factory=DiagnosticsConfig)
     declarations: DeclarationsConfig = field(default_factory=DeclarationsConfig)
     lsp_core: LspCoreConfig = field(default_factory=LspCoreConfig)
     lsp_assist: LspAssistConfig = field(default_factory=LspAssistConfig)
+    lsp_heavy: LspHeavyConfig = field(default_factory=LspHeavyConfig)
+    search_alt: SearchAltConfig = field(default_factory=SearchAltConfig)
     search_core: SearchCoreConfig = field(default_factory=SearchCoreConfig)
     mathlib_nav: MathlibNavConfig = field(default_factory=MathlibNavConfig)
     search_nav: SearchNavConfig = field(default_factory=SearchNavConfig)
+    proof_search_alt: ProofSearchAltConfig = field(default_factory=ProofSearchAltConfig)
     warmup: WarmupConfig = field(default_factory=WarmupConfig)
     backends: BackendsConfig = field(default_factory=BackendsConfig)
     toolchain: ToolchainConfig = field(default_factory=ToolchainConfig)
@@ -887,18 +1329,27 @@ class ToolkitConfig:
     def from_dict(cls, data: JsonDict) -> "ToolkitConfig":
         raw_server = data.get("server")
         raw_groups = data.get("groups")
+        raw_build_base = data.get("build_base")
         raw_diag = data.get("diagnostics")
         raw_declarations = data.get("declarations")
         raw_lsp_core = data.get("lsp_core")
         raw_lsp_assist = data.get("lsp_assist")
+        raw_lsp_heavy = data.get("lsp_heavy")
+        raw_search_alt = data.get("search_alt")
         raw_search_core = data.get("search_core")
         raw_mathlib_nav = data.get("mathlib_nav")
         raw_search_nav = data.get("search_nav")
+        raw_proof_search_alt = data.get("proof_search_alt")
         raw_warmup = data.get("warmup")
         raw_backends = data.get("backends")
         raw_toolchain = data.get("toolchain")
         raw_overrides = data.get("raw_group_overrides")
 
+        build_base = (
+            BuildBaseConfig.from_dict(raw_build_base)
+            if isinstance(raw_build_base, dict)
+            else BuildBaseConfig()
+        )
         diagnostics = (
             DiagnosticsConfig.from_dict(raw_diag)
             if isinstance(raw_diag, dict)
@@ -919,10 +1370,20 @@ class ToolkitConfig:
             if isinstance(raw_lsp_assist, dict)
             else LspAssistConfig()
         )
+        lsp_heavy = (
+            LspHeavyConfig.from_dict(raw_lsp_heavy)
+            if isinstance(raw_lsp_heavy, dict)
+            else LspHeavyConfig()
+        )
         search_core = (
             SearchCoreConfig.from_dict(raw_search_core)
             if isinstance(raw_search_core, dict)
             else SearchCoreConfig()
+        )
+        search_alt = (
+            SearchAltConfig.from_dict(raw_search_alt)
+            if isinstance(raw_search_alt, dict)
+            else SearchAltConfig()
         )
         mathlib_nav = (
             MathlibNavConfig.from_dict(raw_mathlib_nav)
@@ -933,6 +1394,11 @@ class ToolkitConfig:
             SearchNavConfig.from_dict(raw_search_nav)
             if isinstance(raw_search_nav, dict)
             else SearchNavConfig()
+        )
+        proof_search_alt = (
+            ProofSearchAltConfig.from_dict(raw_proof_search_alt)
+            if isinstance(raw_proof_search_alt, dict)
+            else ProofSearchAltConfig()
         )
         warmup = (
             WarmupConfig.from_dict(raw_warmup)
@@ -952,13 +1418,17 @@ class ToolkitConfig:
                 if isinstance(raw_groups, dict)
                 else GroupActivationConfig()
             ),
+            build_base=build_base,
             diagnostics=diagnostics,
             declarations=declarations,
             lsp_core=lsp_core,
             lsp_assist=lsp_assist,
+            lsp_heavy=lsp_heavy,
+            search_alt=search_alt,
             search_core=search_core,
             mathlib_nav=mathlib_nav,
             search_nav=search_nav,
+            proof_search_alt=proof_search_alt,
             warmup=warmup,
             backends=backends,
             toolchain=(
@@ -973,13 +1443,17 @@ class ToolkitConfig:
         return {
             "server": self.server.to_dict(),
             "groups": self.groups.to_dict(),
+            "build_base": self.build_base.to_dict(),
             "diagnostics": self.diagnostics.to_dict(),
             "declarations": self.declarations.to_dict(),
             "lsp_core": self.lsp_core.to_dict(),
             "lsp_assist": self.lsp_assist.to_dict(),
+            "lsp_heavy": self.lsp_heavy.to_dict(),
+            "search_alt": self.search_alt.to_dict(),
             "search_core": self.search_core.to_dict(),
             "mathlib_nav": self.mathlib_nav.to_dict(),
             "search_nav": self.search_nav.to_dict(),
+            "proof_search_alt": self.proof_search_alt.to_dict(),
             "warmup": self.warmup.to_dict(),
             "backends": self.backends.to_dict(),
             "toolchain": self.toolchain.to_dict(),

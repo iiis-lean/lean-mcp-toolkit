@@ -1,4 +1,6 @@
 from lean_mcp_toolkit.app import (
+    create_build_base_client,
+    create_build_base_service,
     create_declarations_client,
     create_declarations_service,
     create_diagnostics_client,
@@ -21,6 +23,9 @@ from lean_mcp_toolkit.transport.http import HttpConfig
 
 
 def test_factories_create_instances() -> None:
+    build_base_service = create_build_base_service()
+    assert build_base_service is not None
+
     service = create_diagnostics_service()
     assert service is not None
 
@@ -43,6 +48,9 @@ def test_factories_create_instances() -> None:
     assert mathlib_nav_service is not None
 
     http_cfg = HttpConfig(base_url="http://127.0.0.1:18080")
+    build_base_client = create_build_base_client(http_config=http_cfg)
+    assert build_base_client.http_config.base_url == "http://127.0.0.1:18080"
+
     client = create_diagnostics_client(http_config=http_cfg)
     assert client.http_config.base_url == "http://127.0.0.1:18080"
 
@@ -66,6 +74,8 @@ def test_factories_create_instances() -> None:
 
     server = create_local_toolkit_server()
     assert server is not None
+    assert server.build_base is None
 
     toolkit_client = create_toolkit_http_client(http_config=http_cfg)
     assert toolkit_client is not None
+    assert toolkit_client.build_base is None

@@ -10,6 +10,7 @@ from .lean import LeanCommandRuntime
 from .lean.path import TargetResolver
 from .lean_explore import LeanExploreBackendAdapter
 from .lsp import LeanLSPClientManager
+from .search_providers import ProofSearchAltBackendManager, SearchAltBackendManager
 
 
 def build_backend_context(
@@ -59,6 +60,18 @@ def build_backend_context(
                 backend_config=config.backends.lean_explore,
                 search_config=config.search_core,
             ),
+        )
+
+    if BackendKey.SEARCH_ALT_MANAGER in required:
+        context.set(
+            BackendKey.SEARCH_ALT_MANAGER,
+            SearchAltBackendManager(config=config.backends.search_providers),
+        )
+
+    if BackendKey.PROOF_SEARCH_ALT_MANAGER in required:
+        context.set(
+            BackendKey.PROOF_SEARCH_ALT_MANAGER,
+            ProofSearchAltBackendManager(config=config.backends.search_providers),
         )
 
     return context

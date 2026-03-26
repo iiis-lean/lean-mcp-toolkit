@@ -148,6 +148,7 @@ def test_create_toolkit_runtime_local(monkeypatch) -> None:
     assert runtime.mode == "local"
     assert runtime.config == fake_cfg
     assert runtime.http_config is None
+    assert runtime.build_base is None
     assert runtime.diagnostics is fake_diagnostics
     assert runtime.declarations is fake_declarations
     assert runtime.lsp_core is fake_lsp_core
@@ -216,6 +217,7 @@ def test_create_toolkit_runtime_http(monkeypatch) -> None:
 
     assert runtime.mode == "http"
     assert runtime.config == fake_cfg
+    assert runtime.build_base is None
     assert runtime.diagnostics is fake_diagnostics
     assert runtime.declarations is fake_declarations
     assert runtime.lsp_core is fake_lsp_core

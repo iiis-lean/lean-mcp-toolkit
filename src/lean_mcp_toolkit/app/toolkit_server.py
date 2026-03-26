@@ -10,11 +10,15 @@ from typing import Any
 from ..backends import BackendContext, build_backend_context
 from ..config import ToolkitConfig, load_toolkit_config
 from ..core.services import (
+    BuildBaseService,
     DeclarationsService,
     DiagnosticsService,
     LspAssistService,
+    LspHeavyService,
     LspCoreService,
     MathlibNavService,
+    ProofSearchAltService,
+    SearchAltService,
     SearchCoreService,
     SearchNavService,
 )
@@ -35,13 +39,17 @@ class ToolkitServer:
 
     config: ToolkitConfig
     api_prefix: str = "/api/v1"
+    build_base: BuildBaseService | None = None
     diagnostics: DiagnosticsService | None = None
     declarations: DeclarationsService | None = None
     lsp_core: LspCoreService | None = None
     lsp_assist: LspAssistService | None = None
+    lsp_heavy: LspHeavyService | None = None
+    search_alt: SearchAltService | None = None
     search_core: SearchCoreService | None = None
     mathlib_nav: MathlibNavService | None = None
     search_nav: SearchNavService | None = None
+    proof_search_alt: ProofSearchAltService | None = None
     _group_plugins: tuple[GroupPlugin, ...] = field(default_factory=tuple, repr=False)
     _group_services: dict[str, Any] = field(default_factory=dict, repr=False)
     _canonical_handlers: dict[str, ToolHandler] = field(default_factory=dict, repr=False)
@@ -360,6 +368,8 @@ class ToolkitServer:
                 backends=self._backend_context,
             )
             self._group_services[plugin.group_name] = service
+            if plugin.group_name == "build_base":
+                self.build_base = service
             if plugin.group_name == "diagnostics":
                 self.diagnostics = service
             if plugin.group_name == "declarations":
@@ -368,12 +378,18 @@ class ToolkitServer:
                 self.lsp_core = service
             if plugin.group_name == "lsp_assist":
                 self.lsp_assist = service
+            if plugin.group_name == "lsp_heavy":
+                self.lsp_heavy = service
+            if plugin.group_name == "search_alt":
+                self.search_alt = service
             if plugin.group_name == "search_core":
                 self.search_core = service
             if plugin.group_name == "mathlib_nav":
                 self.mathlib_nav = service
             if plugin.group_name == "search_nav":
                 self.search_nav = service
+            if plugin.group_name == "proof_search_alt":
+                self.proof_search_alt = service
 
             specs = plugin.tool_specs()
             spec_by_canonical = {spec.canonical_name: spec for spec in specs}
