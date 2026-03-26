@@ -16,6 +16,7 @@ class ConfigCLIArgs:
     mode: str | None = None
     host: str | None = None
     port: int | None = None
+    project_root: str | None = None
     enable_groups: list[str] = field(default_factory=list)
     disable_groups: list[str] = field(default_factory=list)
     include_tools: list[str] = field(default_factory=list)
@@ -31,6 +32,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--mode", choices=["mcp", "http", "unified"])
     parser.add_argument("--host")
     parser.add_argument("--port", type=int)
+    parser.add_argument("--project-root", "--default-project-root", dest="project_root")
     parser.add_argument("--enable-group", action="append", default=[])
     parser.add_argument("--disable-group", action="append", default=[])
     parser.add_argument("--include-tool", action="append", default=[])
@@ -49,6 +51,7 @@ def parse_cli_args(argv: list[str] | None = None) -> ConfigCLIArgs:
         mode=ns.mode,
         host=ns.host,
         port=ns.port,
+        project_root=ns.project_root,
         enable_groups=list(ns.enable_group or []),
         disable_groups=list(ns.disable_group or []),
         include_tools=list(ns.include_tool or []),
@@ -82,6 +85,8 @@ def cli_args_to_overrides(args: ConfigCLIArgs) -> JsonDict:
         apply_path_override(data, "server.host", args.host)
     if args.port is not None:
         apply_path_override(data, "server.port", args.port)
+    if args.project_root is not None:
+        apply_path_override(data, "server.default_project_root", args.project_root)
 
     if args.enable_groups:
         apply_path_override(data, "groups.enabled_groups", args.enable_groups)

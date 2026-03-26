@@ -40,13 +40,17 @@ class LeanCommandRuntime:
         *,
         project_root: Path,
         module_targets: tuple[str, ...],
+        target_facet: str | None = None,
         timeout_s: int | None,
         jobs: int | None,
     ) -> CommandResult:
         cmd = self._lake_prefix() + ["build"]
         if jobs is not None and jobs > 0:
             cmd.extend(["-j", str(jobs)])
-        cmd.extend(module_targets)
+        if target_facet:
+            cmd.extend(f"{target}:{target_facet}" for target in module_targets)
+        else:
+            cmd.extend(module_targets)
         with self._lake_guard():
             return self._run_command(
                 args=tuple(cmd),

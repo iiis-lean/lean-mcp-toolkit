@@ -40,7 +40,7 @@ class MathlibNavServiceImpl(MathlibNavService):
             )
             inner_req = RepoNavTreeRequest(
                 repo_root=str(mathlib_root),
-                base=req.base,
+                base=self._normalize_mathlib_locator(req.base, allow_empty=True),
                 depth=req.depth,
                 name_filter=req.name_filter,
                 limit=req.limit,
@@ -61,7 +61,7 @@ class MathlibNavServiceImpl(MathlibNavService):
             )
             inner_req = RepoNavFileOutlineRequest(
                 repo_root=str(mathlib_root),
-                target=req.target,
+                target=self._normalize_mathlib_locator(req.target, allow_empty=False),
                 include_imports=req.include_imports,
                 include_module_doc=req.include_module_doc,
                 include_section_doc=req.include_section_doc,
@@ -81,7 +81,7 @@ class MathlibNavServiceImpl(MathlibNavService):
             )
             inner_req = RepoNavReadRequest(
                 repo_root=str(mathlib_root),
-                target=req.target,
+                target=self._normalize_mathlib_locator(req.target, allow_empty=False),
                 start_line=req.start_line,
                 end_line=req.end_line,
                 max_lines=req.max_lines,
@@ -129,6 +129,22 @@ class MathlibNavServiceImpl(MathlibNavService):
             f"cannot locate Mathlib source root under project_root={project}; "
             "tried .lake/packages/mathlib/Mathlib and project_root/Mathlib"
         )
+
+    @staticmethod
+    def _normalize_mathlib_locator(raw: str | None, *, allow_empty: bool) -> str | None:
+        text = (raw or "").strip()
+        if not text:
+            return None if allow_empty else text
+
+        if text == "Mathlib":
+            return None if allow_empty else text
+        if text.startswith("Mathlib."):
+            return text[len("Mathlib.") :]
+        if text.startswith("Mathlib/"):
+            return text[len("Mathlib/") :]
+        if text.startswith("Mathlib\\"):
+            return text[len("Mathlib\\") :]
+        return text
 
 
 __all__ = ["MathlibNavServiceImpl"]

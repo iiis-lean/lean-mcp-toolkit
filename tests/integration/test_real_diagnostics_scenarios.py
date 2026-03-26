@@ -142,7 +142,7 @@ def test_build_dependency_and_artifact_scenarios(tmp_path: Path) -> None:
     assert b_with_deps_after_a_change.failed_stage == "build_deps"
     assert b_with_deps_after_a_change.stage_error_message is not None
 
-    # Scenario D: direct build_deps failure on A returns stage failure and empty files.
+    # Scenario D: direct target-local error on A should now bypass build_deps failure.
     a_with_deps_after_a_change = service_b.run_build(
         BuildRequest.from_dict(
             {
@@ -153,8 +153,39 @@ def test_build_dependency_and_artifact_scenarios(tmp_path: Path) -> None:
         )
     )
     assert a_with_deps_after_a_change.success is False
-    assert a_with_deps_after_a_change.failed_stage == "build_deps"
-    assert len(a_with_deps_after_a_change.files) == 0
+    assert a_with_deps_after_a_change.failed_stage == "diagnostics"
+    assert len(a_with_deps_after_a_change.files) == 1
+    assert a_with_deps_after_a_change.files[0].file == "DiagMatrix.A"
+
+
+@pytest.mark.skipif(not _has_lean_toolchain(), reason="real integration test requires lean/lake")
+def test_build_deps_only_skips_target_local_errors(tmp_path: Path) -> None:
+    root = tmp_path / "case_target_local_error"
+    root.mkdir(parents=True, exist_ok=True)
+    project_root, package_dir = _init_lake_project(root, "DiagMatrix")
+    service = _new_service(project_root)
+
+    (package_dir / "A.lean").write_text("def okDep : Nat := 1\n", encoding="utf-8")
+    (package_dir / "B.lean").write_text(
+        "import DiagMatrix.A\n\ndef badTarget : Nat := \"oops\"\n",
+        encoding="utf-8",
+    )
+
+    resp = service.run_build(
+        BuildRequest.from_dict(
+            {
+                "targets": ["DiagMatrix/B.lean"],
+                "build_deps": True,
+                "emit_artifacts": False,
+            }
+        )
+    )
+
+    assert resp.success is False
+    assert resp.failed_stage == "diagnostics"
+    assert len(resp.files) == 1
+    assert resp.files[0].file == "DiagMatrix.B"
+    assert any("oops" in item.data or "Type mismatch" in item.data for item in resp.files[0].items)
 
 
 @pytest.mark.skipif(not _has_lean_toolchain(), reason="real integration test requires lean/lake")

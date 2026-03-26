@@ -156,6 +156,32 @@ def test_warmup_runner_probe_conflict_uses_suffix(tmp_path: Path) -> None:
     assert not (tmp_path / generated_rel).exists()
 
 
+def test_warmup_runner_uses_server_default_project_root_when_policy_root_unset(tmp_path: Path) -> None:
+    cfg = ToolkitConfig.from_dict(
+        {
+            "server": {"default_project_root": str(tmp_path)},
+            "warmup": {
+                "policy": {"enabled": True},
+                "plan": {"order": ["declarations.extract"]},
+                "calls": {
+                    "declarations.extract": {"enabled": True, "use_probe_file": True, "request": {}}
+                },
+            },
+        }
+    )
+    fake_decl = _FakeDeclarations(project_root=tmp_path)
+    runner = ToolkitWarmupRunner(
+        config=cfg,
+        diagnostics=None,
+        declarations=fake_decl,
+        search_core=None,
+    )
+    report = runner.run()
+    assert report.success is True
+    assert report.project_root == str(tmp_path)
+    assert len(fake_decl.targets) == 1
+
+
 def test_warmup_runner_probe_without_project_root_fails() -> None:
     cfg = ToolkitConfig.from_dict(
         {

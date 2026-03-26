@@ -67,6 +67,7 @@ class AxiomProbeJob:
     probe_rel_file: str
     probe_abs_file: Path
     declarations: tuple[str, ...]
+    probe_names: tuple[str, ...]
 
 
 @dataclass(slots=True)
@@ -131,6 +132,7 @@ class DiagnosticsServiceImpl(DiagnosticsService):
             deps_result = self.runtime.run_lake_build(
                 project_root=resolved.project_root_abs,
                 module_targets=resolved.module_dots(),
+                target_facet="deps",
                 timeout_s=options.timeout_seconds,
                 jobs=self.config.backends.lean_command.lake_build_jobs,
             )
@@ -172,6 +174,7 @@ class DiagnosticsServiceImpl(DiagnosticsService):
                 emit_result = self.runtime.run_lake_build(
                     project_root=resolved.project_root_abs,
                     module_targets=success_modules,
+                    target_facet="leanArts",
                     timeout_s=options.timeout_seconds,
                     jobs=self.config.backends.lean_command.lake_build_jobs,
                 )
@@ -361,26 +364,26 @@ class DiagnosticsServiceImpl(DiagnosticsService):
                 unresolved=tuple(),
             )
 
-        if self.config.diagnostics.default_build_deps:
-            deps_result = self.runtime.run_lake_build(
-                project_root=resolved.project_root_abs,
-                module_targets=resolved.module_dots(),
-                timeout_s=options.timeout_seconds,
-                jobs=self.config.backends.lean_command.lake_build_jobs,
+        artifact_result = self.runtime.run_lake_build(
+            project_root=resolved.project_root_abs,
+            module_targets=resolved.module_dots(),
+            target_facet="leanArts",
+            timeout_s=options.timeout_seconds,
+            jobs=self.config.backends.lean_command.lake_build_jobs,
+        )
+        if not artifact_result.ok:
+            msg = self._format_command_failure_message(
+                stage="axiom_audit.prepare_target",
+                cmd_result=artifact_result,
             )
-            if not deps_result.ok:
-                msg = self._format_command_failure_message(
-                    stage="axiom_audit.build_deps",
-                    cmd_result=deps_result,
-                )
-                return AxiomAuditResult(
-                    check_id="axiom_audit",
-                    success=False,
-                    message=msg,
-                    declared_axioms=tuple(),
-                    usage_issues=tuple(),
-                    unresolved=tuple(),
-                )
+            return AxiomAuditResult(
+                check_id="axiom_audit",
+                success=False,
+                message=msg,
+                declared_axioms=tuple(),
+                usage_issues=tuple(),
+                unresolved=tuple(),
+            )
 
         backend = self._resolve_declarations_backend()
         if backend is None:
@@ -398,7 +401,8 @@ class DiagnosticsServiceImpl(DiagnosticsService):
 
         declared_axioms: list[AxiomDeclaredItem] = []
         unresolved: list[AxiomUsageUnresolved] = []
-        jobs: list[AxiomProbeJob] = []
+        modules_by_dot = {module.dot: module for module in resolved.modules}
+        pending_probe_candidates: dict[tuple[str, str], tuple[str, ...]] = {}
         decl_kind_filter = {
             item.strip().lower()
             for item in self.config.diagnostics.axiom_audit_decl_kinds
@@ -421,42 +425,31 @@ class DiagnosticsServiceImpl(DiagnosticsService):
                     )
                 )
 
-            declared_axioms.extend(
-                self._collect_declared_axioms(
-                    module=module,
-                    declarations=declarations_resp.declarations,
-                    project_root=options.project_root,
-                    include_content=options.include_content,
-                    context_lines=options.context_lines,
-                    decl_kind_filter=decl_kind_filter,
+            if declarations_resp.declarations:
+                declared_axioms.extend(
+                    self._collect_declared_axioms(
+                        module=module,
+                        declarations=declarations_resp.declarations,
+                        project_root=options.project_root,
+                        include_content=options.include_content,
+                        context_lines=options.context_lines,
+                        decl_kind_filter=decl_kind_filter,
+                    )
                 )
-            )
-
-            declarations, error_message = self._collect_checkable_declarations(
-                backend=backend,
-                project_root=options.project_root,
-                module=module,
-                timeout_seconds=options.timeout_seconds,
+            declarations = self._collect_checkable_declarations(
+                declarations=declarations_resp.declarations,
                 decl_kind_filter=decl_kind_filter,
             )
-            if error_message is not None:
-                unresolved.append(
-                    AxiomUsageUnresolved(
-                        fileName=module.dot,
-                        declaration=None,
-                        reason=error_message,
-                    )
-                )
             if declarations:
-                jobs.append(
-                    self._write_axiom_probe_file(
-                        project_root=options.project_root,
-                        module=module,
-                        declarations=declarations,
+                for decl in declarations:
+                    pending_probe_candidates[(module.dot, decl)] = (
+                        self._candidate_declaration_names(
+                            module=module,
+                            declaration=decl,
+                        )
                     )
-                )
 
-        if not jobs:
+        if not pending_probe_candidates:
             success = self._axiom_audit_success(
                 declared_axioms=declared_axioms,
                 usage_issues=tuple(),
@@ -487,71 +480,96 @@ class DiagnosticsServiceImpl(DiagnosticsService):
         }
         include_sorry_ax = self.config.diagnostics.axiom_audit_include_sorry_ax
         usage_issues: list[AxiomUsageIssue] = []
+        max_rounds = max(
+            (len(candidates) for candidates in pending_probe_candidates.values()),
+            default=0,
+        )
+        last_failure_reason: dict[tuple[str, str], str] = {}
 
-        rel_files = tuple(job.probe_rel_file for job in jobs)
-        try:
-            batch_results = self._run_lean_json_rel_files_batch(
+        for round_index in range(max_rounds):
+            jobs = self._build_axiom_probe_round_jobs(
                 project_root=options.project_root,
-                rel_files=rel_files,
-                timeout_seconds=options.timeout_seconds,
+                modules_by_dot=modules_by_dot,
+                pending_probe_candidates=pending_probe_candidates,
+                round_index=round_index,
             )
-            result_map = {rel_file: cmd for rel_file, cmd in batch_results}
+            if not jobs:
+                continue
 
-            for job in jobs:
-                cmd_result = result_map.get(job.probe_rel_file)
-                if cmd_result is None:
-                    unresolved.extend(
-                        AxiomUsageUnresolved(
-                            fileName=job.module_dot,
-                            declaration=decl,
-                            reason="missing probe batch result",
-                        )
-                        for decl in job.declarations
-                    )
-                    continue
-
-                axiom_map = self._parse_axiom_usage_from_result(
-                    cmd_result=cmd_result,
+            rel_files = tuple(job.probe_rel_file for job in jobs)
+            try:
+                batch_results = self._run_lean_json_rel_files_batch(
                     project_root=options.project_root,
-                    fallback_module=LeanPath.from_dot(job.module_dot),
+                    rel_files=rel_files,
+                    timeout_seconds=options.timeout_seconds,
                 )
-                unresolved_reason = (
-                    self._format_command_failure_message(
-                        stage="axiom_audit.probe",
-                        cmd_result=cmd_result,
-                    )
-                    if cmd_result.returncode != 0
-                    else "axiom report not found in probe output"
-                )
+                result_map = {rel_file: cmd for rel_file, cmd in batch_results}
 
-                for decl in job.declarations:
-                    axioms = self._resolve_axioms_for_declaration(
-                        declaration=decl,
-                        axiom_map=axiom_map,
-                    )
-                    if axioms is None:
-                        unresolved.append(
-                            AxiomUsageUnresolved(
-                                fileName=job.module_dot,
-                                declaration=decl,
-                                reason=unresolved_reason,
-                            )
-                        )
+                for job in jobs:
+                    cmd_result = result_map.get(job.probe_rel_file)
+                    if cmd_result is None:
+                        for decl in job.declarations:
+                            last_failure_reason[(job.module_dot, decl)] = "missing probe batch result"
                         continue
 
-                    risky_axioms = [ax for ax in axioms if ax not in allowed_axioms]
-                    if not include_sorry_ax:
-                        risky_axioms = [ax for ax in risky_axioms if ax != "sorryAx"]
-                    if risky_axioms:
-                        usage_issues.append(
-                            AxiomUsageIssue(
-                                fileName=job.module_dot,
-                                declaration=decl,
-                                risky_axioms=tuple(risky_axioms),
-                            )
+                    axiom_map = self._parse_axiom_usage_from_result(
+                        cmd_result=cmd_result,
+                        project_root=options.project_root,
+                        fallback_module=LeanPath.from_dot(job.module_dot),
+                    )
+                    unresolved_reason = (
+                        self._format_command_failure_message(
+                            stage="axiom_audit.probe",
+                            cmd_result=cmd_result,
                         )
-        finally:
-            self._cleanup_probe_files(tuple(job.probe_abs_file for job in jobs))
+                        if cmd_result.returncode != 0
+                        else "axiom report not found in probe output"
+                    )
+
+                    for decl, probe_name in zip(job.declarations, job.probe_names, strict=True):
+                        key = (job.module_dot, decl)
+                        axioms = self._resolve_axioms_for_probe_name(
+                            probe_name=probe_name,
+                            axiom_map=axiom_map,
+                        )
+                        if axioms is None:
+                            last_failure_reason[key] = (
+                                f"{unresolved_reason}; candidate={probe_name}"
+                            )
+                            continue
+
+                        pending_probe_candidates.pop(key, None)
+                        last_failure_reason.pop(key, None)
+                        risky_axioms = [ax for ax in axioms if ax not in allowed_axioms]
+                        if not include_sorry_ax:
+                            risky_axioms = [ax for ax in risky_axioms if ax != "sorryAx"]
+                        if risky_axioms:
+                            usage_issues.append(
+                                AxiomUsageIssue(
+                                    fileName=job.module_dot,
+                                    declaration=decl,
+                                    risky_axioms=tuple(risky_axioms),
+                                )
+                            )
+            finally:
+                self._cleanup_probe_files(tuple(job.probe_abs_file for job in jobs))
+
+        for (module_dot, decl), candidates in pending_probe_candidates.items():
+            tried = ", ".join(candidates)
+            reason = last_failure_reason.get(
+                (module_dot, decl),
+                "axiom report not found in probe output",
+            )
+            unresolved.append(
+                AxiomUsageUnresolved(
+                    fileName=module_dot,
+                    declaration=decl,
+                    reason=(
+                        f"failed to resolve declaration via probe candidates: "
+                        f"[{tried}]; last error: {reason}"
+                    ),
+                )
+            )
 
         success = self._axiom_audit_success(
             declared_axioms=declared_axioms,
@@ -582,21 +600,11 @@ class DiagnosticsServiceImpl(DiagnosticsService):
     def _collect_checkable_declarations(
         self,
         *,
-        backend: DeclarationsBackend,
-        project_root: Path,
-        module: LeanPath,
-        timeout_seconds: int | None,
+        declarations: tuple[object, ...],
         decl_kind_filter: set[str],
-    ) -> tuple[tuple[str, ...], str | None]:
-        backend_req = DeclarationsBackendRequest(
-            project_root=project_root,
-            target_dot=module.dot,
-            timeout_seconds=timeout_seconds,
-        )
-        resp = backend.extract(backend_req)
-
+    ) -> tuple[str, ...]:
         names: list[str] = []
-        for decl in resp.declarations:
+        for decl in declarations:
             full_name = str(
                 getattr(decl, "full_name", None)
                 or getattr(decl, "name", None)
@@ -608,9 +616,7 @@ class DiagnosticsServiceImpl(DiagnosticsService):
             if kind in decl_kind_filter:
                 continue
             names.append(full_name)
-
-        deduped = tuple(dict.fromkeys(names))
-        return deduped, (resp.error_message if not resp.success else None)
+        return tuple(dict.fromkeys(names))
 
     def _collect_declared_axioms(
         self,
@@ -723,10 +729,11 @@ class DiagnosticsServiceImpl(DiagnosticsService):
         project_root: Path,
         module: LeanPath,
         declarations: tuple[str, ...],
+        probe_names: tuple[str, ...],
     ) -> AxiomProbeJob:
         probe_abs = (project_root / f"_mcp_axprobe_{uuid.uuid4().hex}.lean").resolve()
         lines = [f"import {module.dot}", ""]
-        lines.extend(f"#print axioms {decl}" for decl in declarations)
+        lines.extend(f"#print axioms {probe_name}" for probe_name in probe_names)
         probe_abs.write_text("\n".join(lines) + "\n", encoding="utf-8")
         probe_rel = probe_abs.relative_to(project_root).as_posix()
         return AxiomProbeJob(
@@ -734,6 +741,7 @@ class DiagnosticsServiceImpl(DiagnosticsService):
             probe_rel_file=probe_rel,
             probe_abs_file=probe_abs,
             declarations=declarations,
+            probe_names=probe_names,
         )
 
     def _parse_axiom_usage_from_result(
@@ -772,25 +780,88 @@ class DiagnosticsServiceImpl(DiagnosticsService):
 
         return parsed
 
-    def _resolve_axioms_for_declaration(
+    def _resolve_axioms_for_probe_name(
         self,
         *,
-        declaration: str,
+        probe_name: str,
         axiom_map: dict[str, list[str]],
     ) -> list[str] | None:
-        direct = axiom_map.get(declaration)
+        normalized = self._normalize_declaration_name(probe_name)
+        direct = axiom_map.get(probe_name)
+        if direct is None and normalized != probe_name:
+            direct = axiom_map.get(normalized)
         if direct is not None:
             return direct
 
-        short = declaration.split(".")[-1]
+        short = normalized.split(".")[-1]
         candidates = [
             axioms
             for name, axioms in axiom_map.items()
-            if name == short or name.endswith(f".{short}")
+            if self._normalize_declaration_name(name) == normalized
+            or name == short
+            or name.endswith(f".{short}")
         ]
         if len(candidates) == 1:
             return candidates[0]
         return None
+
+    @staticmethod
+    def _normalize_declaration_name(name: str) -> str:
+        normalized = name.strip()
+        while normalized.startswith("_root_."):
+            normalized = normalized[len("_root_.") :]
+        return normalized
+
+    def _candidate_declaration_names(
+        self,
+        *,
+        module: LeanPath,
+        declaration: str,
+    ) -> tuple[str, ...]:
+        raw = declaration.strip()
+        normalized = self._normalize_declaration_name(raw)
+        short = normalized.split(".")[-1].strip() if normalized else ""
+
+        candidates: list[str] = []
+        for item in (raw, normalized):
+            if item and item not in candidates:
+                candidates.append(item)
+
+        module_qualified = f"{module.dot}.{short}" if short else ""
+        if module_qualified and module_qualified not in candidates:
+            candidates.append(module_qualified)
+        return tuple(candidates)
+
+    def _build_axiom_probe_round_jobs(
+        self,
+        *,
+        project_root: Path,
+        modules_by_dot: dict[str, LeanPath],
+        pending_probe_candidates: dict[tuple[str, str], tuple[str, ...]],
+        round_index: int,
+    ) -> list[AxiomProbeJob]:
+        grouped: dict[str, list[tuple[str, str]]] = {}
+        for (module_dot, declaration), candidates in pending_probe_candidates.items():
+            if round_index >= len(candidates):
+                continue
+            grouped.setdefault(module_dot, []).append((declaration, candidates[round_index]))
+
+        jobs: list[AxiomProbeJob] = []
+        for module_dot, entries in grouped.items():
+            module = modules_by_dot.get(module_dot)
+            if module is None:
+                continue
+            declarations = tuple(declaration for declaration, _ in entries)
+            probe_names = tuple(probe_name for _, probe_name in entries)
+            jobs.append(
+                self._write_axiom_probe_file(
+                    project_root=project_root,
+                    module=module,
+                    declarations=declarations,
+                    probe_names=probe_names,
+                )
+            )
+        return jobs
 
     def _effective_build_options(self, req: BuildRequest) -> EffectiveBuildOptions:
         project_root = self._resolve_project_root(req.project_root)
@@ -1107,8 +1178,21 @@ class DiagnosticsServiceImpl(DiagnosticsService):
         stdout = (cmd_result.stdout or "").strip()
 
         if stderr:
-            parts.append(f"stderr={stderr.splitlines()[0]}")
-        elif stdout:
-            parts.append(f"stdout={stdout.splitlines()[0]}")
+            parts.append(f"stderr={self._summarize_command_output(stderr)}")
+        if stdout:
+            parts.append(f"stdout={self._summarize_command_output(stdout)}")
 
         return " | ".join(parts)
+
+    def _summarize_command_output(self, text: str, *, max_lines: int = 12, max_chars: int = 4000) -> str:
+        normalized = text.strip()
+        if not normalized:
+            return ""
+        lines = normalized.splitlines()
+        tail = lines[-max_lines:]
+        snippet = "\n".join(tail)
+        if len(snippet) > max_chars:
+            snippet = snippet[-max_chars:]
+        if len(lines) > max_lines or len(normalized) > len(snippet):
+            snippet = f"...\n{snippet}"
+        return snippet

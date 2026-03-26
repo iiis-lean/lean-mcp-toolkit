@@ -16,11 +16,25 @@ from lean_mcp_toolkit.groups.diagnostics.service_impl import DiagnosticsServiceI
 
 @dataclass(slots=True)
 class _FakeRuntime:
-    def run_lake_build(self, *, project_root: Path, module_targets: tuple[str, ...], timeout_s: int | None, jobs: int | None) -> CommandResult:
+    lake_calls: list[tuple[tuple[str, ...], str | None]] = None
+
+    def __post_init__(self) -> None:
+        if self.lake_calls is None:
+            self.lake_calls = []
+
+    def run_lake_build(
+        self,
+        *,
+        project_root: Path,
+        module_targets: tuple[str, ...],
+        target_facet: str | None = None,
+        timeout_s: int | None,
+        jobs: int | None,
+    ) -> CommandResult:
         _ = project_root
-        _ = module_targets
         _ = timeout_s
         _ = jobs
+        self.lake_calls.append((module_targets, target_facet))
         return CommandResult(args=("lake", "build"), returncode=0, stdout="", stderr="")
 
     def run_lean_json(self, *, project_root: Path, rel_file: str, timeout_s: int | None) -> CommandResult:
@@ -53,23 +67,31 @@ class _FakeDeclBackend:
             sorries=tuple(),
         )
 
-
 @dataclass(slots=True)
 class _AxiomProbeRuntime:
     axiom_map: dict[str, tuple[str, ...]]
+    probed_decls: list[str] = None
+    lake_calls: list[tuple[tuple[str, ...], str | None]] = None
+
+    def __post_init__(self) -> None:
+        if self.probed_decls is None:
+            self.probed_decls = []
+        if self.lake_calls is None:
+            self.lake_calls = []
 
     def run_lake_build(
         self,
         *,
         project_root: Path,
         module_targets: tuple[str, ...],
+        target_facet: str | None = None,
         timeout_s: int | None,
         jobs: int | None,
     ) -> CommandResult:
         _ = project_root
-        _ = module_targets
         _ = timeout_s
         _ = jobs
+        self.lake_calls.append((module_targets, target_facet))
         return CommandResult(args=("lake", "build"), returncode=0, stdout="", stderr="")
 
     def run_lean_json(self, *, project_root: Path, rel_file: str, timeout_s: int | None) -> CommandResult:
@@ -86,6 +108,7 @@ class _AxiomProbeRuntime:
             if not line.startswith("#print axioms "):
                 continue
             decl = line[len("#print axioms ") :].strip()
+            self.probed_decls.append(decl)
             axioms = self.axiom_map.get(decl)
             if axioms is None:
                 continue
@@ -115,12 +138,14 @@ class _AxiomProbeRuntime:
 @dataclass(slots=True)
 class _FailBuildDepsRuntime:
     lean_calls: int = 0
+    last_target_facet: str | None = None
 
     def run_lake_build(
         self,
         *,
         project_root: Path,
         module_targets: tuple[str, ...],
+        target_facet: str | None = None,
         timeout_s: int | None,
         jobs: int | None,
     ) -> CommandResult:
@@ -128,11 +153,17 @@ class _FailBuildDepsRuntime:
         _ = module_targets
         _ = timeout_s
         _ = jobs
+        self.last_target_facet = target_facet
         return CommandResult(
-            args=("lake", "build"),
+            args=("lake", "build", "A.Good:deps" if target_facet == "deps" else "A.Good"),
             returncode=1,
-            stdout="",
-            stderr="build deps failed",
+            stdout=(
+                "✖ [1/2] Building A.Dep\n"
+                "error: A/Dep.lean:3:5: dependency failed\n"
+                "Some required targets logged failures:\n"
+                "- A.Dep"
+            ),
+            stderr="error: build failed",
         )
 
     def run_lean_json(
@@ -154,11 +185,13 @@ class _FailEmitRuntime:
         *,
         project_root: Path,
         module_targets: tuple[str, ...],
+        target_facet: str | None = None,
         timeout_s: int | None,
         jobs: int | None,
     ) -> CommandResult:
         _ = project_root
         _ = module_targets
+        _ = target_facet
         _ = timeout_s
         _ = jobs
         self.lake_calls += 1
@@ -190,11 +223,13 @@ class _BatchOnlyRuntime:
         *,
         project_root: Path,
         module_targets: tuple[str, ...],
+        target_facet: str | None = None,
         timeout_s: int | None,
         jobs: int | None,
     ) -> CommandResult:
         _ = project_root
         _ = module_targets
+        _ = target_facet
         _ = timeout_s
         _ = jobs
         return CommandResult(args=("lake", "build"), returncode=0, stdout="", stderr="")
@@ -356,8 +391,11 @@ def test_run_build_build_deps_failure_short_circuit(tmp_path: Path) -> None:
     assert resp.success is False
     assert resp.failed_stage == "build_deps"
     assert resp.stage_error_message is not None
+    assert "A/Dep.lean:3:5" in resp.stage_error_message
+    assert "A.Good:deps" in resp.stage_error_message
     assert len(resp.files) == 0
     assert runtime.lean_calls == 0
+    assert runtime.last_target_facet == "deps"
 
 
 def test_run_build_emit_failure_returns_stage_error(tmp_path: Path) -> None:
@@ -395,6 +433,7 @@ def test_run_lint_no_sorry_fails_on_build_stage_failure(tmp_path: Path) -> None:
     )
     assert no_sorry.success is False
     assert len(no_sorry.sorries) == 0
+    assert "A/Dep.lean:3:5" in no_sorry.message
 
 
 def test_run_build_uses_batch_runner_when_available(tmp_path: Path) -> None:
@@ -478,3 +517,87 @@ def test_run_lint_axiom_audit_filters_sorry_ax_by_default(tmp_path: Path) -> Non
     assert check.success is True
     assert check.usage_issues == tuple()
     assert check.unresolved == tuple()
+
+
+def test_run_lint_axiom_audit_normalizes_root_prefixed_declaration_names(tmp_path: Path) -> None:
+    _write(tmp_path / "A" / "Pkg.lean", "abbrev adjacentDiff := 1\n")
+    cfg = ToolkitConfig.from_dict(
+        {
+            "server": {"default_project_root": str(tmp_path)},
+            "diagnostics": {
+                "default_enabled_checks": ["axiom_audit"],
+                "default_build_deps": False,
+            },
+        }
+    )
+    runtime = _AxiomProbeRuntime(axiom_map={"adjacentDiff": tuple()})
+    backend = _FakeDeclBackend(by_module={"A.Pkg": (_FakeDecl(full_name="_root_.adjacentDiff"),)})
+    svc = DiagnosticsServiceImpl(
+        config=cfg,
+        runtime=runtime,
+        declarations_backends={"lean_interact": backend},
+    )
+
+    lint_resp = svc.run_lint(LintRequest.from_dict({"targets": ["A/Pkg.lean"]}))
+    assert lint_resp.success is True
+    check = lint_resp.checks[0]
+    assert isinstance(check, AxiomAuditResult)
+    assert check.success is True
+    assert check.unresolved == tuple()
+    assert runtime.probed_decls == ["_root_.adjacentDiff", "adjacentDiff"]
+
+
+def test_run_lint_axiom_audit_retries_probe_candidates_in_batches(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "A" / "Pkg.lean",
+        "\n".join(
+            [
+                "theorem ok : True := by",
+                "  trivial",
+                "abbrev adjacentDiff := 1",
+                "",
+            ]
+        ),
+    )
+    cfg = ToolkitConfig.from_dict(
+        {
+            "server": {"default_project_root": str(tmp_path)},
+            "diagnostics": {
+                "default_enabled_checks": ["axiom_audit"],
+                "default_build_deps": False,
+            },
+        }
+    )
+    runtime = _AxiomProbeRuntime(
+        axiom_map={
+            "A.Pkg.ok": tuple(),
+            "A.Pkg.adjacentDiff": tuple(),
+        }
+    )
+    backend = _FakeDeclBackend(
+        by_module={
+            "A.Pkg": (
+                _FakeDecl(full_name="A.Pkg.ok"),
+                _FakeDecl(full_name="_root_.adjacentDiff"),
+            )
+        }
+    )
+    svc = DiagnosticsServiceImpl(
+        config=cfg,
+        runtime=runtime,
+        declarations_backends={"lean_interact": backend},
+    )
+
+    lint_resp = svc.run_lint(LintRequest.from_dict({"targets": ["A/Pkg.lean"]}))
+    assert lint_resp.success is True
+    check = lint_resp.checks[0]
+    assert isinstance(check, AxiomAuditResult)
+    assert check.success is True
+    assert check.unresolved == tuple()
+    assert runtime.probed_decls == [
+        "A.Pkg.ok",
+        "_root_.adjacentDiff",
+        "adjacentDiff",
+        "A.Pkg.adjacentDiff",
+    ]
+    assert runtime.lake_calls == [(("A.Pkg",), "leanArts")]

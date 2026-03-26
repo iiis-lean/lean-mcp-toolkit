@@ -96,3 +96,47 @@ def test_mathlib_nav_service_explicit_mathlib_root(tmp_path: Path) -> None:
     )
     assert tree.success is True
     assert any(e.name == "Probe.lean" for e in tree.entries)
+
+
+def test_mathlib_nav_service_accepts_mathlib_prefixed_inputs(tmp_path: Path) -> None:
+    project = _build_project_with_mathlib(tmp_path)
+    explicit_root = project / ".lake" / "packages" / "mathlib"
+    svc = MathlibNavServiceImpl(config=ToolkitConfig())
+
+    tree = svc.run_mathlib_nav_tree(
+        MathlibNavTreeRequest.from_dict(
+            {
+                "mathlib_root": str(explicit_root),
+                "base": "Mathlib.Linear",
+                "depth": 0,
+            }
+        )
+    )
+    assert tree.success is True
+    assert any(e.name == "Probe.lean" for e in tree.entries)
+
+    outline = svc.run_mathlib_nav_file_outline(
+        MathlibNavFileOutlineRequest.from_dict(
+            {
+                "mathlib_root": str(explicit_root),
+                "target": "Mathlib.Linear.Probe",
+            }
+        )
+    )
+    assert outline.success is True
+    assert outline.target is not None
+    assert outline.target.module_path == "Linear.Probe"
+
+    read = svc.run_mathlib_nav_read(
+        MathlibNavReadRequest.from_dict(
+            {
+                "mathlib_root": str(explicit_root),
+                "target": "Mathlib/Linear/Probe.lean",
+                "start_line": 1,
+                "max_lines": 2,
+            }
+        )
+    )
+    assert read.success is True
+    assert read.window is not None
+    assert read.window.start_line == 1

@@ -22,6 +22,7 @@ def test_cli_override_priority() -> None:
     args = ConfigCLIArgs(
         mode="http",
         port=20001,
+        project_root="/tmp/project-from-cli",
         enable_groups=["diagnostics"],
         set_items=["backends.lean_command.max_concurrent_lean_checks=9"],
     )
@@ -29,6 +30,7 @@ def test_cli_override_priority() -> None:
     cfg = load_toolkit_config(cli_overrides=overrides)
     assert cfg.server.mode == "http"
     assert cfg.server.port == 20001
+    assert cfg.server.default_project_root == "/tmp/project-from-cli"
     assert cfg.groups.enabled_groups == ("diagnostics",)
     assert cfg.backends.lean_command.max_concurrent_lean_checks == 9
 

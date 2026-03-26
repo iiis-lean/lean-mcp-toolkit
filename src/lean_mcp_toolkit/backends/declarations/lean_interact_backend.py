@@ -10,6 +10,20 @@ from ...config import LeanInteractBackendConfig, ToolchainConfig
 from ..lean.path import LeanPath
 from .base import DeclarationsBackendRequest, DeclarationsBackendResponse
 
+_LEAN_VERSION_TO_REPL_REV: dict[str, str] = {
+    "v4.20.0": "v1.3.9",
+    "v4.20.1": "v1.3.9",
+    "v4.21.0": "v1.3.9",
+    "v4.22.0": "v1.3.9",
+    "v4.23.0": "v1.3.9",
+    "v4.24.0": "v1.3.9",
+    "v4.25.0": "v1.3.9",
+    "v4.25.1": "v1.3.9",
+    "v4.26.0": "v1.3.9",
+    "v4.27.0": "v1.3.14",
+    "v4.28.0": "v1.3.14",
+}
+
 
 class LeanInteractDeclarationsBackend:
     """Declarations backend implemented on top of LeanInteract."""
@@ -38,7 +52,7 @@ class LeanInteractDeclarationsBackend:
         except Exception as exc:
             return DeclarationsBackendResponse(
                 success=False,
-                error_message=f"lean_interact execution failed: {exc}",
+                error_message=f"lean_interact execution failed: {self._format_exception(exc)}",
                 declarations=tuple(),
                 messages=tuple(),
                 sorries=tuple(),
@@ -91,23 +105,29 @@ class LeanInteractDeclarationsBackend:
             auto_build=self.backend_config.project_auto_build,
             lake_path=self.toolchain_config.lake_bin,
         )
-        config = lean_interact["LeanREPLConfig"](
-            project=project,
-            build_repl=self.backend_config.build_repl,
-            force_pull_repl=self.backend_config.force_pull_repl,
-            repl_rev=self.backend_config.repl_rev,
-            repl_git=self.backend_config.repl_git,
-            cache_dir=self.backend_config.cache_dir,
-            lake_path=self.toolchain_config.lake_bin,
-            memory_hard_limit_mb=self.backend_config.memory_hard_limit_mb,
-            enable_incremental_optimization=(
+        auto_repl_rev = self.backend_config.repl_rev is None
+        repl_rev = self._resolve_repl_rev(project_root=project_root)
+        config_kwargs: dict[str, Any] = {
+            "project": project,
+            "build_repl": self.backend_config.build_repl,
+            "force_pull_repl": self.backend_config.force_pull_repl or auto_repl_rev,
+            "lake_path": self.toolchain_config.lake_bin,
+            "memory_hard_limit_mb": self.backend_config.memory_hard_limit_mb,
+            "enable_incremental_optimization": (
                 self.backend_config.enable_incremental_optimization
             ),
-            enable_parallel_elaboration=(
+            "enable_parallel_elaboration": (
                 self.backend_config.enable_parallel_elaboration
             ),
-            verbose=self.backend_config.verbose,
-        )
+            "verbose": self.backend_config.verbose,
+        }
+        if repl_rev is not None:
+            config_kwargs["repl_rev"] = repl_rev
+        if self.backend_config.repl_git is not None:
+            config_kwargs["repl_git"] = self.backend_config.repl_git
+        if self.backend_config.cache_dir is not None:
+            config_kwargs["cache_dir"] = self.backend_config.cache_dir
+        config = lean_interact["LeanREPLConfig"](**config_kwargs)
         server_cls = (
             lean_interact["AutoLeanServer"]
             if self.backend_config.use_auto_server
@@ -175,3 +195,38 @@ class LeanInteractDeclarationsBackend:
         if isinstance(value, tuple):
             return value
         return tuple()
+
+    @staticmethod
+    def _format_exception(exc: Exception) -> str:
+        message = str(exc).strip()
+        if message:
+            return message
+        return exc.__class__.__name__
+
+    def _resolve_repl_rev(self, *, project_root: Path) -> str | None:
+        if self.backend_config.repl_rev is not None:
+            return self.backend_config.repl_rev
+        lean_version = self._read_project_lean_version(project_root)
+        if lean_version is None:
+            return None
+        return _LEAN_VERSION_TO_REPL_REV.get(self._normalize_lean_version(lean_version))
+
+    @staticmethod
+    def _read_project_lean_version(project_root: Path) -> str | None:
+        toolchain_file = project_root / "lean-toolchain"
+        try:
+            raw = toolchain_file.read_text(encoding="utf-8").strip()
+        except Exception:
+            return None
+        if not raw:
+            return None
+        return LeanInteractDeclarationsBackend._normalize_lean_version(raw)
+
+    @staticmethod
+    def _normalize_lean_version(raw: str) -> str:
+        text = raw.strip()
+        if text.startswith("leanprover/lean4:"):
+            text = text.removeprefix("leanprover/lean4:")
+        if "-rc" in text:
+            text = text.split("-rc", 1)[0]
+        return text

@@ -257,6 +257,66 @@ def test_lean_interact_backend_returns_raw_declarations_and_reuses_server(
     assert len(_FakeLeanServer.created) == 1
 
 
+def test_lean_interact_backend_omits_optional_config_values_when_unset(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _reset_fakes()
+    backend = LeanInteractDeclarationsBackend(
+        toolchain_config=ToolchainConfig(),
+        backend_config=LeanInteractBackendConfig(
+            cache_dir=None,
+            repl_rev=None,
+            repl_git=None,
+        ),
+    )
+    monkeypatch.setattr(backend, "_load_lean_interact", lambda: _fake_module_dict())
+
+    resp = backend.extract(
+        DeclarationsBackendRequest(
+            project_root=tmp_path,
+            target_dot="A.B",
+            timeout_seconds=None,
+        )
+    )
+
+    assert resp.success is True
+    assert len(_FakeLeanREPLConfig.created) == 1
+    assert "cache_dir" not in _FakeLeanREPLConfig.created[0]
+    assert "repl_rev" not in _FakeLeanREPLConfig.created[0]
+    assert "repl_git" not in _FakeLeanREPLConfig.created[0]
+
+
+def test_lean_interact_backend_auto_maps_project_lean_version_to_repl_rev(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _reset_fakes()
+    (tmp_path / "lean-toolchain").write_text("leanprover/lean4:v4.28.0\n", encoding="utf-8")
+    backend = LeanInteractDeclarationsBackend(
+        toolchain_config=ToolchainConfig(),
+        backend_config=LeanInteractBackendConfig(
+            repl_rev=None,
+            repl_git=None,
+            cache_dir=None,
+        ),
+    )
+    monkeypatch.setattr(backend, "_load_lean_interact", lambda: _fake_module_dict())
+
+    resp = backend.extract(
+        DeclarationsBackendRequest(
+            project_root=tmp_path,
+            target_dot="A.B",
+            timeout_seconds=None,
+        )
+    )
+
+    assert resp.success is True
+    assert len(_FakeLeanREPLConfig.created) == 1
+    assert _FakeLeanREPLConfig.created[0]["repl_rev"] == "v1.3.14"
+    assert _FakeLeanREPLConfig.created[0]["force_pull_repl"] is True
+
+
 def test_lean_interact_backend_uses_auto_server_when_enabled(monkeypatch, tmp_path: Path) -> None:
     _reset_fakes()
     backend = LeanInteractDeclarationsBackend(
@@ -338,3 +398,30 @@ def test_lean_interact_backend_returns_structured_failure_for_response_errors(
     assert len(resp.messages) == 1
     assert len(resp.sorries) == 1
 
+
+def test_lean_interact_backend_includes_exception_type_for_empty_message(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _reset_fakes()
+    backend = LeanInteractDeclarationsBackend(
+        toolchain_config=ToolchainConfig(),
+        backend_config=LeanInteractBackendConfig(),
+    )
+    monkeypatch.setattr(backend, "_load_lean_interact", lambda: _fake_module_dict())
+
+    def _boom(_: Path) -> object:
+        raise AssertionError()
+
+    monkeypatch.setattr(backend, "_create_server", _boom)
+
+    resp = backend.extract(
+        DeclarationsBackendRequest(
+            project_root=tmp_path,
+            target_dot="A.B",
+            timeout_seconds=None,
+        )
+    )
+
+    assert resp.success is False
+    assert resp.error_message == "lean_interact execution failed: AssertionError"

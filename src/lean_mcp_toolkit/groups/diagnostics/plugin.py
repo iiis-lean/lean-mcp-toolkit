@@ -58,7 +58,8 @@ _BUILD_PARAMS: tuple[ToolParamSpec, ...] = (
         required=False,
         default_value="diagnostics.default_build_deps",
         description=(
-            "Whether to run `lake build` for targets before per-file diagnostics."
+            "Whether to run `lake build <module>:deps` before per-file diagnostics, "
+            "so only target dependencies are prebuilt."
         ),
     ),
     ToolParamSpec(
@@ -67,7 +68,8 @@ _BUILD_PARAMS: tuple[ToolParamSpec, ...] = (
         required=False,
         default_value="diagnostics.default_emit_artifacts",
         description=(
-            "Whether to run `lake build` for files that passed diagnostics, to emit build artifacts."
+            "Whether to run `lake build <module>:leanArts` for files that passed diagnostics, "
+            "to emit target Lean artifacts."
         ),
     ),
     ToolParamSpec(
