@@ -6,8 +6,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
 from pathlib import Path
+import os
+import signal
 import subprocess
 import threading
+import time
 from typing import Iterator
 
 from ...config import LeanCommandBackendConfig, ToolchainConfig
@@ -43,6 +46,8 @@ class LeanCommandRuntime:
         target_facet: str | None = None,
         timeout_s: int | None,
         jobs: int | None,
+        deadline_monotonic: float | None = None,
+        cancel_event: threading.Event | None = None,
     ) -> CommandResult:
         cmd = self._lake_prefix() + ["build"]
         if jobs is not None and jobs > 0:
@@ -56,6 +61,8 @@ class LeanCommandRuntime:
                 args=tuple(cmd),
                 cwd=project_root,
                 timeout_s=timeout_s,
+                deadline_monotonic=deadline_monotonic,
+                cancel_event=cancel_event,
             )
 
     def run_lake_clean(
@@ -63,6 +70,8 @@ class LeanCommandRuntime:
         *,
         project_root: Path,
         timeout_s: int | None,
+        deadline_monotonic: float | None = None,
+        cancel_event: threading.Event | None = None,
     ) -> CommandResult:
         cmd = self._lake_prefix() + ["clean"]
         with self._lake_guard():
@@ -70,6 +79,8 @@ class LeanCommandRuntime:
                 args=tuple(cmd),
                 cwd=project_root,
                 timeout_s=timeout_s,
+                deadline_monotonic=deadline_monotonic,
+                cancel_event=cancel_event,
             )
 
     def run_lean_json(
@@ -78,6 +89,8 @@ class LeanCommandRuntime:
         project_root: Path,
         rel_file: str,
         timeout_s: int | None,
+        deadline_monotonic: float | None = None,
+        cancel_event: threading.Event | None = None,
     ) -> CommandResult:
         if self.toolchain_config.use_lake_env_for_lean:
             cmd = self._lake_prefix() + [
@@ -94,6 +107,8 @@ class LeanCommandRuntime:
                 args=tuple(cmd),
                 cwd=project_root,
                 timeout_s=timeout_s,
+                deadline_monotonic=deadline_monotonic,
+                cancel_event=cancel_event,
             )
 
     def run_lean_json_batch(
@@ -102,6 +117,8 @@ class LeanCommandRuntime:
         project_root: Path,
         rel_files: tuple[str, ...],
         timeout_s: int | None,
+        deadline_monotonic: float | None = None,
+        cancel_event: threading.Event | None = None,
     ) -> tuple[tuple[str, CommandResult], ...]:
         if not rel_files:
             return tuple()
@@ -124,6 +141,7 @@ class LeanCommandRuntime:
             )
 
         indexed_results: list[tuple[str, CommandResult] | None] = [None] * len(rel_files)
+        shared_cancel_event = cancel_event or threading.Event()
         with ThreadPoolExecutor(
             max_workers=max_workers,
             thread_name_prefix="lean-json",
@@ -135,6 +153,8 @@ class LeanCommandRuntime:
                     project_root=project_root,
                     rel_file=rel_file,
                     timeout_s=timeout_s,
+                    deadline_monotonic=deadline_monotonic,
+                    cancel_event=shared_cancel_event,
                 )
                 future_to_index[future] = idx
 
@@ -145,6 +165,8 @@ class LeanCommandRuntime:
                     result = future.result()
                 except Exception as exc:  # pragma: no cover - safety fallback
                     result = self._unexpected_lean_json_error(rel_file=rel_file, exc=exc)
+                if result.timed_out:
+                    shared_cancel_event.set()
                 indexed_results[idx] = (rel_file, result)
 
         finalized: list[tuple[str, CommandResult]] = []
@@ -207,32 +229,41 @@ class LeanCommandRuntime:
         args: tuple[str, ...],
         cwd: Path,
         timeout_s: int | None,
+        deadline_monotonic: float | None = None,
+        cancel_event: threading.Event | None = None,
     ) -> CommandResult:
-        try:
-            completed = subprocess.run(
-                list(args),
-                cwd=str(cwd),
-                env=self._merge_env(),
-                text=True,
-                capture_output=True,
-                timeout=timeout_s,
-                check=False,
-            )
-            return CommandResult(
-                args=args,
-                returncode=completed.returncode,
-                stdout=completed.stdout or "",
-                stderr=completed.stderr or "",
-                timed_out=False,
-            )
-        except subprocess.TimeoutExpired as exc:
+        effective_deadline = self._effective_deadline_monotonic(
+            timeout_s=timeout_s,
+            deadline_monotonic=deadline_monotonic,
+        )
+        if effective_deadline is not None and effective_deadline <= time.monotonic():
             return CommandResult(
                 args=args,
                 returncode=124,
-                stdout=(exc.stdout or "") if isinstance(exc.stdout, str) else "",
-                stderr=(exc.stderr or "") if isinstance(exc.stderr, str) else "",
+                stdout="",
+                stderr="command timed out before start",
                 timed_out=True,
             )
+        if cancel_event is not None and cancel_event.is_set():
+            return CommandResult(
+                args=args,
+                returncode=124,
+                stdout="",
+                stderr="command cancelled before start",
+                timed_out=True,
+            )
+
+        popen_kwargs = {
+            "cwd": str(cwd),
+            "env": self._merge_env(),
+            "text": True,
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.PIPE,
+        }
+        if os.name != "nt":
+            popen_kwargs["start_new_session"] = True
+        try:
+            proc = subprocess.Popen(list(args), **popen_kwargs)
         except FileNotFoundError as exc:
             return CommandResult(
                 args=args,
@@ -241,6 +272,108 @@ class LeanCommandRuntime:
                 stderr=str(exc),
                 timed_out=False,
             )
+        while True:
+            if cancel_event is not None and cancel_event.is_set():
+                return self._abort_process(
+                    proc=proc,
+                    args=args,
+                    reason="command cancelled",
+                )
+            remaining = self._remaining_deadline_seconds(effective_deadline)
+            if remaining is not None and remaining <= 0:
+                return self._abort_process(
+                    proc=proc,
+                    args=args,
+                    reason="command timed out",
+                )
+            timeout_slice = 0.1 if remaining is None else max(0.01, min(0.1, remaining))
+            try:
+                stdout, stderr = proc.communicate(timeout=timeout_slice)
+                return CommandResult(
+                    args=args,
+                    returncode=proc.returncode,
+                    stdout=stdout or "",
+                    stderr=stderr or "",
+                    timed_out=False,
+                )
+            except subprocess.TimeoutExpired:
+                continue
+
+    @staticmethod
+    def _effective_deadline_monotonic(
+        *,
+        timeout_s: int | None,
+        deadline_monotonic: float | None,
+    ) -> float | None:
+        deadline = deadline_monotonic
+        if timeout_s is not None:
+            timeout_deadline = time.monotonic() + max(0, timeout_s)
+            deadline = (
+                timeout_deadline
+                if deadline is None
+                else min(deadline, timeout_deadline)
+            )
+        return deadline
+
+    @staticmethod
+    def _remaining_deadline_seconds(deadline_monotonic: float | None) -> float | None:
+        if deadline_monotonic is None:
+            return None
+        return deadline_monotonic - time.monotonic()
+
+    def _abort_process(
+        self,
+        *,
+        proc: subprocess.Popen[str],
+        args: tuple[str, ...],
+        reason: str,
+    ) -> CommandResult:
+        self._terminate_process(proc)
+        try:
+            stdout, stderr = proc.communicate(timeout=1.0)
+        except subprocess.TimeoutExpired:
+            self._kill_process(proc)
+            stdout, stderr = proc.communicate()
+        stderr_text = (stderr or "").strip()
+        if reason:
+            stderr_text = f"{stderr_text}\n{reason}".strip() if stderr_text else reason
+        return CommandResult(
+            args=args,
+            returncode=124,
+            stdout=stdout or "",
+            stderr=stderr_text,
+            timed_out=True,
+        )
+
+    @staticmethod
+    def _terminate_process(proc: subprocess.Popen[str]) -> None:
+        try:
+            if os.name == "nt":
+                proc.terminate()
+            else:
+                os.killpg(proc.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            return
+        except Exception:
+            try:
+                proc.terminate()
+            except Exception:
+                return
+
+    @staticmethod
+    def _kill_process(proc: subprocess.Popen[str]) -> None:
+        try:
+            if os.name == "nt":
+                proc.kill()
+            else:
+                os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            return
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                return
 
     def _merge_env(self) -> dict[str, str] | None:
         extra = self._runtime_env()

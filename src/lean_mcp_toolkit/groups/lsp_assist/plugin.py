@@ -29,6 +29,7 @@ from ..plugin_base import (
     ToolHandler,
     ToolParamSpec,
     ToolReturnSpec,
+    run_sync_mcp_service_handler,
 )
 from .factory import create_lsp_assist_client, create_lsp_assist_service
 
@@ -386,7 +387,7 @@ class LspAssistGroupPlugin(GroupPlugin):
         if spec.canonical_name == "lsp.completions":
 
             @mcp.tool(name=alias, description=spec.render_mcp_description())
-            def _lsp_completions(
+            async def _lsp_completions(
                 project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
                 file_path: Annotated[str, Field(description=_param_desc(spec, "file_path"))] = "",
                 line: Annotated[int, Field(description=_param_desc(spec, "line"), ge=1)] = 1,
@@ -400,14 +401,18 @@ class LspAssistGroupPlugin(GroupPlugin):
                     "column": column,
                     "max_completions": max_completions,
                 }
-                return handle_lsp_completions(service, prune_none(payload))
+                return await run_sync_mcp_service_handler(
+                    handle_lsp_completions,
+                    service,
+                    prune_none(payload),
+                )
 
             return
 
         if spec.canonical_name == "lsp.declaration_file":
 
             @mcp.tool(name=alias, description=spec.render_mcp_description())
-            def _lsp_declaration_file(
+            async def _lsp_declaration_file(
                 project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
                 file_path: Annotated[str, Field(description=_param_desc(spec, "file_path"))] = "",
                 symbol: Annotated[str, Field(description=_param_desc(spec, "symbol"))] = "",
@@ -423,14 +428,18 @@ class LspAssistGroupPlugin(GroupPlugin):
                     "column": column,
                     "include_file_content": include_file_content,
                 }
-                return handle_lsp_declaration_file(service, prune_none(payload))
+                return await run_sync_mcp_service_handler(
+                    handle_lsp_declaration_file,
+                    service,
+                    prune_none(payload),
+                )
 
             return
 
         if spec.canonical_name == "lsp.multi_attempt":
 
             @mcp.tool(name=alias, description=spec.render_mcp_description())
-            def _lsp_multi_attempt(
+            async def _lsp_multi_attempt(
                 project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
                 file_path: Annotated[str, Field(description=_param_desc(spec, "file_path"))] = "",
                 line: Annotated[int, Field(description=_param_desc(spec, "line"), ge=1)] = 1,
@@ -444,14 +453,18 @@ class LspAssistGroupPlugin(GroupPlugin):
                     "snippets": snippets or [],
                     "max_attempts": max_attempts,
                 }
-                return handle_lsp_multi_attempt(service, prune_none(payload))
+                return await run_sync_mcp_service_handler(
+                    handle_lsp_multi_attempt,
+                    service,
+                    prune_none(payload),
+                )
 
             return
 
         if spec.canonical_name == "lsp.run_snippet":
 
             @mcp.tool(name=alias, description=spec.render_mcp_description())
-            def _lsp_run_snippet(
+            async def _lsp_run_snippet(
                 project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
                 code: Annotated[str, Field(description=_param_desc(spec, "code"))] = "",
                 timeout_seconds: Annotated[int | None, Field(description=_param_desc(spec, "timeout_seconds"), ge=1)] = None,
@@ -461,12 +474,16 @@ class LspAssistGroupPlugin(GroupPlugin):
                     "code": code,
                     "timeout_seconds": timeout_seconds,
                 }
-                return handle_lsp_run_snippet(service, prune_none(payload))
+                return await run_sync_mcp_service_handler(
+                    handle_lsp_run_snippet,
+                    service,
+                    prune_none(payload),
+                )
 
             return
 
         @mcp.tool(name=alias, description=spec.render_mcp_description())
-        def _lsp_theorem_soundness(
+        async def _lsp_theorem_soundness(
             project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
             file_path: Annotated[str, Field(description=_param_desc(spec, "file_path"))] = "",
             theorem_name: Annotated[str, Field(description=_param_desc(spec, "theorem_name"))] = "",
@@ -478,7 +495,11 @@ class LspAssistGroupPlugin(GroupPlugin):
                 "theorem_name": theorem_name,
                 "scan_source": scan_source,
             }
-            return handle_lsp_theorem_soundness(service, prune_none(payload))
+            return await run_sync_mcp_service_handler(
+                handle_lsp_theorem_soundness,
+                service,
+                prune_none(payload),
+            )
 
 
 __all__ = ["LspAssistGroupPlugin"]

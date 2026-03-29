@@ -1078,6 +1078,8 @@ class LeanCommandBackendConfig:
 @dataclass(slots=True, frozen=True)
 class LeanInteractBackendConfig:
     use_auto_server: bool = False
+    use_server_pool: bool = True
+    pool_workers: int | None = 8
     project_auto_build: bool = False
     build_repl: bool = True
     force_pull_repl: bool = False
@@ -1093,6 +1095,8 @@ class LeanInteractBackendConfig:
     def from_dict(cls, data: JsonDict) -> "LeanInteractBackendConfig":
         return cls(
             use_auto_server=to_bool(data.get("use_auto_server"), default=False),
+            use_server_pool=to_bool(data.get("use_server_pool"), default=True),
+            pool_workers=to_int(data.get("pool_workers"), default=8),
             project_auto_build=to_bool(data.get("project_auto_build"), default=False),
             build_repl=to_bool(data.get("build_repl"), default=True),
             force_pull_repl=to_bool(data.get("force_pull_repl"), default=False),
@@ -1112,6 +1116,8 @@ class LeanInteractBackendConfig:
     def to_dict(self) -> JsonDict:
         return {
             "use_auto_server": self.use_auto_server,
+            "use_server_pool": self.use_server_pool,
+            "pool_workers": self.pool_workers,
             "project_auto_build": self.project_auto_build,
             "build_repl": self.build_repl,
             "force_pull_repl": self.force_pull_repl,

@@ -134,7 +134,15 @@ class ToolkitServer:
         except Exception as exc:  # pragma: no cover - optional dependency
             raise RuntimeError("fastapi is required to create HTTP app") from exc
 
-        app = FastAPI(title="lean-mcp-toolkit")
+        @contextlib.asynccontextmanager
+        async def lifespan(app: Any):
+            _ = app
+            try:
+                yield
+            finally:
+                self.close()
+
+        app = FastAPI(title="lean-mcp-toolkit", lifespan=lifespan)
 
         @app.get(
             f"{self.api_prefix}/meta/tools",
@@ -232,8 +240,11 @@ class ToolkitServer:
         @contextlib.asynccontextmanager
         async def lifespan(app: Any):
             _ = app
-            async with mcp.session_manager.run():
-                yield
+            try:
+                async with mcp.session_manager.run():
+                    yield
+            finally:
+                self.close()
 
         app = Starlette(
             routes=[
@@ -251,12 +262,15 @@ class ToolkitServer:
             raise RuntimeError("uvicorn is required to run HTTP server") from exc
 
         app = self.create_fastapi_app()
-        uvicorn.run(
-            app,
-            host=host or self.config.server.host,
-            port=port or self.config.server.port,
-            log_level=self.config.server.log_level,
-        )
+        try:
+            uvicorn.run(
+                app,
+                host=host or self.config.server.host,
+                port=port or self.config.server.port,
+                log_level=self.config.server.log_level,
+            )
+        finally:
+            self.close()
 
     def run_mcp(self) -> None:
         mcp = self.create_mcp_server()
@@ -297,12 +311,19 @@ class ToolkitServer:
             raise RuntimeError("uvicorn is required to run unified server") from exc
 
         app = self.create_unified_asgi_app()
-        uvicorn.run(
-            app,
-            host=host or self.config.server.host,
-            port=port or self.config.server.port,
-            log_level=self.config.server.log_level,
-        )
+        try:
+            uvicorn.run(
+                app,
+                host=host or self.config.server.host,
+                port=port or self.config.server.port,
+                log_level=self.config.server.log_level,
+            )
+        finally:
+            self.close()
+
+    def close(self) -> None:
+        self._close_value(self._backend_context)
+        self._backend_context = None
 
     def run(self) -> None:
         self.run_startup_warmup()
@@ -317,6 +338,28 @@ class ToolkitServer:
             self.run_unified()
             return
         raise ValueError(f"unsupported server mode: {mode}")
+
+    def _close_value(self, value: Any) -> None:
+        if value is None:
+            return
+        if isinstance(value, dict):
+            for item in value.values():
+                self._close_value(item)
+            return
+        if isinstance(value, (list, tuple, set)):
+            for item in value:
+                self._close_value(item)
+            return
+        if isinstance(value, BackendContext):
+            for key in value.keys():
+                self._close_value(value.get(key))
+            return
+        close = getattr(value, "close", None)
+        if callable(close):
+            try:
+                close()
+            except Exception:
+                pass
 
     def run_startup_warmup(self) -> dict[str, Any] | None:
         policy = self.config.warmup.policy

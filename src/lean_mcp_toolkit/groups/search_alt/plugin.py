@@ -24,7 +24,14 @@ from ...backends.keys import BackendKey
 from ...config import ToolkitConfig
 from ...contracts.base import JsonDict
 from ...transport.http import HttpConfig
-from ..plugin_base import GroupPlugin, GroupToolSpec, ToolHandler, ToolParamSpec, ToolReturnSpec
+from ..plugin_base import (
+    GroupPlugin,
+    GroupToolSpec,
+    ToolHandler,
+    ToolParamSpec,
+    ToolReturnSpec,
+    run_sync_mcp_service_handler,
+)
 from .factory import create_search_alt_client, create_search_alt_service
 
 _SEARCH_PARAMS: tuple[ToolParamSpec, ...] = (
@@ -110,7 +117,7 @@ class SearchAltGroupPlugin(GroupPlugin):
             spec = _TOOL_SPEC_MAP[canonical_name]
             for alias in aliases_by_canonical.get(canonical_name, ()):
                 @mcp.tool(name=alias, description=spec.render_mcp_description())
-                def _search_alt_tool(
+                async def _search_alt_tool(
                     query: Annotated[str, Field(description=_param_desc(spec, "query"))] = "",
                     num_results: Annotated[
                         int | None,
@@ -118,11 +125,11 @@ class SearchAltGroupPlugin(GroupPlugin):
                     ] = None,
                     _handler=handler,
                 ) -> JsonDict:
-                    return _handler(
+                    return await run_sync_mcp_service_handler(
+                        _handler,
                         service,
                         prune_none({"query": query, "num_results": num_results}),
                     )
 
 
 __all__ = ["SearchAltGroupPlugin"]
-

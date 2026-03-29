@@ -25,6 +25,7 @@ from ..plugin_base import (
     ToolHandler,
     ToolParamSpec,
     ToolReturnSpec,
+    run_sync_mcp_service_handler,
 )
 from .factory import create_build_base_client, create_build_base_service
 
@@ -149,7 +150,7 @@ class BuildBaseGroupPlugin(GroupPlugin):
         spec = _TOOL_SPEC_MAP["build.workspace"]
         for alias in aliases_by_canonical.get("build.workspace", ()):
             @mcp.tool(name=alias, description=spec.render_mcp_description())
-            def _build_workspace(
+            async def _build_workspace(
                 project_root: Annotated[
                     str | None,
                     Field(description=_param_desc(spec, "project_root")),
@@ -182,4 +183,8 @@ class BuildBaseGroupPlugin(GroupPlugin):
                         "clean_first": clean_first,
                     }
                 )
-                return handle_build_workspace(service, payload)
+                return await run_sync_mcp_service_handler(
+                    handle_build_workspace,
+                    service,
+                    payload,
+                )

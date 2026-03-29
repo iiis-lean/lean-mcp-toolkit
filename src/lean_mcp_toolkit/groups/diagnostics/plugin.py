@@ -30,6 +30,7 @@ from ..plugin_base import (
     ToolHandler,
     ToolParamSpec,
     ToolReturnSpec,
+    run_sync_mcp_service_handler,
 )
 
 _BUILD_PARAMS: tuple[ToolParamSpec, ...] = (
@@ -524,7 +525,7 @@ class DiagnosticsGroupPlugin(GroupPlugin):
             name=alias,
             description=spec.render_mcp_description(),
         )
-        def _diagnostics_build(
+        async def _diagnostics_build(
             project_root: Annotated[
                 str | None,
                 Field(description=_param_desc(spec, "project_root")),
@@ -563,7 +564,11 @@ class DiagnosticsGroupPlugin(GroupPlugin):
                 "context_lines": context_lines,
                 "timeout_seconds": timeout_seconds,
             }
-            return handle_diagnostics_build(service, prune_none(payload))
+            return await run_sync_mcp_service_handler(
+                handle_diagnostics_build,
+                service,
+                prune_none(payload),
+            )
 
     @staticmethod
     def _register_file(
@@ -578,7 +583,7 @@ class DiagnosticsGroupPlugin(GroupPlugin):
             name=alias,
             description=spec.render_mcp_description(),
         )
-        def _diagnostics_file(
+        async def _diagnostics_file(
             project_root: Annotated[
                 str | None,
                 Field(description=_param_desc(spec, "project_root")),
@@ -607,7 +612,11 @@ class DiagnosticsGroupPlugin(GroupPlugin):
                 "context_lines": context_lines,
                 "timeout_seconds": timeout_seconds,
             }
-            return handle_diagnostics_file(service, prune_none(payload))
+            return await run_sync_mcp_service_handler(
+                handle_diagnostics_file,
+                service,
+                prune_none(payload),
+            )
 
     @staticmethod
     def _register_lint(
@@ -623,7 +632,7 @@ class DiagnosticsGroupPlugin(GroupPlugin):
             name=alias,
             description=spec.render_mcp_description(),
         )
-        def _diagnostics_lint(
+        async def _diagnostics_lint(
             project_root: Annotated[
                 str | None,
                 Field(description=_param_desc(spec, "project_root")),
@@ -657,7 +666,11 @@ class DiagnosticsGroupPlugin(GroupPlugin):
                 "context_lines": context_lines,
                 "timeout_seconds": timeout_seconds,
             }
-            return handle_diagnostics_lint(service, prune_none(payload))
+            return await run_sync_mcp_service_handler(
+                handle_diagnostics_lint,
+                service,
+                prune_none(payload),
+            )
 
     @staticmethod
     def _register_lint_no_sorry(
@@ -673,7 +686,7 @@ class DiagnosticsGroupPlugin(GroupPlugin):
             name=alias,
             description=spec.render_mcp_description(),
         )
-        def _diagnostics_lint_no_sorry(
+        async def _diagnostics_lint_no_sorry(
             project_root: Annotated[
                 str | None,
                 Field(description=_param_desc(spec, "project_root")),
@@ -702,7 +715,11 @@ class DiagnosticsGroupPlugin(GroupPlugin):
                 "context_lines": context_lines,
                 "timeout_seconds": timeout_seconds,
             }
-            return handle_diagnostics_lint_no_sorry(service, prune_none(payload))
+            return await run_sync_mcp_service_handler(
+                handle_diagnostics_lint_no_sorry,
+                service,
+                prune_none(payload),
+            )
 
     @staticmethod
     def _register_lint_axiom_audit(
@@ -718,7 +735,7 @@ class DiagnosticsGroupPlugin(GroupPlugin):
             name=alias,
             description=spec.render_mcp_description(),
         )
-        def _diagnostics_lint_axiom_audit(
+        async def _diagnostics_lint_axiom_audit(
             project_root: Annotated[
                 str | None,
                 Field(description=_param_desc(spec, "project_root")),
@@ -747,7 +764,11 @@ class DiagnosticsGroupPlugin(GroupPlugin):
                 "context_lines": context_lines,
                 "timeout_seconds": timeout_seconds,
             }
-            return handle_diagnostics_lint_axiom_audit(service, prune_none(payload))
+            return await run_sync_mcp_service_handler(
+                handle_diagnostics_lint_axiom_audit,
+                service,
+                prune_none(payload),
+            )
 
 
 __all__ = ["DiagnosticsGroupPlugin"]

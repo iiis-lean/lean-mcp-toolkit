@@ -22,7 +22,14 @@ from ...backends.keys import BackendKey
 from ...config import ToolkitConfig
 from ...contracts.base import JsonDict
 from ...transport.http import HttpConfig
-from ..plugin_base import GroupPlugin, GroupToolSpec, ToolHandler, ToolParamSpec, ToolReturnSpec
+from ..plugin_base import (
+    GroupPlugin,
+    GroupToolSpec,
+    ToolHandler,
+    ToolParamSpec,
+    ToolReturnSpec,
+    run_sync_mcp_service_handler,
+)
 from .factory import create_proof_search_alt_client, create_proof_search_alt_service
 
 _COMMON_PARAMS: tuple[ToolParamSpec, ...] = (
@@ -99,7 +106,7 @@ class ProofSearchAltGroupPlugin(GroupPlugin):
             spec = _TOOL_SPEC_MAP[canonical_name]
             for alias in aliases_by_canonical.get(canonical_name, ()):
                 @mcp.tool(name=alias, description=spec.render_mcp_description())
-                def _proof_alt_tool(
+                async def _proof_alt_tool(
                     project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
                     file_path: Annotated[str, Field(description=_param_desc(spec, "file_path"))] = "",
                     line: Annotated[int, Field(description=_param_desc(spec, "line"))] = 1,
@@ -107,7 +114,8 @@ class ProofSearchAltGroupPlugin(GroupPlugin):
                     num_results: Annotated[int | None, Field(description=_param_desc(spec, "num_results"))] = None,
                     _handler=handler,
                 ) -> JsonDict:
-                    return _handler(
+                    return await run_sync_mcp_service_handler(
+                        _handler,
                         service,
                         prune_none(
                             {
@@ -122,4 +130,3 @@ class ProofSearchAltGroupPlugin(GroupPlugin):
 
 
 __all__ = ["ProofSearchAltGroupPlugin"]
-

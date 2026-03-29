@@ -37,7 +37,9 @@ class HttpJsonClient:
 
         last_exc: Exception | None = None
         total_attempts = max(1, 1 + self.config.retry_count)
-        for _ in range(total_attempts):
+        attempts_made = 0
+        for attempt_idx in range(total_attempts):
+            attempts_made = attempt_idx + 1
             try:
                 with urllib.request.urlopen(  # noqa: S310
                     request,
@@ -64,7 +66,11 @@ class HttpJsonClient:
             except Exception as exc:  # pragma: no cover - network boundary
                 last_exc = exc
 
-        raise HttpClientError(f"http request failed after retries: {last_exc}")
+        if attempts_made <= 1:
+            raise HttpClientError(f"http request failed: {last_exc}")
+        raise HttpClientError(
+            f"http request failed after {attempts_made} attempts: {last_exc}"
+        )
 
     def _build_url(self, path: str) -> str:
         prefix = self.config.api_prefix.strip()

@@ -2,27 +2,12 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from threading import Lock
 from typing import Any
 
 from ...config import LeanInteractBackendConfig, ToolchainConfig
+from ..lean_interact_runtime import LeanInteractRuntimeManager
 from ..lean.path import LeanPath
 from .base import DeclarationsBackendRequest, DeclarationsBackendResponse
-
-_LEAN_VERSION_TO_REPL_REV: dict[str, str] = {
-    "v4.20.0": "v1.3.9",
-    "v4.20.1": "v1.3.9",
-    "v4.21.0": "v1.3.9",
-    "v4.22.0": "v1.3.9",
-    "v4.23.0": "v1.3.9",
-    "v4.24.0": "v1.3.9",
-    "v4.25.0": "v1.3.9",
-    "v4.25.1": "v1.3.9",
-    "v4.26.0": "v1.3.9",
-    "v4.27.0": "v1.3.14",
-    "v4.28.0": "v1.3.14",
-}
 
 
 class LeanInteractDeclarationsBackend:
@@ -35,20 +20,74 @@ class LeanInteractDeclarationsBackend:
         *,
         toolchain_config: ToolchainConfig,
         backend_config: LeanInteractBackendConfig,
+        runtime_manager: LeanInteractRuntimeManager | None = None,
     ):
         self.toolchain_config = toolchain_config
         self.backend_config = backend_config
-        self._server_lock = Lock()
-        self._servers: dict[str, Any] = {}
+        self.runtime_manager = runtime_manager or LeanInteractRuntimeManager(
+            toolchain_config=toolchain_config,
+            backend_config=backend_config,
+        )
+
+    def close(self) -> None:
+        self.runtime_manager.close()
 
     def extract(self, req: DeclarationsBackendRequest) -> DeclarationsBackendResponse:
         rel_file = LeanPath.from_dot(req.target_dot).to_rel_file()
+        return self._extract_rel_file(req=req, rel_file=rel_file)
 
+    def extract_batch(
+        self,
+        reqs: tuple[DeclarationsBackendRequest, ...],
+    ) -> tuple[DeclarationsBackendResponse, ...]:
+        if not reqs:
+            return tuple()
+        requests = tuple(
+            self.runtime_manager.make_file_command(
+                rel_file=LeanPath.from_dot(req.target_dot).to_rel_file(),
+                declarations=True,
+            )
+            for req in reqs
+        )
         try:
-            server = self._get_server(req.project_root)
-            file_command = self._make_file_command(rel_file=rel_file)
+            project_root = reqs[0].project_root
+            timeout = float(reqs[0].timeout_seconds) if reqs[0].timeout_seconds is not None else None
+            responses = self.runtime_manager.run_batch(
+                project_root=project_root,
+                requests=requests,
+                timeout_per_req=timeout,
+            )
+        except Exception as exc:
+            error = f"lean_interact execution failed: {self._format_exception(exc)}"
+            return tuple(
+                DeclarationsBackendResponse(
+                    success=False,
+                    error_message=error,
+                    declarations=tuple(),
+                    messages=tuple(),
+                    sorries=tuple(),
+                )
+                for _ in reqs
+            )
+        return tuple(self._build_response(response) for response in responses)
+
+    def _extract_rel_file(
+        self,
+        *,
+        req: DeclarationsBackendRequest,
+        rel_file: str,
+    ) -> DeclarationsBackendResponse:
+        try:
+            file_command = self.runtime_manager.make_file_command(
+                rel_file=rel_file,
+                declarations=True,
+            )
             timeout = float(req.timeout_seconds) if req.timeout_seconds is not None else None
-            response = server.run(file_command, timeout=timeout)
+            response = self.runtime_manager.run(
+                project_root=req.project_root,
+                request=file_command,
+                timeout=timeout,
+            )
         except Exception as exc:
             return DeclarationsBackendResponse(
                 success=False,
@@ -57,7 +96,9 @@ class LeanInteractDeclarationsBackend:
                 messages=tuple(),
                 sorries=tuple(),
             )
+        return self._build_response(response)
 
+    def _build_response(self, response: Any) -> DeclarationsBackendResponse:
         if self._is_lean_error(response):
             return DeclarationsBackendResponse(
                 success=False,
@@ -88,75 +129,8 @@ class LeanInteractDeclarationsBackend:
             sorries=sorries,
         )
 
-    def _get_server(self, project_root: Path) -> Any:
-        key = str(project_root)
-        with self._server_lock:
-            existing = self._servers.get(key)
-            if existing is not None:
-                return existing
-            server = self._create_server(project_root)
-            self._servers[key] = server
-            return server
-
-    def _create_server(self, project_root: Path) -> Any:
-        lean_interact = self._load_lean_interact()
-        project = lean_interact["LocalProject"](
-            directory=str(project_root),
-            auto_build=self.backend_config.project_auto_build,
-            lake_path=self.toolchain_config.lake_bin,
-        )
-        auto_repl_rev = self.backend_config.repl_rev is None
-        repl_rev = self._resolve_repl_rev(project_root=project_root)
-        config_kwargs: dict[str, Any] = {
-            "project": project,
-            "build_repl": self.backend_config.build_repl,
-            "force_pull_repl": self.backend_config.force_pull_repl or auto_repl_rev,
-            "lake_path": self.toolchain_config.lake_bin,
-            "memory_hard_limit_mb": self.backend_config.memory_hard_limit_mb,
-            "enable_incremental_optimization": (
-                self.backend_config.enable_incremental_optimization
-            ),
-            "enable_parallel_elaboration": (
-                self.backend_config.enable_parallel_elaboration
-            ),
-            "verbose": self.backend_config.verbose,
-        }
-        if repl_rev is not None:
-            config_kwargs["repl_rev"] = repl_rev
-        if self.backend_config.repl_git is not None:
-            config_kwargs["repl_git"] = self.backend_config.repl_git
-        if self.backend_config.cache_dir is not None:
-            config_kwargs["cache_dir"] = self.backend_config.cache_dir
-        config = lean_interact["LeanREPLConfig"](**config_kwargs)
-        server_cls = (
-            lean_interact["AutoLeanServer"]
-            if self.backend_config.use_auto_server
-            else lean_interact["LeanServer"]
-        )
-        return server_cls(config)
-
-    def _make_file_command(self, *, rel_file: str) -> Any:
-        lean_interact = self._load_lean_interact()
-        return lean_interact["FileCommand"](path=rel_file, declarations=True)
-
-    def _load_lean_interact(self) -> dict[str, Any]:
-        try:
-            from lean_interact import AutoLeanServer, FileCommand, LeanREPLConfig, LeanServer, LocalProject
-            from lean_interact.interface import LeanError
-        except Exception as exc:  # pragma: no cover - dependency boundary
-            raise RuntimeError(f"failed to import lean_interact: {exc}") from exc
-
-        return {
-            "LeanREPLConfig": LeanREPLConfig,
-            "LeanServer": LeanServer,
-            "AutoLeanServer": AutoLeanServer,
-            "LocalProject": LocalProject,
-            "FileCommand": FileCommand,
-            "LeanError": LeanError,
-        }
-
     def _is_lean_error(self, response: Any) -> bool:
-        lean_error_cls = self._load_lean_interact()["LeanError"]
+        lean_error_cls = self.runtime_manager.lean_error_cls()
         return isinstance(response, lean_error_cls)
 
     @staticmethod
@@ -202,31 +176,3 @@ class LeanInteractDeclarationsBackend:
         if message:
             return message
         return exc.__class__.__name__
-
-    def _resolve_repl_rev(self, *, project_root: Path) -> str | None:
-        if self.backend_config.repl_rev is not None:
-            return self.backend_config.repl_rev
-        lean_version = self._read_project_lean_version(project_root)
-        if lean_version is None:
-            return None
-        return _LEAN_VERSION_TO_REPL_REV.get(self._normalize_lean_version(lean_version))
-
-    @staticmethod
-    def _read_project_lean_version(project_root: Path) -> str | None:
-        toolchain_file = project_root / "lean-toolchain"
-        try:
-            raw = toolchain_file.read_text(encoding="utf-8").strip()
-        except Exception:
-            return None
-        if not raw:
-            return None
-        return LeanInteractDeclarationsBackend._normalize_lean_version(raw)
-
-    @staticmethod
-    def _normalize_lean_version(raw: str) -> str:
-        text = raw.strip()
-        if text.startswith("leanprover/lean4:"):
-            text = text.removeprefix("leanprover/lean4:")
-        if "-rc" in text:
-            text = text.split("-rc", 1)[0]
-        return text

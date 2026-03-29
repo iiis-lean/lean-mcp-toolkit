@@ -32,6 +32,7 @@ from ..plugin_base import (
     ToolHandler,
     ToolParamSpec,
     ToolReturnSpec,
+    run_sync_mcp_service_handler,
 )
 
 
@@ -306,7 +307,7 @@ class SearchNavGroupPlugin(GroupPlugin):
             spec = _TOOL_SPEC_MAP["search.repo_nav.tree"]
 
             @mcp.tool(name=alias, description=spec.render_mcp_description())
-            def _repo_nav_tree(
+            async def _repo_nav_tree(
                 repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
                 base: Annotated[str | None, Field(description=_param_desc(spec, "base"))] = None,
                 depth: Annotated[int | None, Field(description=_param_desc(spec, "depth"))] = None,
@@ -325,13 +326,17 @@ class SearchNavGroupPlugin(GroupPlugin):
                     "limit": limit,
                     "offset": offset,
                 }
-                return handle_search_repo_nav_tree(service, prune_none(payload))
+                return await run_sync_mcp_service_handler(
+                    handle_search_repo_nav_tree,
+                    service,
+                    prune_none(payload),
+                )
 
         for alias in aliases_by_canonical.get("search.repo_nav.file_outline", ()): 
             spec = _TOOL_SPEC_MAP["search.repo_nav.file_outline"]
 
             @mcp.tool(name=alias, description=spec.render_mcp_description())
-            def _repo_nav_file_outline(
+            async def _repo_nav_file_outline(
                 target: Annotated[str, Field(description=_param_desc(spec, "target"))],
                 repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
                 include_imports: Annotated[
@@ -369,13 +374,17 @@ class SearchNavGroupPlugin(GroupPlugin):
                     "include_scope_cmds": include_scope_cmds,
                     "limit_decls": limit_decls,
                 }
-                return handle_search_repo_nav_file_outline(service, prune_none(payload))
+                return await run_sync_mcp_service_handler(
+                    handle_search_repo_nav_file_outline,
+                    service,
+                    prune_none(payload),
+                )
 
         for alias in aliases_by_canonical.get("search.repo_nav.read", ()): 
             spec = _TOOL_SPEC_MAP["search.repo_nav.read"]
 
             @mcp.tool(name=alias, description=spec.render_mcp_description())
-            def _repo_nav_read(
+            async def _repo_nav_read(
                 target: Annotated[str, Field(description=_param_desc(spec, "target"))],
                 repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
                 start_line: Annotated[int | None, Field(description=_param_desc(spec, "start_line"))] = None,
@@ -394,13 +403,17 @@ class SearchNavGroupPlugin(GroupPlugin):
                     "max_lines": max_lines,
                     "with_line_numbers": with_line_numbers,
                 }
-                return handle_search_repo_nav_read(service, prune_none(payload))
+                return await run_sync_mcp_service_handler(
+                    handle_search_repo_nav_read,
+                    service,
+                    prune_none(payload),
+                )
 
         for alias in aliases_by_canonical.get("search.local_decl.find", ()): 
             spec = _TOOL_SPEC_MAP["search.local_decl.find"]
 
             @mcp.tool(name=alias, description=spec.render_mcp_description())
-            def _local_decl_find(
+            async def _local_decl_find(
                 query: Annotated[str, Field(description=_param_desc(spec, "query"))],
                 repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
                 match_mode: Annotated[str, Field(description=_param_desc(spec, "match_mode"))] = "prefix",
@@ -432,13 +445,17 @@ class SearchNavGroupPlugin(GroupPlugin):
                     "include_deps": include_deps,
                     "limit": limit,
                 }
-                return handle_search_local_decl_find(service, prune_none(payload))
+                return await run_sync_mcp_service_handler(
+                    handle_search_local_decl_find,
+                    service,
+                    prune_none(payload),
+                )
 
         for alias in aliases_by_canonical.get("search.local_import.find", ()): 
             spec = _TOOL_SPEC_MAP["search.local_import.find"]
 
             @mcp.tool(name=alias, description=spec.render_mcp_description())
-            def _local_import_find(
+            async def _local_import_find(
                 query: Annotated[str, Field(description=_param_desc(spec, "query"))],
                 repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
                 match_mode: Annotated[str, Field(description=_param_desc(spec, "match_mode"))] = "exact",
@@ -462,13 +479,17 @@ class SearchNavGroupPlugin(GroupPlugin):
                     "include_deps": include_deps,
                     "limit": limit,
                 }
-                return handle_search_local_import_find(service, prune_none(payload))
+                return await run_sync_mcp_service_handler(
+                    handle_search_local_import_find,
+                    service,
+                    prune_none(payload),
+                )
 
         for alias in aliases_by_canonical.get("search.local_scope.find", ()): 
             spec = _TOOL_SPEC_MAP["search.local_scope.find"]
 
             @mcp.tool(name=alias, description=spec.render_mcp_description())
-            def _local_scope_find(
+            async def _local_scope_find(
                 repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
                 query: Annotated[str | None, Field(description=_param_desc(spec, "query"))] = None,
                 scope_kinds: Annotated[
@@ -500,13 +521,17 @@ class SearchNavGroupPlugin(GroupPlugin):
                     "limit": limit,
                     "context_lines": context_lines,
                 }
-                return handle_search_local_scope_find(service, prune_none(payload))
+                return await run_sync_mcp_service_handler(
+                    handle_search_local_scope_find,
+                    service,
+                    prune_none(payload),
+                )
 
         for alias in aliases_by_canonical.get("search.local_text.find", ()): 
             spec = _TOOL_SPEC_MAP["search.local_text.find"]
 
             @mcp.tool(name=alias, description=spec.render_mcp_description())
-            def _local_text_find(
+            async def _local_text_find(
                 query: Annotated[str, Field(description=_param_desc(spec, "query"))],
                 repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
                 scopes: Annotated[
@@ -538,13 +563,17 @@ class SearchNavGroupPlugin(GroupPlugin):
                     "limit": limit,
                     "context_lines": context_lines,
                 }
-                return handle_search_local_text_find(service, prune_none(payload))
+                return await run_sync_mcp_service_handler(
+                    handle_search_local_text_find,
+                    service,
+                    prune_none(payload),
+                )
 
         for alias in aliases_by_canonical.get("search.local_refs.find", ()): 
             spec = _TOOL_SPEC_MAP["search.local_refs.find"]
 
             @mcp.tool(name=alias, description=spec.render_mcp_description())
-            def _local_refs_find(
+            async def _local_refs_find(
                 symbol: Annotated[str, Field(description=_param_desc(spec, "symbol"))],
                 repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
                 include_definition_site: Annotated[
@@ -579,7 +608,11 @@ class SearchNavGroupPlugin(GroupPlugin):
                     "limit": limit,
                     "context_lines": context_lines,
                 }
-                return handle_search_local_refs_find(service, prune_none(payload))
+                return await run_sync_mcp_service_handler(
+                    handle_search_local_refs_find,
+                    service,
+                    prune_none(payload),
+                )
 
 
 __all__ = ["SearchNavGroupPlugin"]

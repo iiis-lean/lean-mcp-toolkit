@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
+from weakref import WeakKeyDictionary
 from typing import Any, Callable, Mapping, Protocol
 
 from ..backends.context import BackendContext
@@ -11,6 +13,48 @@ from ..contracts.base import JsonDict
 from ..transport.http import HttpConfig
 
 ToolHandler = Callable[[JsonDict], JsonDict]
+
+DEFAULT_MCP_BLOCKING_TOOL_MAX_CONCURRENCY = 8
+_MCP_BLOCKING_TOOL_SEMAPHORES: WeakKeyDictionary[
+    asyncio.AbstractEventLoop,
+    dict[int, asyncio.Semaphore],
+] = WeakKeyDictionary()
+
+
+def _get_mcp_blocking_tool_semaphore(limit: int) -> asyncio.Semaphore:
+    normalized = max(int(limit), 1)
+    loop = asyncio.get_running_loop()
+    per_loop = _MCP_BLOCKING_TOOL_SEMAPHORES.setdefault(loop, {})
+    sem = per_loop.get(normalized)
+    if sem is None:
+        sem = asyncio.Semaphore(normalized)
+        per_loop[normalized] = sem
+    return sem
+
+
+async def run_sync_mcp_handler(
+    handler: Callable[[JsonDict], JsonDict],
+    payload: JsonDict,
+    *,
+    max_concurrency: int = DEFAULT_MCP_BLOCKING_TOOL_MAX_CONCURRENCY,
+) -> JsonDict:
+    """Run a synchronous MCP handler off the event loop."""
+    sem = _get_mcp_blocking_tool_semaphore(max_concurrency)
+    async with sem:
+        return await asyncio.to_thread(handler, payload)
+
+
+async def run_sync_mcp_service_handler(
+    handler: Callable[[Any, JsonDict], JsonDict],
+    service: Any,
+    payload: JsonDict,
+    *,
+    max_concurrency: int = DEFAULT_MCP_BLOCKING_TOOL_MAX_CONCURRENCY,
+) -> JsonDict:
+    """Run a synchronous service-bound MCP handler off the event loop."""
+    sem = _get_mcp_blocking_tool_semaphore(max_concurrency)
+    async with sem:
+        return await asyncio.to_thread(handler, service, payload)
 
 
 @dataclass(slots=True, frozen=True)

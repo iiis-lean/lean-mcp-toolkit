@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import inspect
 
 import pytest
 
 from lean_mcp_toolkit.app import ToolkitServer
 from lean_mcp_toolkit.config import ToolkitConfig
+from lean_mcp_toolkit.groups import builtin_group_plugins
 from lean_mcp_toolkit.groups.plugin_base import GroupToolSpec
 
 
@@ -129,3 +131,46 @@ def test_plugin_tool_naming_mode_both_and_unknown_group_ignored() -> None:
     assert set(server.available_tool_aliases()) == {"fake.alpha", "fake.beta", "alpha", "beta"}
     assert server.dispatch_api("fake.beta", {})["tool"] == "fake.beta"
     assert server.dispatch_api("beta", {})["tool"] == "fake.beta"
+
+
+class _CaptureMCP:
+    def __init__(self) -> None:
+        self.handlers: dict[str, object] = {}
+
+    def tool(self, *, name: str, description: str):
+        _ = description
+
+        def _decorator(fn):
+            self.handlers[name] = fn
+            return fn
+
+        return _decorator
+
+
+def test_builtin_plugins_register_async_mcp_tools() -> None:
+    def _normalize_str_list(value):
+        if value is None or isinstance(value, list):
+            return value
+        return [value]
+
+    def _prune_none(payload: dict[str, object]) -> dict[str, object]:
+        return {k: v for k, v in payload.items() if v is not None}
+
+    for plugin in builtin_group_plugins():
+        mcp = _CaptureMCP()
+        aliases_by_canonical = {
+            spec.canonical_name: (spec.canonical_name,)
+            for spec in plugin.tool_specs()
+        }
+        plugin.register_mcp_tools(
+            mcp,
+            service=object(),
+            aliases_by_canonical=aliases_by_canonical,
+            normalize_str_list=_normalize_str_list,
+            prune_none=_prune_none,
+        )
+        assert mcp.handlers, plugin.group_name
+        assert all(
+            inspect.iscoroutinefunction(handler)
+            for handler in mcp.handlers.values()
+        ), plugin.group_name

@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+import inspect
 import os
 from pathlib import Path
 import re
+import threading
+import time
 import uuid
 
 from ...backends.declarations import (
     DeclarationsBackend,
     DeclarationsBackendRequest,
+    DeclarationsBackendResponse,
     LeanInteractDeclarationsBackend,
     NativeDeclarationsBackend,
 )
@@ -39,8 +43,17 @@ from ...core.services import DiagnosticsService
 from .parsing.context_extractor import ContextExtractor
 from .parsing.diagnostic_parser import LeanDiagnosticParser
 
-_AXIOM_DEPENDS_RE = re.compile(r"^'(?P<decl>.+?)'\s+depends on axioms:\s*\[(?P<axioms>.*)\]\s*$")
+_AXIOM_DEPENDS_RE = re.compile(
+    r"^'(?P<decl>.+?)'\s+depends on axioms:\s*\[(?P<axioms>.*?)\]\s*$",
+    re.DOTALL,
+)
 _AXIOM_NONE_RE = re.compile(r"^'(?P<decl>.+?)'\s+does not depend on any axioms\s*$")
+_TOP_LEVEL_ALIAS_RE = re.compile(
+    r"^alias\s+(?P<target>.+?)\s*:=\s*(?P<export>[A-Za-z0-9_'.]+)\s*$"
+)
+_TOP_LEVEL_DECL_HEAD_RE = re.compile(
+    r"^(?P<kw>theorem|lemma|def|abbrev|instance|axiom|constant|structure|class|inductive)\b"
+)
 
 
 @dataclass(slots=True, frozen=True)
@@ -71,6 +84,35 @@ class AxiomProbeJob:
 
 
 @dataclass(slots=True)
+class _InflightCall:
+    event: threading.Event = field(default_factory=threading.Event)
+    result: object | None = None
+    error: BaseException | None = None
+
+
+@dataclass(slots=True, frozen=True)
+class _RequestBudget:
+    deadline_monotonic: float | None
+
+    def remaining_timeout_seconds(self) -> int | None:
+        if self.deadline_monotonic is None:
+            return None
+        remaining = self.deadline_monotonic - time.monotonic()
+        if remaining <= 0:
+            return 0
+        return max(1, int(remaining + 0.999))
+
+    def remaining_wait_seconds(self) -> float | None:
+        if self.deadline_monotonic is None:
+            return None
+        return max(0.0, self.deadline_monotonic - time.monotonic())
+
+
+class _RequestTimeoutError(TimeoutError):
+    pass
+
+
+@dataclass(slots=True)
 class DiagnosticsServiceImpl(DiagnosticsService):
     """Default diagnostics service implementation."""
 
@@ -81,6 +123,15 @@ class DiagnosticsServiceImpl(DiagnosticsService):
     context_extractor: ContextExtractor
     declarations_backends: dict[str, DeclarationsBackend]
     lsp_client_manager: LeanLSPClientManager
+    _coord_lock: threading.Lock = field(init=False, repr=False)
+    _scope_locks: dict[tuple[str, tuple[str, ...]], threading.Lock] = field(
+        init=False,
+        repr=False,
+    )
+    _inflight_calls: dict[tuple[str, tuple[str, tuple[str, ...]], tuple[object, ...]], _InflightCall] = field(
+        init=False,
+        repr=False,
+    )
 
     def __init__(
         self,
@@ -111,8 +162,46 @@ class DiagnosticsServiceImpl(DiagnosticsService):
         self.lsp_client_manager = lsp_client_manager or LeanLSPClientManager(
             backend_config=config.backends.lsp
         )
+        self._coord_lock = threading.Lock()
+        self._scope_locks = {}
+        self._inflight_calls = {}
 
     def run_build(self, req: BuildRequest) -> BuildResponse:
+        budget = self._build_request_budget(req.timeout_seconds)
+        try:
+            return self._run_with_target_coordination(
+                op_name="build",
+                scope=self._coordination_scope(
+                    project_root=req.project_root,
+                    targets=req.targets,
+                ),
+                signature=(
+                    bool(req.build_deps)
+                    if req.build_deps is not None
+                    else bool(self.config.diagnostics.default_build_deps),
+                    bool(req.emit_artifacts)
+                    if req.emit_artifacts is not None
+                    else bool(self.config.diagnostics.default_emit_artifacts),
+                    bool(req.include_content)
+                    if req.include_content is not None
+                    else bool(self.config.diagnostics.default_include_content),
+                    int(req.context_lines)
+                    if req.context_lines is not None
+                    else int(self.config.diagnostics.default_context_lines),
+                    req.timeout_seconds,
+                ),
+                budget=budget,
+                func=lambda: self._run_build_impl(req, budget),
+            )
+        except _RequestTimeoutError as exc:
+            return BuildResponse(
+                success=False,
+                files=tuple(),
+                failed_stage="request_timeout",
+                stage_error_message=str(exc),
+            )
+
+    def _run_build_impl(self, req: BuildRequest, budget: _RequestBudget) -> BuildResponse:
         options = self._effective_build_options(req)
         resolved = self.resolver.resolve(
             project_root=options.project_root,
@@ -129,12 +218,16 @@ class DiagnosticsServiceImpl(DiagnosticsService):
         file_results: list[FileDiagnostics] = []
 
         if options.build_deps:
-            deps_result = self.runtime.run_lake_build(
+            deps_result = self._runtime_run_lake_build(
                 project_root=resolved.project_root_abs,
                 module_targets=resolved.module_dots(),
                 target_facet="deps",
-                timeout_s=options.timeout_seconds,
+                timeout_s=self._remaining_timeout_seconds(
+                    budget,
+                    operation="build_deps",
+                ),
                 jobs=self.config.backends.lean_command.lake_build_jobs,
+                deadline_monotonic=budget.deadline_monotonic,
             )
             if not deps_result.ok:
                 return BuildResponse(
@@ -150,7 +243,11 @@ class DiagnosticsServiceImpl(DiagnosticsService):
         batch_results = self._run_lean_json_batch(
             project_root=options.project_root,
             modules=resolved.modules,
-            timeout_seconds=options.timeout_seconds,
+            timeout_seconds=self._remaining_timeout_seconds(
+                budget,
+                operation="diagnostics",
+            ),
+            deadline_monotonic=budget.deadline_monotonic,
         )
         result_map = {rel_file: cmd_result for rel_file, cmd_result in batch_results}
         for module in resolved.modules:
@@ -171,12 +268,16 @@ class DiagnosticsServiceImpl(DiagnosticsService):
                 file_result.file for file_result in file_results if file_result.success
             )
             if success_modules:
-                emit_result = self.runtime.run_lake_build(
+                emit_result = self._runtime_run_lake_build(
                     project_root=resolved.project_root_abs,
                     module_targets=success_modules,
                     target_facet="leanArts",
-                    timeout_s=options.timeout_seconds,
+                    timeout_s=self._remaining_timeout_seconds(
+                        budget,
+                        operation="emit_artifacts",
+                    ),
                     jobs=self.config.backends.lean_command.lake_build_jobs,
+                    deadline_monotonic=budget.deadline_monotonic,
                 )
                 if not emit_result.ok:
                     return BuildResponse(
@@ -289,6 +390,42 @@ class DiagnosticsServiceImpl(DiagnosticsService):
             )
 
     def run_lint_no_sorry(self, req: LintRequest) -> NoSorryResult:
+        budget = self._build_request_budget(req.timeout_seconds)
+        try:
+            return self._run_with_target_coordination(
+                op_name="no_sorry",
+                scope=self._coordination_scope(
+                    project_root=req.project_root,
+                    targets=req.targets,
+                ),
+                signature=(
+                    bool(req.include_content)
+                    if req.include_content is not None
+                    else bool(self.config.diagnostics.default_include_content),
+                    int(req.context_lines)
+                    if req.context_lines is not None
+                    else int(self.config.diagnostics.default_context_lines),
+                    req.timeout_seconds,
+                ),
+                budget=budget,
+                func=lambda: self._run_lint_no_sorry_impl(req, budget),
+            )
+        except _RequestTimeoutError as exc:
+            return NoSorryResult(
+                check_id="no_sorry",
+                success=False,
+                message=str(exc),
+                sorries=tuple(),
+            )
+
+    def _run_lint_no_sorry_impl(self, req: LintRequest, budget: _RequestBudget) -> NoSorryResult:
+        if not req.targets:
+            return NoSorryResult(
+                check_id="no_sorry",
+                success=False,
+                message=self._lint_targets_required_message(),
+                sorries=tuple(),
+            )
         lint_options = self._effective_lint_options(req)
         build_req = BuildRequest(
             project_root=str(lint_options.project_root),
@@ -297,9 +434,12 @@ class DiagnosticsServiceImpl(DiagnosticsService):
             emit_artifacts=False,
             include_content=lint_options.include_content,
             context_lines=lint_options.context_lines,
-            timeout_seconds=lint_options.timeout_seconds,
+            timeout_seconds=self._remaining_timeout_seconds(
+                budget,
+                operation="no_sorry",
+            ),
         )
-        build_resp = self.run_build(build_req)
+        build_resp = self._run_build_impl(build_req, budget)
         if build_resp.failed_stage in {"build_deps", "emit_artifacts"}:
             stage_msg = build_resp.stage_error_message or f"stage failure: {build_resp.failed_stage}"
             return NoSorryResult(
@@ -325,30 +465,119 @@ class DiagnosticsServiceImpl(DiagnosticsService):
         )
 
     def run_lint(self, req: LintRequest) -> LintResponse:
-        enabled = req.enabled_checks or self.config.diagnostics.default_enabled_checks
+        enabled = tuple(req.enabled_checks or self.config.diagnostics.default_enabled_checks)
+        budget = self._build_request_budget(req.timeout_seconds)
+        try:
+            return self._run_with_target_coordination(
+                op_name="lint",
+                scope=self._coordination_scope(
+                    project_root=req.project_root,
+                    targets=req.targets,
+                ),
+                signature=(
+                    enabled,
+                    bool(req.include_content)
+                    if req.include_content is not None
+                    else bool(self.config.diagnostics.default_include_content),
+                    int(req.context_lines)
+                    if req.context_lines is not None
+                    else int(self.config.diagnostics.default_context_lines),
+                    req.timeout_seconds,
+                ),
+                budget=budget,
+                func=lambda: self._run_lint_impl(req, enabled, budget),
+            )
+        except _RequestTimeoutError as exc:
+            return LintResponse(
+                success=False,
+                checks=(
+                    CheckResult(
+                        check_id="request_timeout",
+                        success=False,
+                        message=str(exc),
+                    ),
+                ),
+            )
+
+    def _run_lint_impl(
+        self,
+        req: LintRequest,
+        enabled: tuple[str, ...],
+        budget: _RequestBudget,
+    ) -> LintResponse:
         checks: list[CheckResult] = []
 
         for check_id in enabled:
             cid = check_id.strip()
             if not cid:
                 continue
-            if cid == "no_sorry":
-                checks.append(self.run_lint_no_sorry(req))
-            elif cid == "axiom_audit":
-                checks.append(self.run_lint_axiom_audit(req))
-            else:
+            try:
+                if cid == "no_sorry":
+                    checks.append(self._run_lint_no_sorry_impl(req, budget))
+                elif cid == "axiom_audit":
+                    checks.append(self._run_lint_axiom_audit_impl(req, budget))
+                else:
+                    checks.append(
+                        CheckResult(
+                            check_id=cid,
+                            success=False,
+                            message=f"not implemented lint check: {cid}",
+                        )
+                    )
+            except _RequestTimeoutError as exc:
                 checks.append(
                     CheckResult(
                         check_id=cid,
                         success=False,
-                        message=f"not implemented lint check: {cid}",
+                        message=str(exc),
                     )
                 )
+                break
 
         success = all(check.success for check in checks)
         return LintResponse(success=success, checks=tuple(checks))
 
     def run_lint_axiom_audit(self, req: LintRequest) -> AxiomAuditResult:
+        budget = self._build_request_budget(req.timeout_seconds)
+        try:
+            return self._run_with_target_coordination(
+                op_name="axiom_audit",
+                scope=self._coordination_scope(
+                    project_root=req.project_root,
+                    targets=req.targets,
+                ),
+                signature=(
+                    bool(req.include_content)
+                    if req.include_content is not None
+                    else bool(self.config.diagnostics.default_include_content),
+                    int(req.context_lines)
+                    if req.context_lines is not None
+                    else int(self.config.diagnostics.default_context_lines),
+                    req.timeout_seconds,
+                ),
+                budget=budget,
+                func=lambda: self._run_lint_axiom_audit_impl(req, budget),
+            )
+        except _RequestTimeoutError as exc:
+            return AxiomAuditResult(
+                check_id="axiom_audit",
+                success=False,
+                message=str(exc),
+                declared_axioms=tuple(),
+                usage_issues=tuple(),
+                unresolved=tuple(),
+            )
+
+    def _run_lint_axiom_audit_impl(self, req: LintRequest, budget: _RequestBudget) -> AxiomAuditResult:
+        if not req.targets:
+            return AxiomAuditResult(
+                check_id="axiom_audit",
+                success=False,
+                message=self._lint_targets_required_message(),
+                declared_axioms=tuple(),
+                usage_issues=tuple(),
+                unresolved=tuple(),
+            )
         options = self._effective_lint_options(req)
         resolved = self.resolver.resolve(
             project_root=options.project_root,
@@ -364,12 +593,16 @@ class DiagnosticsServiceImpl(DiagnosticsService):
                 unresolved=tuple(),
             )
 
-        artifact_result = self.runtime.run_lake_build(
+        artifact_result = self._runtime_run_lake_build(
             project_root=resolved.project_root_abs,
             module_targets=resolved.module_dots(),
             target_facet="leanArts",
-            timeout_s=options.timeout_seconds,
+            timeout_s=self._remaining_timeout_seconds(
+                budget,
+                operation="axiom_audit.prepare_target",
+            ),
             jobs=self.config.backends.lean_command.lake_build_jobs,
+            deadline_monotonic=budget.deadline_monotonic,
         )
         if not artifact_result.ok:
             msg = self._format_command_failure_message(
@@ -408,13 +641,53 @@ class DiagnosticsServiceImpl(DiagnosticsService):
             for item in self.config.diagnostics.axiom_audit_decl_kinds
             if item.strip()
         }
+        modules_for_extract = tuple(
+            module
+            for module in resolved.modules
+            if self._module_may_contain_auditable_declarations(
+                module=module,
+                project_root=options.project_root,
+            )
+        )
+        backend_reqs = tuple(
+            DeclarationsBackendRequest(
+                project_root=options.project_root,
+                target_dot=module.dot,
+                timeout_seconds=options.timeout_seconds,
+            )
+            for module in modules_for_extract
+        )
+        declarations_resps = backend.extract_batch(backend_reqs)
+        declarations_resp_by_dot = {
+            module.dot: resp
+            for module, resp in zip(modules_for_extract, declarations_resps)
+        }
+
         for module in resolved.modules:
-            declarations_resp = backend.extract(
-                DeclarationsBackendRequest(
-                    project_root=options.project_root,
-                    target_dot=module.dot,
-                    timeout_seconds=options.timeout_seconds,
+            alias_exports = self._find_top_level_alias_exports(
+                module=module,
+                project_root=options.project_root,
+            )
+            for export_name in alias_exports:
+                unresolved.append(
+                    AxiomUsageUnresolved(
+                        fileName=module.dot,
+                        declaration=export_name,
+                        reason=(
+                            "top-level alias declarations are disallowed in audited files; "
+                            "replace alias with an explicit abbrev/def/theorem wrapper"
+                        ),
+                    )
                 )
+            declarations_resp = declarations_resp_by_dot.get(
+                module.dot,
+                DeclarationsBackendResponse(
+                    success=True,
+                    error_message=None,
+                    declarations=tuple(),
+                    messages=tuple(),
+                    sorries=tuple(),
+                ),
             )
             if not declarations_resp.success and declarations_resp.error_message:
                 unresolved.append(
@@ -593,6 +866,77 @@ class DiagnosticsServiceImpl(DiagnosticsService):
             usage_issues=tuple(usage_issues),
             unresolved=tuple(unresolved),
         )
+
+    def _coordination_scope(
+        self,
+        *,
+        project_root: str | None,
+        targets: tuple[str, ...] | None,
+    ) -> tuple[str, tuple[str, ...]] | None:
+        if not targets:
+            return None
+        try:
+            resolved_project_root = self._resolve_project_root(project_root)
+            resolved = self.resolver.resolve(
+                project_root=resolved_project_root,
+                targets=list(targets),
+            )
+        except Exception:
+            return None
+        rel_files = tuple(module.to_rel_file() for module in resolved.modules)
+        if not rel_files:
+            return None
+        return (str(resolved_project_root), rel_files)
+
+    def _run_with_target_coordination(
+        self,
+        *,
+        op_name: str,
+        scope: tuple[str, tuple[str, ...]] | None,
+        signature: tuple[object, ...],
+        budget: _RequestBudget,
+        func,
+    ):
+        if scope is None:
+            self._ensure_budget_active(budget, operation=op_name)
+            return func()
+
+        inflight_key = (op_name, scope, signature)
+        with self._coord_lock:
+            entry = self._inflight_calls.get(inflight_key)
+            if entry is None:
+                entry = _InflightCall()
+                self._inflight_calls[inflight_key] = entry
+                is_owner = True
+            else:
+                is_owner = False
+            scope_lock = self._scope_locks.setdefault(scope, threading.Lock())
+
+        if not is_owner:
+            wait_s = budget.remaining_wait_seconds()
+            if wait_s is not None and wait_s <= 0:
+                raise _RequestTimeoutError(f"{op_name} request timed out")
+            finished = entry.event.wait(wait_s)
+            if not finished:
+                raise _RequestTimeoutError(f"{op_name} request timed out")
+            if entry.error is not None:
+                raise entry.error
+            return entry.result
+
+        try:
+            with scope_lock:
+                self._ensure_budget_active(budget, operation=op_name)
+                result = func()
+        except BaseException as exc:
+            entry.error = exc
+            raise
+        else:
+            entry.result = result
+            return result
+        finally:
+            entry.event.set()
+            with self._coord_lock:
+                self._inflight_calls.pop(inflight_key, None)
 
     def _resolve_declarations_backend(self) -> DeclarationsBackend | None:
         return self.declarations_backends.get(self.config.declarations.default_backend)
@@ -823,14 +1167,55 @@ class DiagnosticsServiceImpl(DiagnosticsService):
         short = normalized.split(".")[-1].strip() if normalized else ""
 
         candidates: list[str] = []
-        for item in (raw, normalized):
+        module_qualified = f"{module.dot}.{short}" if short else ""
+        for item in (module_qualified, raw, normalized):
             if item and item not in candidates:
                 candidates.append(item)
-
-        module_qualified = f"{module.dot}.{short}" if short else ""
-        if module_qualified and module_qualified not in candidates:
-            candidates.append(module_qualified)
         return tuple(candidates)
+
+    def _find_top_level_alias_exports(
+        self,
+        *,
+        module: LeanPath,
+        project_root: Path,
+    ) -> tuple[str, ...]:
+        try:
+            text = module.to_abs_file(project_root).read_text(encoding="utf-8")
+        except Exception:
+            return tuple()
+        names: list[str] = []
+        for raw in text.splitlines():
+            line = raw.strip("\n")
+            match = _TOP_LEVEL_ALIAS_RE.match(line)
+            if match is None:
+                continue
+            export_name = match.group("export").strip()
+            if export_name and export_name not in names:
+                names.append(export_name)
+        return tuple(names)
+
+    def _module_may_contain_auditable_declarations(
+        self,
+        *,
+        module: LeanPath,
+        project_root: Path,
+    ) -> bool:
+        abs_file = (project_root / module.to_rel_file()).resolve()
+        try:
+            text = abs_file.read_text(encoding="utf-8")
+        except Exception:
+            return True
+        for raw in text.splitlines():
+            stripped = raw.strip()
+            if not stripped or stripped.startswith("--") or stripped.startswith("/-"):
+                continue
+            if raw[:1].isspace():
+                continue
+            if _TOP_LEVEL_ALIAS_RE.match(stripped) is not None:
+                return True
+            if _TOP_LEVEL_DECL_HEAD_RE.match(stripped) is not None:
+                return True
+        return False
 
     def _build_axiom_probe_round_jobs(
         self,
@@ -915,6 +1300,10 @@ class DiagnosticsServiceImpl(DiagnosticsService):
             ),
         )
 
+    @staticmethod
+    def _lint_targets_required_message() -> str:
+        return "lint requires explicit Lean file or directory targets; targets must be non-empty"
+
     def _resolve_project_root(self, project_root: str | None) -> Path:
         root = project_root or self.config.server.default_project_root or os.getcwd()
         return Path(root).expanduser().resolve()
@@ -928,7 +1317,7 @@ class DiagnosticsServiceImpl(DiagnosticsService):
     ) -> FileDiagnostics:
         if cmd_result is None:
             rel_file = module.to_rel_file()
-            cmd_result = self.runtime.run_lean_json(
+            cmd_result = self._runtime_run_lean_json(
                 project_root=options.project_root,
                 rel_file=rel_file,
                 timeout_s=options.timeout_seconds,
@@ -969,12 +1358,14 @@ class DiagnosticsServiceImpl(DiagnosticsService):
         project_root: Path,
         modules: tuple[LeanPath, ...],
         timeout_seconds: int | None,
+        deadline_monotonic: float | None = None,
     ) -> tuple[tuple[str, CommandResult], ...]:
         rel_files = tuple(module.to_rel_file() for module in modules)
         return self._run_lean_json_rel_files_batch(
             project_root=project_root,
             rel_files=rel_files,
             timeout_seconds=timeout_seconds,
+            deadline_monotonic=deadline_monotonic,
         )
 
     def _run_lean_json_rel_files_batch(
@@ -983,28 +1374,65 @@ class DiagnosticsServiceImpl(DiagnosticsService):
         project_root: Path,
         rel_files: tuple[str, ...],
         timeout_seconds: int | None,
+        deadline_monotonic: float | None = None,
     ) -> tuple[tuple[str, CommandResult], ...]:
         batch_runner = getattr(self.runtime, "run_lean_json_batch", None)
         if callable(batch_runner):
             return tuple(
-                batch_runner(
+                self._call_runtime_method(
+                    batch_runner,
                     project_root=project_root,
                     rel_files=rel_files,
                     timeout_s=timeout_seconds,
+                    deadline_monotonic=deadline_monotonic,
                 )
             )
 
         return tuple(
             (
                 rel_file,
-                self.runtime.run_lean_json(
+                self._runtime_run_lean_json(
                     project_root=project_root,
                     rel_file=rel_file,
                     timeout_s=timeout_seconds,
+                    deadline_monotonic=deadline_monotonic,
                 ),
             )
             for rel_file in rel_files
         )
+
+    @staticmethod
+    def _build_request_budget(timeout_seconds: int | None) -> _RequestBudget:
+        if timeout_seconds is None:
+            return _RequestBudget(deadline_monotonic=None)
+        return _RequestBudget(deadline_monotonic=time.monotonic() + max(0, timeout_seconds))
+
+    @staticmethod
+    def _ensure_budget_active(budget: _RequestBudget, *, operation: str) -> None:
+        remaining = budget.remaining_wait_seconds()
+        if remaining is not None and remaining <= 0:
+            raise _RequestTimeoutError(f"{operation} request timed out")
+
+    def _remaining_timeout_seconds(
+        self,
+        budget: _RequestBudget,
+        *,
+        operation: str,
+    ) -> int | None:
+        self._ensure_budget_active(budget, operation=operation)
+        return budget.remaining_timeout_seconds()
+
+    def _runtime_run_lake_build(self, **kwargs) -> CommandResult:
+        return self._call_runtime_method(self.runtime.run_lake_build, **kwargs)
+
+    def _runtime_run_lean_json(self, **kwargs) -> CommandResult:
+        return self._call_runtime_method(self.runtime.run_lean_json, **kwargs)
+
+    @staticmethod
+    def _call_runtime_method(method, **kwargs):
+        params = inspect.signature(method).parameters
+        filtered = {key: value for key, value in kwargs.items() if key in params}
+        return method(**filtered)
 
     def _missing_batch_result(self, *, rel_file: str) -> CommandResult:
         return CommandResult(

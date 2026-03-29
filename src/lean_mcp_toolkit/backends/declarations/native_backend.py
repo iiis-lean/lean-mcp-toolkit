@@ -17,3 +17,9 @@ class NativeDeclarationsBackend:
             error_message="declarations backend `native` is not implemented",
             declarations=tuple(),
         )
+
+    def extract_batch(
+        self,
+        reqs: tuple[DeclarationsBackendRequest, ...],
+    ) -> tuple[DeclarationsBackendResponse, ...]:
+        return tuple(self.extract(req) for req in reqs)

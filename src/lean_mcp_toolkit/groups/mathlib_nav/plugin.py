@@ -27,6 +27,7 @@ from ..plugin_base import (
     ToolHandler,
     ToolParamSpec,
     ToolReturnSpec,
+    run_sync_mcp_service_handler,
 )
 
 
@@ -171,7 +172,7 @@ class MathlibNavGroupPlugin(GroupPlugin):
             spec = _TOOL_SPEC_MAP["search.mathlib_nav.tree"]
 
             @mcp.tool(name=alias, description=spec.render_mcp_description())
-            def _mathlib_nav_tree(
+            async def _mathlib_nav_tree(
                 project_root: Annotated[
                     str | None,
                     Field(description=_param_desc(spec, "project_root")),
@@ -200,13 +201,17 @@ class MathlibNavGroupPlugin(GroupPlugin):
                         "offset": offset,
                     }
                 )
-                return handle_search_mathlib_nav_tree(service, payload)
+                return await run_sync_mcp_service_handler(
+                    handle_search_mathlib_nav_tree,
+                    service,
+                    payload,
+                )
 
         for alias in aliases_by_canonical.get("search.mathlib_nav.file_outline", ()):
             spec = _TOOL_SPEC_MAP["search.mathlib_nav.file_outline"]
 
             @mcp.tool(name=alias, description=spec.render_mcp_description())
-            def _mathlib_nav_file_outline(
+            async def _mathlib_nav_file_outline(
                 target: Annotated[str, Field(description=_param_desc(spec, "target"))],
                 project_root: Annotated[
                     str | None,
@@ -254,13 +259,17 @@ class MathlibNavGroupPlugin(GroupPlugin):
                         "limit_decls": limit_decls,
                     }
                 )
-                return handle_search_mathlib_nav_file_outline(service, payload)
+                return await run_sync_mcp_service_handler(
+                    handle_search_mathlib_nav_file_outline,
+                    service,
+                    payload,
+                )
 
         for alias in aliases_by_canonical.get("search.mathlib_nav.read", ()):
             spec = _TOOL_SPEC_MAP["search.mathlib_nav.read"]
 
             @mcp.tool(name=alias, description=spec.render_mcp_description())
-            def _mathlib_nav_read(
+            async def _mathlib_nav_read(
                 target: Annotated[str, Field(description=_param_desc(spec, "target"))],
                 project_root: Annotated[
                     str | None,
@@ -298,7 +307,11 @@ class MathlibNavGroupPlugin(GroupPlugin):
                         "with_line_numbers": with_line_numbers,
                     }
                 )
-                return handle_search_mathlib_nav_read(service, payload)
+                return await run_sync_mcp_service_handler(
+                    handle_search_mathlib_nav_read,
+                    service,
+                    payload,
+                )
 
 
 __all__ = ["MathlibNavGroupPlugin"]

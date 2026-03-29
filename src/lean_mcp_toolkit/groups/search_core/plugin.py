@@ -24,6 +24,7 @@ from ..plugin_base import (
     ToolHandler,
     ToolParamSpec,
     ToolReturnSpec,
+    run_sync_mcp_service_handler,
 )
 
 
@@ -287,7 +288,7 @@ class SearchCoreGroupPlugin(GroupPlugin):
         prune_none,
     ) -> None:
         @mcp.tool(name=alias, description=spec.render_mcp_description())
-        def _search_mathlib_decl_find(
+        async def _search_mathlib_decl_find(
             query: Annotated[str, Field(description=_param_desc(spec, "query"))],
             limit: Annotated[int | None, Field(description=_param_desc(spec, "limit"))] = None,
             rerank_top: Annotated[
@@ -335,7 +336,11 @@ class SearchCoreGroupPlugin(GroupPlugin):
                 "include_dependencies": include_dependencies,
                 "include_informalization": include_informalization,
             }
-            return handle_search_mathlib_decl_find(service, prune_none(payload))
+            return await run_sync_mcp_service_handler(
+                handle_search_mathlib_decl_find,
+                service,
+                prune_none(payload),
+            )
 
     @staticmethod
     def _register_mathlib_get(
@@ -347,7 +352,7 @@ class SearchCoreGroupPlugin(GroupPlugin):
         prune_none,
     ) -> None:
         @mcp.tool(name=alias, description=spec.render_mcp_description())
-        def _search_mathlib_decl_get(
+        async def _search_mathlib_decl_get(
             declaration_id: Annotated[int, Field(description=_param_desc(spec, "declaration_id"))],
             include_module: Annotated[
                 bool,
@@ -383,7 +388,11 @@ class SearchCoreGroupPlugin(GroupPlugin):
                 "include_dependencies": include_dependencies,
                 "include_informalization": include_informalization,
             }
-            return handle_search_mathlib_decl_get(service, prune_none(payload))
+            return await run_sync_mcp_service_handler(
+                handle_search_mathlib_decl_get,
+                service,
+                prune_none(payload),
+            )
 
 
 __all__ = ["SearchCoreGroupPlugin"]

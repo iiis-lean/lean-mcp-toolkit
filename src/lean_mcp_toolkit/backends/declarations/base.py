@@ -37,3 +37,9 @@ class DeclarationsBackend(Protocol):
 
     def extract(self, req: DeclarationsBackendRequest) -> DeclarationsBackendResponse:
         ...
+
+    def extract_batch(
+        self,
+        reqs: tuple[DeclarationsBackendRequest, ...],
+    ) -> tuple[DeclarationsBackendResponse, ...]:
+        ...

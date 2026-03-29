@@ -24,6 +24,7 @@ from ..plugin_base import (
     ToolHandler,
     ToolParamSpec,
     ToolReturnSpec,
+    run_sync_mcp_service_handler,
 )
 
 _EXTRACT_PARAMS: tuple[ToolParamSpec, ...] = (
@@ -357,7 +358,7 @@ class DeclarationsGroupPlugin(GroupPlugin):
             name=alias,
             description=spec.render_mcp_description(),
         )
-        def _declarations_extract(
+        async def _declarations_extract(
             target: Annotated[
                 str,
                 Field(description=_param_desc(spec, "target")),
@@ -371,7 +372,11 @@ class DeclarationsGroupPlugin(GroupPlugin):
                 "project_root": project_root,
                 "target": target,
             }
-            return handle_declarations_extract(service, prune_none(payload))
+            return await run_sync_mcp_service_handler(
+                handle_declarations_extract,
+                service,
+                prune_none(payload),
+            )
 
     @staticmethod
     def _register_locate(
@@ -386,7 +391,7 @@ class DeclarationsGroupPlugin(GroupPlugin):
             name=alias,
             description=spec.render_mcp_description(),
         )
-        def _declarations_locate(
+        async def _declarations_locate(
             source_file: Annotated[
                 str,
                 Field(description=_param_desc(spec, "source_file")),
@@ -415,7 +420,11 @@ class DeclarationsGroupPlugin(GroupPlugin):
                 "line": line,
                 "column": column,
             }
-            return handle_declarations_locate(service, prune_none(payload))
+            return await run_sync_mcp_service_handler(
+                handle_declarations_locate,
+                service,
+                prune_none(payload),
+            )
 
 
 __all__ = ["DeclarationsGroupPlugin"]
