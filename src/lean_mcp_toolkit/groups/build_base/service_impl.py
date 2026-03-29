@@ -10,6 +10,7 @@ from ...backends.lean.path import TargetResolver
 from ...config import ToolkitConfig
 from ...contracts.build_base import BuildWorkspaceRequest, BuildWorkspaceResponse
 from ...core.services import BuildBaseService
+from ...tool_audit import audit_stage, get_current_audit_recorder
 
 
 @dataclass(slots=True)
@@ -33,36 +34,40 @@ class BuildBaseServiceImpl(BuildBaseService):
         self.resolver = resolver or TargetResolver()
 
     def run_workspace(self, req: BuildWorkspaceRequest) -> BuildWorkspaceResponse:
-        project_root = self._resolve_project_root(req.project_root)
-        clean_first = (
-            req.clean_first
-            if req.clean_first is not None
-            else self.config.build_base.default_clean_first
-        )
-        timeout_seconds = (
-            req.timeout_seconds
-            if req.timeout_seconds is not None
-            else self.config.build_base.default_timeout_seconds
-        )
-        jobs = (
-            req.jobs
-            if req.jobs is not None
-            else (
-                self.config.build_base.default_jobs
-                if self.config.build_base.default_jobs is not None
-                else self.config.backends.lean_command.lake_build_jobs
+        with audit_stage("resolve_targets"):
+            project_root = self._resolve_project_root(req.project_root)
+            clean_first = (
+                req.clean_first
+                if req.clean_first is not None
+                else self.config.build_base.default_clean_first
             )
-        )
+            timeout_seconds = (
+                req.timeout_seconds
+                if req.timeout_seconds is not None
+                else self.config.build_base.default_timeout_seconds
+            )
+            jobs = (
+                req.jobs
+                if req.jobs is not None
+                else (
+                    self.config.build_base.default_jobs
+                    if self.config.build_base.default_jobs is not None
+                    else self.config.backends.lean_command.lake_build_jobs
+                )
+            )
 
-        normalized_targets: tuple[str, ...]
-        if req.targets is None:
-            normalized_targets = tuple()
-        else:
-            resolved = self.resolver.resolve(
-                project_root=project_root,
-                targets=req.targets,
-            )
-            normalized_targets = resolved.module_dots()
+            normalized_targets: tuple[str, ...]
+            if req.targets is None:
+                normalized_targets = tuple()
+            else:
+                resolved = self.resolver.resolve(
+                    project_root=project_root,
+                    targets=req.targets,
+                )
+                normalized_targets = resolved.module_dots()
+            recorder = get_current_audit_recorder()
+            if recorder is not None:
+                recorder.set_attr("targets", list(normalized_targets))
 
         facet = (req.target_facet or "").strip() or None
         if facet is not None and not normalized_targets:
@@ -85,10 +90,11 @@ class BuildBaseServiceImpl(BuildBaseService):
         stderr_chunks: list[str] = []
 
         if clean_first:
-            clean_result = self.runtime.run_lake_clean(
-                project_root=project_root,
-                timeout_s=timeout_seconds,
-            )
+            with audit_stage("clean"):
+                clean_result = self.runtime.run_lake_clean(
+                    project_root=project_root,
+                    timeout_s=timeout_seconds,
+                )
             executed_commands.append(clean_result.args)
             if clean_result.stdout:
                 stdout_chunks.append(clean_result.stdout.rstrip())
@@ -107,13 +113,14 @@ class BuildBaseServiceImpl(BuildBaseService):
                     stage="clean",
                 )
 
-        build_result = self.runtime.run_lake_build(
-            project_root=project_root,
-            module_targets=normalized_targets,
-            target_facet=facet,
-            timeout_s=timeout_seconds,
-            jobs=jobs,
-        )
+        with audit_stage("build"):
+            build_result = self.runtime.run_lake_build(
+                project_root=project_root,
+                module_targets=normalized_targets,
+                target_facet=facet,
+                timeout_s=timeout_seconds,
+                jobs=jobs,
+            )
         executed_commands.append(build_result.args)
         if build_result.stdout:
             stdout_chunks.append(build_result.stdout.rstrip())

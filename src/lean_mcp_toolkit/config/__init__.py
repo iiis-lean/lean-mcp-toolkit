@@ -29,6 +29,7 @@ from .models import (
     ServerConfig,
     StateSearchProviderConfig,
     ToolchainConfig,
+    ToolkitAuditConfig,
     ToolkitConfig,
     WarmupCallConfig,
     WarmupConfig,
@@ -70,6 +71,7 @@ __all__ = [
     "WarmupCallConfig",
     "WarmupConfig",
     "ToolchainConfig",
+    "ToolkitAuditConfig",
     "ToolkitConfig",
     "load_toolkit_config",
 ]

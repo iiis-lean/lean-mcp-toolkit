@@ -26,6 +26,7 @@ from ...contracts.declarations import (
     DeclarationPosition,
 )
 from ...core.services import DeclarationsService
+from ...tool_audit import audit_stage, get_current_audit_recorder
 from .mappers import map_raw_declarations_to_items
 from .paths import normalize_single_target_to_dot
 
@@ -59,8 +60,15 @@ class DeclarationsServiceImpl(DeclarationsService):
 
     def extract(self, req: DeclarationExtractRequest) -> DeclarationExtractResponse:
         try:
-            project_root = self._resolve_project_root(req.project_root)
-            target_dot = normalize_single_target_to_dot(project_root=project_root, target=req.target)
+            with audit_stage("resolve_target"):
+                project_root = self._resolve_project_root(req.project_root)
+                target_dot = normalize_single_target_to_dot(
+                    project_root=project_root,
+                    target=req.target,
+                )
+                recorder = get_current_audit_recorder()
+                if recorder is not None:
+                    recorder.set_attr("target_dot", target_dot)
         except Exception as exc:
             return DeclarationExtractResponse(
                 success=False,
@@ -84,13 +92,15 @@ class DeclarationsServiceImpl(DeclarationsService):
             target_dot=target_dot,
             timeout_seconds=self.config.declarations.default_timeout_seconds,
         )
-        backend_resp = backend.extract(backend_req)
-        source_lines = self._load_source_lines(project_root=project_root, target_dot=target_dot)
-        declarations = map_raw_declarations_to_items(
-            backend_resp.declarations,
-            source_lines=source_lines,
-            include_value=self.config.declarations.default_include_value,
-        )
+        with audit_stage("backend_extract", attrs={"backend": backend_name}):
+            backend_resp = backend.extract(backend_req)
+        with audit_stage("map_items"):
+            source_lines = self._load_source_lines(project_root=project_root, target_dot=target_dot)
+            declarations = map_raw_declarations_to_items(
+                backend_resp.declarations,
+                source_lines=source_lines,
+                include_value=self.config.declarations.default_include_value,
+            )
         return DeclarationExtractResponse(
             success=backend_resp.success,
             error_message=backend_resp.error_message,
@@ -100,12 +110,13 @@ class DeclarationsServiceImpl(DeclarationsService):
 
     def locate(self, req: DeclarationLocateRequest) -> DeclarationLocateResponse:
         try:
-            project_root = self._resolve_project_root(req.project_root)
-            source_dot = normalize_single_target_to_dot(
-                project_root=project_root,
-                target=req.source_file,
-            )
-            source_rel = LeanPath.from_dot(source_dot).to_rel_file()
+            with audit_stage("resolve_target"):
+                project_root = self._resolve_project_root(req.project_root)
+                source_dot = normalize_single_target_to_dot(
+                    project_root=project_root,
+                    target=req.source_file,
+                )
+                source_rel = LeanPath.from_dot(source_dot).to_rel_file()
         except Exception as exc:
             return DeclarationLocateResponse(
                 success=False,
@@ -124,9 +135,10 @@ class DeclarationsServiceImpl(DeclarationsService):
             )
 
         try:
-            client = self.lsp_client_manager.get_client(project_root)
-            client.open_file(source_rel)
-            source_content = client.get_file_content(source_rel)
+            with audit_stage("client_acquire"):
+                client = self.lsp_client_manager.get_client(project_root)
+                client.open_file(source_rel)
+                source_content = client.get_file_content(source_rel)
         except Exception as exc:
             return DeclarationLocateResponse(
                 success=False,
@@ -148,9 +160,10 @@ class DeclarationsServiceImpl(DeclarationsService):
 
         line0, col0 = source_pos
         try:
-            candidates = client.get_declarations(source_rel, line0, col0)
-            if not candidates:
-                candidates = client.get_definitions(source_rel, line0, col0)
+            with audit_stage("request_lsp"):
+                candidates = client.get_declarations(source_rel, line0, col0)
+                if not candidates:
+                    candidates = client.get_definitions(source_rel, line0, col0)
         except Exception as exc:
             return DeclarationLocateResponse(
                 success=False,
@@ -190,11 +203,12 @@ class DeclarationsServiceImpl(DeclarationsService):
         )
         target_range = self._range_from_lsp(target_range_raw)
 
-        matched_decl = self._match_declaration_from_target(
-            project_root=project_root,
-            target_abs=target_abs,
-            candidate=candidate,
-        )
+        with audit_stage("match_declaration"):
+            matched_decl = self._match_declaration_from_target(
+                project_root=project_root,
+                target_abs=target_abs,
+                candidate=candidate,
+            )
 
         return DeclarationLocateResponse(
             success=True,

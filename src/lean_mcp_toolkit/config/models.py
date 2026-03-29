@@ -1312,6 +1312,33 @@ class ToolchainConfig:
 
 
 @dataclass(slots=True, frozen=True)
+class ToolkitAuditConfig:
+    enabled: bool = True
+    global_root: str | None = None
+    save_request_payload: bool = True
+    save_response_payload: bool = True
+
+    @classmethod
+    def from_dict(cls, data: JsonDict) -> "ToolkitAuditConfig":
+        return cls(
+            enabled=to_bool(data.get("enabled"), default=True),
+            global_root=(
+                str(data["global_root"]).strip() if data.get("global_root") is not None else None
+            ),
+            save_request_payload=to_bool(data.get("save_request_payload"), default=True),
+            save_response_payload=to_bool(data.get("save_response_payload"), default=True),
+        )
+
+    def to_dict(self) -> JsonDict:
+        return {
+            "enabled": self.enabled,
+            "global_root": self.global_root,
+            "save_request_payload": self.save_request_payload,
+            "save_response_payload": self.save_response_payload,
+        }
+
+
+@dataclass(slots=True, frozen=True)
 class ToolkitConfig:
     server: ServerConfig = field(default_factory=ServerConfig)
     groups: GroupActivationConfig = field(default_factory=GroupActivationConfig)
@@ -1329,6 +1356,7 @@ class ToolkitConfig:
     warmup: WarmupConfig = field(default_factory=WarmupConfig)
     backends: BackendsConfig = field(default_factory=BackendsConfig)
     toolchain: ToolchainConfig = field(default_factory=ToolchainConfig)
+    audit: ToolkitAuditConfig = field(default_factory=ToolkitAuditConfig)
     raw_group_overrides: JsonDict = field(default_factory=dict)
 
     @classmethod
@@ -1349,6 +1377,7 @@ class ToolkitConfig:
         raw_warmup = data.get("warmup")
         raw_backends = data.get("backends")
         raw_toolchain = data.get("toolchain")
+        raw_audit = data.get("audit")
         raw_overrides = data.get("raw_group_overrides")
 
         build_base = (
@@ -1442,6 +1471,11 @@ class ToolkitConfig:
                 if isinstance(raw_toolchain, dict)
                 else ToolchainConfig()
             ),
+            audit=(
+                ToolkitAuditConfig.from_dict(raw_audit)
+                if isinstance(raw_audit, dict)
+                else ToolkitAuditConfig()
+            ),
             raw_group_overrides=(dict(raw_overrides) if isinstance(raw_overrides, dict) else {}),
         )
 
@@ -1463,5 +1497,6 @@ class ToolkitConfig:
             "warmup": self.warmup.to_dict(),
             "backends": self.backends.to_dict(),
             "toolchain": self.toolchain.to_dict(),
+            "audit": self.audit.to_dict(),
             "raw_group_overrides": dict(self.raw_group_overrides),
         }

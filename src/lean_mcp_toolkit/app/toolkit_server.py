@@ -25,6 +25,7 @@ from ..core.services import (
 from ..groups import GroupPlugin, ToolHandler, builtin_group_plugins
 from ..groups.plugin_base import GroupToolSpec
 from ..groups.plugin_base import resolve_active_group_names, resolve_aliases_by_canonical
+from ..tool_audit import AuditedServiceProxy, ToolkitAuditLogger
 from .warmup import ToolkitWarmupRunner
 
 _LOG = logging.getLogger(__name__)
@@ -63,6 +64,7 @@ class ToolkitServer:
     )
     _backend_context: BackendContext | None = field(default=None, repr=False)
     _last_warmup_report: dict[str, Any] | None = field(default=None, repr=False)
+    _audit_logger: ToolkitAuditLogger | None = field(default=None, repr=False)
 
     @classmethod
     def from_config(
@@ -165,6 +167,39 @@ class ToolkitServer:
                 "project_root": None,
                 "steps": [],
             }
+
+        @app.get(
+            f"{self.api_prefix}/debug/calls/tail",
+            summary="Tail toolkit audit calls",
+            description="Return recent toolkit call audit summaries.",
+        )
+        def _debug_calls_tail(project_root: str | None = None, limit: int = 20):
+            logger = self._audit_logger
+            if logger is None:
+                return {"calls": []}
+            return {"calls": logger.tail_calls(project_root=project_root, limit=limit)}
+
+        @app.get(
+            f"{self.api_prefix}/debug/calls/{{call_id}}",
+            summary="Get toolkit audit call metadata",
+            description="Return metadata for a toolkit audit call.",
+        )
+        def _debug_call_detail(call_id: str, project_root: str | None = None):
+            logger = self._audit_logger
+            if logger is None:
+                return {"meta": None}
+            return {"meta": logger.load_call_meta(project_root=project_root, call_id=call_id)}
+
+        @app.get(
+            f"{self.api_prefix}/debug/calls/{{call_id}}/timing",
+            summary="Get toolkit audit call timing",
+            description="Return timing payload for a toolkit audit call.",
+        )
+        def _debug_call_timing(call_id: str, project_root: str | None = None):
+            logger = self._audit_logger
+            if logger is None:
+                return {"timing": None}
+            return {"timing": logger.load_call_timing(project_root=project_root, call_id=call_id)}
 
         for route_path, handler in sorted(self._api_route_handlers.items()):
             endpoint = self._make_fastapi_endpoint(handler=handler, route_path=route_path)
@@ -397,6 +432,7 @@ class ToolkitServer:
             available_group_names=tuple(plugin_by_name.keys()),
         )
         self._group_plugins = tuple(plugin_by_name[name] for name in active_group_names)
+        self._audit_logger = ToolkitAuditLogger(self.config)
         required_backend_keys: list[str] = []
         for plugin in self._group_plugins:
             required_backend_keys.extend(plugin.backend_dependencies())
@@ -406,9 +442,15 @@ class ToolkitServer:
         )
 
         for plugin in self._group_plugins:
-            service = plugin.create_local_service(
+            raw_service = plugin.create_local_service(
                 self.config,
                 backends=self._backend_context,
+            )
+            service = AuditedServiceProxy(
+                service=raw_service,
+                group_name=plugin.group_name,
+                logger=self._audit_logger,
+                method_aliases=self._default_method_aliases_for_group(plugin.group_name),
             )
             self._group_services[plugin.group_name] = service
             if plugin.group_name == "build_base":
@@ -511,6 +553,25 @@ class ToolkitServer:
         endpoint_name = "tool_" + route_path.strip("/").replace("/", "_").replace(".", "_")
         _endpoint.__name__ = endpoint_name or "tool_root"
         return _endpoint
+
+    @staticmethod
+    def _default_method_aliases_for_group(group_name: str) -> dict[str, str]:
+        if group_name == "build_base":
+            return {"run_workspace": "build.workspace"}
+        if group_name == "diagnostics":
+            return {
+                "run_build": "diagnostics.build",
+                "run_file": "diagnostics.file",
+                "run_lint": "diagnostics.lint",
+                "run_lint_no_sorry": "diagnostics.lint.no_sorry",
+                "run_lint_axiom_audit": "diagnostics.lint.axiom_audit",
+            }
+        if group_name == "declarations":
+            return {
+                "extract": "declarations.extract",
+                "locate": "declarations.locate",
+            }
+        return {}
 
     @staticmethod
     def _normalize_path(value: str | None, *, default: str) -> str:

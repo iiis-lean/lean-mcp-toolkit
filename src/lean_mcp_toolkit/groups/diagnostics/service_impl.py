@@ -40,6 +40,7 @@ from ...contracts.diagnostics import (
     Position,
 )
 from ...core.services import DiagnosticsService
+from ...tool_audit import audit_stage, get_current_audit_recorder
 from .parsing.context_extractor import ContextExtractor
 from .parsing.diagnostic_parser import LeanDiagnosticParser
 
@@ -202,11 +203,12 @@ class DiagnosticsServiceImpl(DiagnosticsService):
             )
 
     def _run_build_impl(self, req: BuildRequest, budget: _RequestBudget) -> BuildResponse:
-        options = self._effective_build_options(req)
-        resolved = self.resolver.resolve(
-            project_root=options.project_root,
-            targets=list(req.targets) if req.targets is not None else None,
-        )
+        with audit_stage("resolve_targets"):
+            options = self._effective_build_options(req)
+            resolved = self.resolver.resolve(
+                project_root=options.project_root,
+                targets=list(req.targets) if req.targets is not None else None,
+            )
         if not resolved.modules:
             return BuildResponse(
                 success=True,
@@ -218,17 +220,18 @@ class DiagnosticsServiceImpl(DiagnosticsService):
         file_results: list[FileDiagnostics] = []
 
         if options.build_deps:
-            deps_result = self._runtime_run_lake_build(
-                project_root=resolved.project_root_abs,
-                module_targets=resolved.module_dots(),
-                target_facet="deps",
-                timeout_s=self._remaining_timeout_seconds(
-                    budget,
-                    operation="build_deps",
-                ),
-                jobs=self.config.backends.lean_command.lake_build_jobs,
-                deadline_monotonic=budget.deadline_monotonic,
-            )
+            with audit_stage("build_deps"):
+                deps_result = self._runtime_run_lake_build(
+                    project_root=resolved.project_root_abs,
+                    module_targets=resolved.module_dots(),
+                    target_facet="deps",
+                    timeout_s=self._remaining_timeout_seconds(
+                        budget,
+                        operation="build_deps",
+                    ),
+                    jobs=self.config.backends.lean_command.lake_build_jobs,
+                    deadline_monotonic=budget.deadline_monotonic,
+                )
             if not deps_result.ok:
                 return BuildResponse(
                     success=False,
@@ -240,15 +243,16 @@ class DiagnosticsServiceImpl(DiagnosticsService):
                     ),
                 )
 
-        batch_results = self._run_lean_json_batch(
-            project_root=options.project_root,
-            modules=resolved.modules,
-            timeout_seconds=self._remaining_timeout_seconds(
-                budget,
-                operation="diagnostics",
-            ),
-            deadline_monotonic=budget.deadline_monotonic,
-        )
+        with audit_stage("diagnostics_batch"):
+            batch_results = self._run_lean_json_batch(
+                project_root=options.project_root,
+                modules=resolved.modules,
+                timeout_seconds=self._remaining_timeout_seconds(
+                    budget,
+                    operation="diagnostics",
+                ),
+                deadline_monotonic=budget.deadline_monotonic,
+            )
         result_map = {rel_file: cmd_result for rel_file, cmd_result in batch_results}
         for module in resolved.modules:
             rel_file = module.to_rel_file()
@@ -268,17 +272,18 @@ class DiagnosticsServiceImpl(DiagnosticsService):
                 file_result.file for file_result in file_results if file_result.success
             )
             if success_modules:
-                emit_result = self._runtime_run_lake_build(
-                    project_root=resolved.project_root_abs,
-                    module_targets=success_modules,
-                    target_facet="leanArts",
-                    timeout_s=self._remaining_timeout_seconds(
-                        budget,
-                        operation="emit_artifacts",
-                    ),
-                    jobs=self.config.backends.lean_command.lake_build_jobs,
-                    deadline_monotonic=budget.deadline_monotonic,
-                )
+                with audit_stage("emit_artifacts"):
+                    emit_result = self._runtime_run_lake_build(
+                        project_root=resolved.project_root_abs,
+                        module_targets=success_modules,
+                        target_facet="leanArts",
+                        timeout_s=self._remaining_timeout_seconds(
+                            budget,
+                            operation="emit_artifacts",
+                        ),
+                        jobs=self.config.backends.lean_command.lake_build_jobs,
+                        deadline_monotonic=budget.deadline_monotonic,
+                    )
                 if not emit_result.ok:
                     return BuildResponse(
                         success=False,
@@ -426,20 +431,22 @@ class DiagnosticsServiceImpl(DiagnosticsService):
                 message=self._lint_targets_required_message(),
                 sorries=tuple(),
             )
-        lint_options = self._effective_lint_options(req)
-        build_req = BuildRequest(
-            project_root=str(lint_options.project_root),
-            targets=req.targets,
-            build_deps=self.config.diagnostics.default_build_deps,
-            emit_artifacts=False,
-            include_content=lint_options.include_content,
-            context_lines=lint_options.context_lines,
-            timeout_seconds=self._remaining_timeout_seconds(
-                budget,
-                operation="no_sorry",
-            ),
-        )
-        build_resp = self._run_build_impl(build_req, budget)
+        with audit_stage("resolve_targets"):
+            lint_options = self._effective_lint_options(req)
+        with audit_stage("build_prepare"):
+            build_req = BuildRequest(
+                project_root=str(lint_options.project_root),
+                targets=req.targets,
+                build_deps=self.config.diagnostics.default_build_deps,
+                emit_artifacts=False,
+                include_content=lint_options.include_content,
+                context_lines=lint_options.context_lines,
+                timeout_seconds=self._remaining_timeout_seconds(
+                    budget,
+                    operation="no_sorry",
+                ),
+            )
+            build_resp = self._run_build_impl(build_req, budget)
         if build_resp.failed_stage in {"build_deps", "emit_artifacts"}:
             stage_msg = build_resp.stage_error_message or f"stage failure: {build_resp.failed_stage}"
             return NoSorryResult(
@@ -449,11 +456,12 @@ class DiagnosticsServiceImpl(DiagnosticsService):
                 sorries=tuple(),
             )
 
-        sorries: list[DiagnosticItem] = []
-        for file_result in build_resp.files:
-            for item in file_result.items:
-                if self._is_sorry(item):
-                    sorries.append(item)
+        with audit_stage("collect_sorries"):
+            sorries: list[DiagnosticItem] = []
+            for file_result in build_resp.files:
+                for item in file_result.items:
+                    if self._is_sorry(item):
+                        sorries.append(item)
 
         success = len(sorries) == 0
         message = "no sorry found" if success else f"found {len(sorries)} sorry diagnostics"
@@ -513,9 +521,11 @@ class DiagnosticsServiceImpl(DiagnosticsService):
                 continue
             try:
                 if cid == "no_sorry":
-                    checks.append(self._run_lint_no_sorry_impl(req, budget))
+                    with audit_stage("check:no_sorry"):
+                        checks.append(self._run_lint_no_sorry_impl(req, budget))
                 elif cid == "axiom_audit":
-                    checks.append(self._run_lint_axiom_audit_impl(req, budget))
+                    with audit_stage("check:axiom_audit"):
+                        checks.append(self._run_lint_axiom_audit_impl(req, budget))
                 else:
                     checks.append(
                         CheckResult(
@@ -578,11 +588,12 @@ class DiagnosticsServiceImpl(DiagnosticsService):
                 usage_issues=tuple(),
                 unresolved=tuple(),
             )
-        options = self._effective_lint_options(req)
-        resolved = self.resolver.resolve(
-            project_root=options.project_root,
-            targets=list(req.targets) if req.targets is not None else None,
-        )
+        with audit_stage("resolve_targets"):
+            options = self._effective_lint_options(req)
+            resolved = self.resolver.resolve(
+                project_root=options.project_root,
+                targets=list(req.targets) if req.targets is not None else None,
+            )
         if not resolved.modules:
             return AxiomAuditResult(
                 check_id="axiom_audit",
@@ -593,17 +604,18 @@ class DiagnosticsServiceImpl(DiagnosticsService):
                 unresolved=tuple(),
             )
 
-        artifact_result = self._runtime_run_lake_build(
-            project_root=resolved.project_root_abs,
-            module_targets=resolved.module_dots(),
-            target_facet="leanArts",
-            timeout_s=self._remaining_timeout_seconds(
-                budget,
-                operation="axiom_audit.prepare_target",
-            ),
-            jobs=self.config.backends.lean_command.lake_build_jobs,
-            deadline_monotonic=budget.deadline_monotonic,
-        )
+        with audit_stage("prepare_target_lake_build"):
+            artifact_result = self._runtime_run_lake_build(
+                project_root=resolved.project_root_abs,
+                module_targets=resolved.module_dots(),
+                target_facet="leanArts",
+                timeout_s=self._remaining_timeout_seconds(
+                    budget,
+                    operation="axiom_audit.prepare_target",
+                ),
+                jobs=self.config.backends.lean_command.lake_build_jobs,
+                deadline_monotonic=budget.deadline_monotonic,
+            )
         if not artifact_result.ok:
             msg = self._format_command_failure_message(
                 stage="axiom_audit.prepare_target",
@@ -657,7 +669,8 @@ class DiagnosticsServiceImpl(DiagnosticsService):
             )
             for module in modules_for_extract
         )
-        declarations_resps = backend.extract_batch(backend_reqs)
+        with audit_stage("extract_batch"):
+            declarations_resps = backend.extract_batch(backend_reqs)
         declarations_resp_by_dot = {
             module.dot: resp
             for module, resp in zip(modules_for_extract, declarations_resps)
@@ -771,11 +784,12 @@ class DiagnosticsServiceImpl(DiagnosticsService):
 
             rel_files = tuple(job.probe_rel_file for job in jobs)
             try:
-                batch_results = self._run_lean_json_rel_files_batch(
-                    project_root=options.project_root,
-                    rel_files=rel_files,
-                    timeout_seconds=options.timeout_seconds,
-                )
+                with audit_stage(f"probe_round_{round_index}"):
+                    batch_results = self._run_lean_json_rel_files_batch(
+                        project_root=options.project_root,
+                        rel_files=rel_files,
+                        timeout_seconds=options.timeout_seconds,
+                    )
                 result_map = {rel_file: cmd for rel_file, cmd in batch_results}
 
                 for job in jobs:
@@ -913,15 +927,27 @@ class DiagnosticsServiceImpl(DiagnosticsService):
             scope_lock = self._scope_locks.setdefault(scope, threading.Lock())
 
         if not is_owner:
+            recorder = get_current_audit_recorder()
+            wait_started = time.perf_counter()
             wait_s = budget.remaining_wait_seconds()
             if wait_s is not None and wait_s <= 0:
                 raise _RequestTimeoutError(f"{op_name} request timed out")
             finished = entry.event.wait(wait_s)
+            if recorder is not None:
+                recorder.set_attr(
+                    f"{op_name}.coordination_wait_seconds",
+                    time.perf_counter() - wait_started,
+                )
+                recorder.set_attr(f"{op_name}.coordination_role", "follower")
             if not finished:
                 raise _RequestTimeoutError(f"{op_name} request timed out")
             if entry.error is not None:
                 raise entry.error
             return entry.result
+
+        recorder = get_current_audit_recorder()
+        if recorder is not None:
+            recorder.set_attr(f"{op_name}.coordination_role", "owner")
 
         try:
             with scope_lock:
