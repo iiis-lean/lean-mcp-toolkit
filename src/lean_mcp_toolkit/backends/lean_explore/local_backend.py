@@ -1,4 +1,8 @@
-"""Local LeanExplore backend adapter."""
+"""Local lean-explore backend adapter.
+
+This module embeds the external ``lean-explore`` Python package directly:
+https://github.com/justincasher/lean-explore
+"""
 
 from __future__ import annotations
 
@@ -13,6 +17,8 @@ from .version_map import resolve_toolchain_id
 
 @dataclass(slots=True)
 class LeanExploreLocalBackend:
+    """Adapter around the local lean-explore ``SearchEngine`` + ``Service``."""
+
     backend_config: LeanExploreBackendConfig
     search_config: SearchCoreConfig
     _service: Any | None = field(default=None, init=False, repr=False)

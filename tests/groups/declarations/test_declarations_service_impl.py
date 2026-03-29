@@ -250,3 +250,73 @@ def test_declarations_locate_matches_declaration_content(tmp_path: Path) -> None
     assert resp.matched_declaration is not None
     assert resp.matched_declaration.name == "A.B.foo"
     assert lsp_client.last_opened == "A/B.lean"
+
+
+def test_text_ast_declarations_normalize_kind_signature_and_ranges(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "A" / "B.lean",
+        "\n".join(
+            [
+                "namespace A",
+                "",
+                "/-- Adjacent-difference list for a finite integer list. -/",
+                "def adjacentDiff : List Int → List Int",
+                "  | [] => []",
+                "  | [_] => []",
+                "  | a :: b :: t => (b - a) :: adjacentDiff (b :: t)",
+                "",
+                "/-- First entry of a list. -/",
+                "theorem firstEntry (l : List Int) :",
+                "    l.length = l.length :=",
+                "  rfl",
+                "",
+                "end A",
+                "",
+            ]
+        ),
+    )
+    cfg = ToolkitConfig.from_dict(
+        {
+            "server": {"default_project_root": str(tmp_path)},
+            "declarations": {
+                "default_backend": "text_ast",
+                "default_include_value": True,
+            },
+        }
+    )
+    svc = DeclarationsServiceImpl(config=cfg)
+
+    resp = svc.extract(DeclarationExtractRequest.from_dict({"target": "A/B.lean"}))
+
+    assert resp.success is True
+    assert resp.total_declarations == 2
+    first, second = resp.declarations
+
+    assert first.name == "A.adjacentDiff"
+    assert first.kind == "definition"
+    assert first.signature == ": List Int → List Int"
+    assert first.decl_start_pos is not None and first.decl_start_pos.line == 3
+    assert first.decl_end_pos is not None and first.decl_end_pos.line == 7
+    assert first.full_declaration == "\n".join(
+        [
+            "/-- Adjacent-difference list for a finite integer list. -/",
+            "def adjacentDiff : List Int → List Int",
+            "  | [] => []",
+            "  | [_] => []",
+            "  | a :: b :: t => (b - a) :: adjacentDiff (b :: t)",
+        ]
+    )
+
+    assert second.name == "A.firstEntry"
+    assert second.kind == "theorem"
+    assert second.signature == "(l : List Int) :\n    l.length = l.length"
+    assert second.decl_start_pos is not None and second.decl_start_pos.line == 9
+    assert second.decl_end_pos is not None and second.decl_end_pos.line == 12
+    assert second.full_declaration == "\n".join(
+        [
+            "/-- First entry of a list. -/",
+            "theorem firstEntry (l : List Int) :",
+            "    l.length = l.length :=",
+            "  rfl",
+        ]
+    )

@@ -1,4 +1,19 @@
-"""lsp_core service implementation."""
+"""lsp_core service implementation.
+
+This group adapts the core tool surface from the Lean LSP MCP ecosystem into
+the toolkit's local/http/MCP architecture.
+
+Reference projects:
+- lean-lsp-mcp (project-numina fork): https://github.com/project-numina/lean-lsp-mcp
+- lean-lsp-mcp upstream: https://github.com/oOo0oOo/lean-lsp-mcp
+
+Method mapping:
+- ``run_file_outline`` -> ``lean_file_outline``
+- ``run_goal`` -> ``lean_goal``
+- ``run_term_goal`` -> ``lean_term_goal``
+- ``run_hover`` -> ``lean_hover_info``
+- ``run_code_actions`` -> ``lean_code_actions``
+"""
 
 from __future__ import annotations
 
@@ -40,6 +55,8 @@ from .renderers.markdown import (
 
 @dataclass(slots=True)
 class LspCoreServiceImpl(LspCoreService):
+    """Service adapter for core Lean LSP queries."""
+
     config: ToolkitConfig
     lsp_client_manager: LeanLSPClientManager
 
@@ -58,6 +75,7 @@ class LspCoreServiceImpl(LspCoreService):
         self,
         req: LspFileOutlineRequest,
     ) -> LspFileOutlineResponse | MarkdownResponse:
+        """Adapt the upstream ``lean_file_outline`` tool."""
         try:
             project_root = self._resolve_project_root(req.project_root)
             rel_path = self._normalize_file_path(
@@ -110,6 +128,7 @@ class LspCoreServiceImpl(LspCoreService):
             )
 
     def run_goal(self, req: LspGoalRequest) -> LspGoalResponse | MarkdownResponse:
+        """Adapt the upstream ``lean_goal`` tool."""
         try:
             project_root = self._resolve_project_root(req.project_root)
             rel_path = self._normalize_file_path(
@@ -178,6 +197,7 @@ class LspCoreServiceImpl(LspCoreService):
         self,
         req: LspTermGoalRequest,
     ) -> LspTermGoalResponse | MarkdownResponse:
+        """Adapt the upstream ``lean_term_goal`` tool."""
         try:
             project_root = self._resolve_project_root(req.project_root)
             rel_path = self._normalize_file_path(
@@ -220,6 +240,7 @@ class LspCoreServiceImpl(LspCoreService):
             )
 
     def run_hover(self, req: LspHoverRequest) -> LspHoverResponse | MarkdownResponse:
+        """Adapt the upstream ``lean_hover_info`` tool."""
         try:
             project_root = self._resolve_project_root(req.project_root)
             rel_path = self._normalize_file_path(
@@ -286,6 +307,7 @@ class LspCoreServiceImpl(LspCoreService):
         self,
         req: LspCodeActionsRequest,
     ) -> LspCodeActionsResponse | MarkdownResponse:
+        """Adapt the upstream ``lean_code_actions`` tool."""
         try:
             project_root = self._resolve_project_root(req.project_root)
             rel_path = self._normalize_file_path(

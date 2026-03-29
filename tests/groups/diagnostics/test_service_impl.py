@@ -495,7 +495,12 @@ def test_run_build_and_lint(tmp_path: Path) -> None:
     _write(tmp_path / "A" / "Bad.lean", "theorem t : True := by\n  exact False.elim ?h\n")
     _write(tmp_path / "A" / "Good.lean", "theorem g : True := by\n  sorry\n")
 
-    cfg = ToolkitConfig.from_dict({"server": {"default_project_root": str(tmp_path)}})
+    cfg = ToolkitConfig.from_dict(
+        {
+            "server": {"default_project_root": str(tmp_path)},
+            "declarations": {"default_backend": "lean_interact"},
+        }
+    )
     svc = DiagnosticsServiceImpl(
         config=cfg,
         runtime=_FakeRuntime(),
@@ -626,7 +631,10 @@ def test_run_lint_no_sorry_fails_on_build_stage_failure(tmp_path: Path) -> None:
     cfg = ToolkitConfig.from_dict(
         {
             "server": {"default_project_root": str(tmp_path)},
-            "diagnostics": {"default_build_deps": True},
+            "diagnostics": {
+                "default_build_deps": True,
+                "no_sorry_backend": "lean",
+            },
         }
     )
     svc = DiagnosticsServiceImpl(config=cfg, runtime=runtime)
@@ -670,6 +678,7 @@ def test_run_lint_axiom_audit_detects_risky_axioms(tmp_path: Path) -> None:
                 "default_enabled_checks": ["axiom_audit"],
                 "default_build_deps": False,
             },
+            "declarations": {"default_backend": "lean_interact"},
         }
     )
     runtime = _AxiomProbeRuntime(axiom_map={"A.Good.t": ("MyAxiom",)})
@@ -702,6 +711,7 @@ def test_run_lint_axiom_audit_filters_sorry_ax_by_default(tmp_path: Path) -> Non
                 "default_enabled_checks": ["axiom_audit"],
                 "default_build_deps": False,
             },
+            "declarations": {"default_backend": "lean_interact"},
         }
     )
     runtime = _AxiomProbeRuntime(axiom_map={"A.Good.t": ("sorryAx",)})
@@ -731,6 +741,7 @@ def test_run_lint_axiom_audit_normalizes_root_prefixed_declaration_names(tmp_pat
                 "default_enabled_checks": ["axiom_audit"],
                 "default_build_deps": False,
             },
+            "declarations": {"default_backend": "lean_interact"},
         }
     )
     runtime = _AxiomProbeRuntime(axiom_map={"adjacentDiff": tuple()})
@@ -769,6 +780,7 @@ def test_run_lint_axiom_audit_retries_probe_candidates_in_batches(tmp_path: Path
                 "default_enabled_checks": ["axiom_audit"],
                 "default_build_deps": False,
             },
+            "declarations": {"default_backend": "lean_interact"},
         }
     )
     runtime = _AxiomProbeRuntime(
@@ -823,6 +835,7 @@ def test_run_lint_axiom_audit_rejects_top_level_alias_exports(tmp_path: Path) ->
                 "default_enabled_checks": ["axiom_audit"],
                 "default_build_deps": False,
             },
+            "declarations": {"default_backend": "lean_interact"},
         }
     )
     runtime = _AxiomProbeRuntime(axiom_map={})
@@ -831,6 +844,46 @@ def test_run_lint_axiom_audit_rejects_top_level_alias_exports(tmp_path: Path) ->
         config=cfg,
         runtime=runtime,
         declarations_backends={"lean_interact": backend},
+    )
+
+    lint_resp = svc.run_lint(LintRequest.from_dict({"targets": ["A/Pkg.lean"]}))
+    assert lint_resp.success is False
+    check = lint_resp.checks[0]
+    assert isinstance(check, AxiomAuditResult)
+    assert check.success is False
+    assert len(check.unresolved) == 1
+    assert check.unresolved[0].declaration == "foo"
+    assert "top-level alias declarations are disallowed" in check.unresolved[0].reason
+
+
+def test_run_lint_axiom_audit_text_ast_rejects_top_level_alias_exports(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "A" / "Pkg.lean",
+        "\n".join(
+            [
+                "namespace A.Pkg",
+                "alias A.Summary.foo := foo",
+                "end A.Pkg",
+                "",
+            ]
+        ),
+    )
+    cfg = ToolkitConfig.from_dict(
+        {
+            "server": {"default_project_root": str(tmp_path)},
+            "diagnostics": {
+                "default_enabled_checks": ["axiom_audit"],
+                "default_build_deps": False,
+                "axiom_declaration_backend": "text_ast",
+            },
+            "declarations": {"default_backend": "text_ast"},
+        }
+    )
+    runtime = _AxiomProbeRuntime(axiom_map={})
+    svc = DiagnosticsServiceImpl(
+        config=cfg,
+        runtime=runtime,
+        declarations_backends={},
     )
 
     lint_resp = svc.run_lint(LintRequest.from_dict({"targets": ["A/Pkg.lean"]}))
@@ -853,6 +906,7 @@ def test_run_lint_axiom_audit_skips_files_without_top_level_declarations(tmp_pat
                 "default_enabled_checks": ["axiom_audit"],
                 "default_build_deps": False,
             },
+            "declarations": {"default_backend": "lean_interact"},
         }
     )
     runtime = _AxiomProbeRuntime(axiom_map={"A.Full.t": tuple()})
@@ -877,6 +931,7 @@ def test_run_lint_axiom_audit_parses_multiline_axiom_reports(tmp_path: Path) -> 
                 "default_enabled_checks": ["axiom_audit"],
                 "default_build_deps": False,
             },
+            "declarations": {"default_backend": "lean_interact"},
         }
     )
     runtime = _AxiomProbeRuntime(
@@ -904,7 +959,12 @@ def test_run_lint_axiom_audit_parses_multiline_axiom_reports(tmp_path: Path) -> 
 def test_run_lint_no_sorry_singleflights_same_target(tmp_path: Path) -> None:
     _write(tmp_path / "A" / "Pkg.lean", "theorem t : True := by\n  trivial\n")
     runtime = _CoordinatedRuntime()
-    cfg = ToolkitConfig.from_dict({"server": {"default_project_root": str(tmp_path)}})
+    cfg = ToolkitConfig.from_dict(
+        {
+            "server": {"default_project_root": str(tmp_path)},
+            "diagnostics": {"no_sorry_backend": "lean"},
+        }
+    )
     svc = DiagnosticsServiceImpl(config=cfg, runtime=runtime)
 
     barrier = threading.Barrier(3)
@@ -941,7 +1001,9 @@ def test_run_lint_and_no_sorry_serialize_same_target_family(tmp_path: Path) -> N
             "diagnostics": {
                 "default_enabled_checks": ["no_sorry", "axiom_audit"],
                 "default_build_deps": False,
+                "no_sorry_backend": "lean",
             },
+            "declarations": {"default_backend": "lean_interact"},
         }
     )
     backend = _FakeDeclBackend(by_module={"A.Pkg": (_FakeDecl(full_name="A.Pkg.t"),)})
@@ -984,7 +1046,12 @@ def test_run_lint_and_no_sorry_serialize_same_target_family(tmp_path: Path) -> N
 def test_run_lint_no_sorry_uses_request_deadline_across_stages(tmp_path: Path) -> None:
     _write(tmp_path / "A" / "Pkg.lean", "theorem t : True := by\n  trivial\n")
     runtime = _SlowBuildRuntime()
-    cfg = ToolkitConfig.from_dict({"server": {"default_project_root": str(tmp_path)}})
+    cfg = ToolkitConfig.from_dict(
+        {
+            "server": {"default_project_root": str(tmp_path)},
+            "diagnostics": {"no_sorry_backend": "lean"},
+        }
+    )
     svc = DiagnosticsServiceImpl(config=cfg, runtime=runtime)
 
     resp = svc.run_lint_no_sorry(

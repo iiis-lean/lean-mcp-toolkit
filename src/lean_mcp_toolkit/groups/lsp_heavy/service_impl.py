@@ -1,4 +1,17 @@
-"""lsp_heavy service implementation."""
+"""lsp_heavy service implementation.
+
+This group adapts the heavier Lean LSP MCP tools and adds a toolkit-native
+proof profiler built around ``lean --profile``.
+
+Reference projects:
+- lean-lsp-mcp (project-numina fork): https://github.com/project-numina/lean-lsp-mcp
+- lean-lsp-mcp upstream: https://github.com/oOo0oOo/lean-lsp-mcp
+
+Method mapping:
+- ``run_widgets`` -> ``lean_get_widgets``
+- ``run_widget_source`` -> ``lean_get_widget_source``
+- ``run_proof_profile`` -> toolkit-native helper
+"""
 
 from __future__ import annotations
 
@@ -27,6 +40,8 @@ from .profile_utils import profile_theorem
 
 @dataclass(slots=True)
 class LspHeavyServiceImpl(LspHeavyService):
+    """Service adapter for widget-heavy and profiling LSP operations."""
+
     config: ToolkitConfig
     lsp_client_manager: LeanLSPClientManager
 
@@ -42,6 +57,7 @@ class LspHeavyServiceImpl(LspHeavyService):
         )
 
     def run_widgets(self, req: LspWidgetsRequest) -> LspWidgetsResponse:
+        """Adapt the upstream ``lean_get_widgets`` tool."""
         try:
             project_root = self._resolve_project_root(req.project_root)
             rel_path = self._normalize_file_path(project_root=project_root, file_path=req.file_path)
@@ -64,6 +80,7 @@ class LspHeavyServiceImpl(LspHeavyService):
             )
 
     def run_widget_source(self, req: LspWidgetSourceRequest) -> LspWidgetSourceResponse:
+        """Adapt the upstream ``lean_get_widget_source`` tool."""
         try:
             project_root = self._resolve_project_root(req.project_root)
             rel_path = self._normalize_file_path(project_root=project_root, file_path=req.file_path)
@@ -103,6 +120,7 @@ class LspHeavyServiceImpl(LspHeavyService):
             )
 
     def run_proof_profile(self, req: LspProofProfileRequest) -> LspProofProfileResponse:
+        """Profile a theorem proof using the toolkit's ``lean --profile`` flow."""
         try:
             project_root = self._resolve_project_root(req.project_root)
             rel_path = self._normalize_file_path(project_root=project_root, file_path=req.file_path)

@@ -152,6 +152,8 @@ class DiagnosticsConfig:
     default_emit_artifacts: bool = True
     default_timeout_seconds: int | None = None
     default_enabled_checks: tuple[str, ...] = ("no_sorry", "axiom_audit")
+    no_sorry_backend: str = "text_ast"
+    axiom_declaration_backend: str = "text_ast"
     axiom_audit_allowed_axioms: tuple[str, ...] = (
         "propext",
         "Classical.choice",
@@ -173,6 +175,16 @@ class DiagnosticsConfig:
             default_enabled_checks=tuple(
                 to_list_of_str(data.get("default_enabled_checks"))
                 or ("no_sorry", "axiom_audit")
+            ),
+            no_sorry_backend=(
+                str(data.get("no_sorry_backend") or "text_ast")
+                if str(data.get("no_sorry_backend") or "text_ast") in {"lean", "text_ast"}
+                else "text_ast"
+            ),
+            axiom_declaration_backend=(
+                str(data.get("axiom_declaration_backend") or "text_ast")
+                if str(data.get("axiom_declaration_backend") or "text_ast") in {"lean", "text_ast"}
+                else "text_ast"
             ),
             axiom_audit_allowed_axioms=tuple(
                 to_list_of_str(data.get("axiom_audit_allowed_axioms"))
@@ -200,6 +212,8 @@ class DiagnosticsConfig:
             "default_emit_artifacts": self.default_emit_artifacts,
             "default_timeout_seconds": self.default_timeout_seconds,
             "default_enabled_checks": list(self.default_enabled_checks),
+            "no_sorry_backend": self.no_sorry_backend,
+            "axiom_declaration_backend": self.axiom_declaration_backend,
             "axiom_audit_allowed_axioms": list(self.axiom_audit_allowed_axioms),
             "axiom_audit_include_sorry_ax": self.axiom_audit_include_sorry_ax,
             "axiom_audit_decl_kinds": list(self.axiom_audit_decl_kinds),
@@ -207,21 +221,21 @@ class DiagnosticsConfig:
         }
 
 
-DeclarationsBackend = Literal["lean_interact", "native"]
+DeclarationsBackend = Literal["lean_interact", "simple_lean", "text_ast"]
 
 
 @dataclass(slots=True, frozen=True)
 class DeclarationsConfig:
     enabled: bool = True
-    default_backend: DeclarationsBackend = "lean_interact"
+    default_backend: DeclarationsBackend = "text_ast"
     default_include_value: bool = False
     default_timeout_seconds: int | None = None
 
     @classmethod
     def from_dict(cls, data: JsonDict) -> "DeclarationsConfig":
-        backend_raw = str(data.get("default_backend") or "lean_interact")
-        backend: DeclarationsBackend = "lean_interact"
-        if backend_raw in {"lean_interact", "native"}:
+        backend_raw = str(data.get("default_backend") or "text_ast")
+        backend: DeclarationsBackend = "text_ast"
+        if backend_raw in {"lean_interact", "simple_lean", "text_ast"}:
             backend = backend_raw  # type: ignore[assignment]
         return cls(
             enabled=to_bool(data.get("enabled"), default=True),

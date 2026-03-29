@@ -1,4 +1,8 @@
-"""Base protocol and models for LeanExplore backend adapters."""
+"""Base protocol and models for LeanExplore backend adapters.
+
+These adapters wrap the external ``lean-explore`` project:
+https://github.com/justincasher/lean-explore
+"""
 
 from __future__ import annotations
 
@@ -10,6 +14,8 @@ from typing import Any, Protocol
 
 @dataclass(slots=True, frozen=True)
 class LeanExploreRecord:
+    """Toolkit projection of one lean-explore declaration record."""
+
     id: int
     name: str
     module: str | None
@@ -28,7 +34,7 @@ class LeanExploreSearchResult:
 
 
 class LeanExploreBackend(Protocol):
-    """Unified interface for LeanExplore backends."""
+    """Unified interface for lean-explore local and remote adapters."""
 
     def search(
         self,

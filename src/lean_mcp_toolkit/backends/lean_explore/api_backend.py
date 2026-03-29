@@ -1,4 +1,8 @@
-"""Remote API LeanExplore backend adapter."""
+"""Remote API lean-explore backend adapter.
+
+This adapter talks to the external ``lean-explore`` API client:
+https://github.com/justincasher/lean-explore
+"""
 
 from __future__ import annotations
 
@@ -12,6 +16,8 @@ from .base import LeanExploreRecord, LeanExploreSearchResult, run_async
 
 @dataclass(slots=True)
 class LeanExploreApiBackend:
+    """Adapter around the remote lean-explore API client."""
+
     backend_config: LeanExploreBackendConfig
     _client: Any | None = field(default=None, init=False, repr=False)
 

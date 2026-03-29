@@ -1,4 +1,19 @@
-"""lsp_assist service implementation."""
+"""lsp_assist service implementation.
+
+This group adapts additional Lean LSP MCP tools and adds a few toolkit-native
+helpers that reuse the same path normalization and LSP client-management layer.
+
+Reference projects:
+- lean-lsp-mcp (project-numina fork): https://github.com/project-numina/lean-lsp-mcp
+- lean-lsp-mcp upstream: https://github.com/oOo0oOo/lean-lsp-mcp
+
+Method mapping:
+- ``run_completions`` -> ``lean_completions``
+- ``run_declaration_file`` -> ``lean_declaration_file``
+- ``run_multi_attempt`` -> ``lean_multi_attempt``
+- ``run_snippet`` -> toolkit-native helper
+- ``run_theorem_soundness`` -> toolkit-native theorem soundness helper
+"""
 
 from __future__ import annotations
 
@@ -85,6 +100,8 @@ _COMPLETION_KIND: dict[int, str] = {
 
 @dataclass(slots=True)
 class LspAssistServiceImpl(LspAssistService):
+    """Service adapter for LSP-assisted proof development helpers."""
+
     config: ToolkitConfig
     lsp_client_manager: LeanLSPClientManager
 
@@ -100,6 +117,7 @@ class LspAssistServiceImpl(LspAssistService):
         )
 
     def run_completions(self, req: LspCompletionsRequest) -> LspCompletionsResponse:
+        """Adapt the upstream ``lean_completions`` tool."""
         try:
             project_root = self._resolve_project_root(req.project_root)
             rel_path = self._normalize_file_path(project_root=project_root, file_path=req.file_path)
@@ -139,6 +157,7 @@ class LspAssistServiceImpl(LspAssistService):
         self,
         req: LspDeclarationFileRequest,
     ) -> LspDeclarationFileResponse:
+        """Adapt the upstream ``lean_declaration_file`` tool."""
         try:
             project_root = self._resolve_project_root(req.project_root)
             rel_path = self._normalize_file_path(project_root=project_root, file_path=req.file_path)
@@ -211,6 +230,7 @@ class LspAssistServiceImpl(LspAssistService):
             )
 
     def run_multi_attempt(self, req: LspMultiAttemptRequest) -> LspMultiAttemptResponse:
+        """Adapt the upstream ``lean_multi_attempt`` tool."""
         try:
             project_root = self._resolve_project_root(req.project_root)
             rel_path = self._normalize_file_path(project_root=project_root, file_path=req.file_path)
@@ -303,6 +323,7 @@ class LspAssistServiceImpl(LspAssistService):
             )
 
     def run_snippet(self, req: LspRunSnippetRequest) -> LspRunSnippetResponse:
+        """Run a temporary Lean snippet inside the current project."""
         snippet_path: Path | None = None
         rel_path: str | None = None
         client: Any | None = None
@@ -385,6 +406,7 @@ class LspAssistServiceImpl(LspAssistService):
         self,
         req: LspTheoremSoundnessRequest,
     ) -> LspTheoremSoundnessResponse:
+        """Check theorem soundness via a temporary ``#print axioms`` file."""
         verify_path: Path | None = None
         rel_path: str | None = None
         client: Any | None = None

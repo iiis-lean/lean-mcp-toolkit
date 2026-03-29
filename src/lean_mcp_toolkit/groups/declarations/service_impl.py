@@ -7,12 +7,7 @@ import os
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-from ...backends.declarations import (
-    DeclarationsBackend,
-    DeclarationsBackendRequest,
-    LeanInteractDeclarationsBackend,
-    NativeDeclarationsBackend,
-)
+from ...backends.declarations import DeclarationsBackend
 from ...backends.lsp import LeanLSPClientManager
 from ...backends.lean.path import LeanPath
 from ...config import ToolkitConfig
@@ -26,8 +21,16 @@ from ...contracts.declarations import (
     DeclarationPosition,
 )
 from ...core.services import DeclarationsService
+from ...interfaces.declarations import (
+    DeclarationsInterfaceManager,
+    DeclarationsInterfaceRequest,
+)
+from ...interfaces.declarations.backends import (
+    LeanInteractDeclarationsInterfaceBackend,
+    SimpleLeanDeclarationsInterfaceBackend,
+    TextAstDeclarationsInterfaceBackend,
+)
 from ...tool_audit import audit_stage, get_current_audit_recorder
-from .mappers import map_raw_declarations_to_items
 from .paths import normalize_single_target_to_dot
 
 
@@ -36,7 +39,7 @@ class DeclarationsServiceImpl(DeclarationsService):
     """Default declarations service implementation."""
 
     config: ToolkitConfig
-    backends: dict[str, DeclarationsBackend]
+    interface_manager: DeclarationsInterfaceManager
     lsp_client_manager: LeanLSPClientManager
 
     def __init__(
@@ -44,16 +47,14 @@ class DeclarationsServiceImpl(DeclarationsService):
         config: ToolkitConfig,
         *,
         backends: dict[str, DeclarationsBackend] | None = None,
+        interface_manager: DeclarationsInterfaceManager | None = None,
         lsp_client_manager: LeanLSPClientManager | None = None,
     ):
         self.config = config
-        self.backends = backends or {
-            "lean_interact": LeanInteractDeclarationsBackend(
-                toolchain_config=config.toolchain,
-                backend_config=config.backends.lean_interact,
-            ),
-            "native": NativeDeclarationsBackend(),
-        }
+        self.interface_manager = interface_manager or DeclarationsInterfaceManager(
+            config=config,
+            backends=self._build_interface_backends(backends),
+        )
         self.lsp_client_manager = lsp_client_manager or LeanLSPClientManager(
             backend_config=config.backends.lsp
         )
@@ -77,35 +78,21 @@ class DeclarationsServiceImpl(DeclarationsService):
                 declarations=tuple(),
             )
 
-        backend_name = self.config.declarations.default_backend
-        backend = self.backends.get(backend_name)
-        if backend is None:
-            return DeclarationExtractResponse(
-                success=False,
-                error_message=f"unsupported declarations backend: {backend_name}",
-                total_declarations=0,
-                declarations=tuple(),
-            )
-
-        backend_req = DeclarationsBackendRequest(
+        interface_req = DeclarationsInterfaceRequest(
             project_root=project_root,
             target_dot=target_dot,
             timeout_seconds=self.config.declarations.default_timeout_seconds,
         )
-        with audit_stage("backend_extract", attrs={"backend": backend_name}):
-            backend_resp = backend.extract(backend_req)
-        with audit_stage("map_items"):
-            source_lines = self._load_source_lines(project_root=project_root, target_dot=target_dot)
-            declarations = map_raw_declarations_to_items(
-                backend_resp.declarations,
-                source_lines=source_lines,
-                include_value=self.config.declarations.default_include_value,
-            )
+        with audit_stage(
+            "backend_extract",
+            attrs={"backend": self.config.declarations.default_backend},
+        ):
+            interface_resp = self.interface_manager.extract(interface_req)
         return DeclarationExtractResponse(
-            success=backend_resp.success,
-            error_message=backend_resp.error_message,
-            total_declarations=len(declarations),
-            declarations=declarations,
+            success=interface_resp.success,
+            error_message=interface_resp.error_message,
+            total_declarations=len(interface_resp.declarations),
+            declarations=interface_resp.declarations,
         )
 
     def locate(self, req: DeclarationLocateRequest) -> DeclarationLocateResponse:
@@ -226,13 +213,25 @@ class DeclarationsServiceImpl(DeclarationsService):
             raise ValueError(f"project_root is not a directory: {resolved}")
         return resolved
 
-    @staticmethod
-    def _load_source_lines(*, project_root: Path, target_dot: str) -> list[str] | None:
-        source_file = project_root / LeanPath.from_dot(target_dot).to_rel_file()
-        try:
-            return source_file.read_text(encoding="utf-8").splitlines()
-        except Exception:
+    def _build_interface_backends(
+        self,
+        backends: dict[str, DeclarationsBackend] | None,
+    ) -> dict[str, object] | None:
+        if backends is None:
             return None
+        mapped: dict[str, object] = {
+            "text_ast": TextAstDeclarationsInterfaceBackend(
+                include_value=self.config.declarations.default_include_value
+            ),
+            "simple_lean": SimpleLeanDeclarationsInterfaceBackend(),
+        }
+        lean_interact = backends.get("lean_interact")
+        if lean_interact is not None:
+            mapped["lean_interact"] = LeanInteractDeclarationsInterfaceBackend(
+                backend=lean_interact,
+                include_value=self.config.declarations.default_include_value,
+            )
+        return mapped
 
     @staticmethod
     def _resolve_source_pos(

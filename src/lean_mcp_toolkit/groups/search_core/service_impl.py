@@ -1,4 +1,11 @@
-"""search_core service implementation."""
+"""search_core service implementation.
+
+This group adapts declaration search functionality from the external
+``lean-explore`` project into the toolkit's local/http/MCP tool surface.
+
+Reference project:
+- lean-explore: https://github.com/justincasher/lean-explore
+"""
 
 from __future__ import annotations
 
@@ -18,6 +25,8 @@ from ...core.services import SearchCoreService
 
 @dataclass(slots=True)
 class SearchCoreServiceImpl(SearchCoreService):
+    """Service wrapper around ``lean-explore`` search/get capabilities."""
+
     config: ToolkitConfig
     lean_explore_backend: LeanExploreBackend
 
@@ -37,6 +46,7 @@ class SearchCoreServiceImpl(SearchCoreService):
         self,
         req: MathlibDeclFindRequest,
     ) -> MathlibDeclFindResponse:
+        """Adapt the lean-explore search endpoint to the toolkit contract."""
         query = req.query.strip()
         if not query:
             return MathlibDeclFindResponse(
@@ -86,6 +96,7 @@ class SearchCoreServiceImpl(SearchCoreService):
         )
 
     def run_mathlib_decl_get(self, req: MathlibDeclGetRequest) -> MathlibDeclGetResponse:
+        """Adapt the lean-explore get-by-id endpoint to the toolkit contract."""
         declaration_id = int(req.declaration_id)
         if declaration_id <= 0:
             return MathlibDeclGetResponse(found=False, item=None)

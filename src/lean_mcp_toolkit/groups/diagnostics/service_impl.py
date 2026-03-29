@@ -13,10 +13,7 @@ import uuid
 
 from ...backends.declarations import (
     DeclarationsBackend,
-    DeclarationsBackendRequest,
-    DeclarationsBackendResponse,
     LeanInteractDeclarationsBackend,
-    NativeDeclarationsBackend,
 )
 from ...backends.lean import CommandResult, LeanCommandRuntime
 from ...backends.lean.path import LeanPath, TargetResolver
@@ -40,6 +37,22 @@ from ...contracts.diagnostics import (
     Position,
 )
 from ...core.services import DiagnosticsService
+from ...interfaces.axiom_decls import (
+    AxiomDeclsInterfaceManager,
+    AxiomDeclsInterfaceRequest,
+    AxiomDeclsInterfaceResponse,
+)
+from ...interfaces.declarations import (
+    DeclarationsInterfaceManager,
+    DeclarationsInterfaceRequest,
+    DeclarationsInterfaceResponse,
+)
+from ...interfaces.declarations.backends import (
+    LeanInteractDeclarationsInterfaceBackend,
+    SimpleLeanDeclarationsInterfaceBackend,
+    TextAstDeclarationsInterfaceBackend,
+)
+from ...interfaces.no_sorry import NoSorryInterfaceManager
 from ...tool_audit import audit_stage, get_current_audit_recorder
 from .parsing.context_extractor import ContextExtractor
 from .parsing.diagnostic_parser import LeanDiagnosticParser
@@ -123,6 +136,7 @@ class DiagnosticsServiceImpl(DiagnosticsService):
     parser: LeanDiagnosticParser
     context_extractor: ContextExtractor
     declarations_backends: dict[str, DeclarationsBackend]
+    declarations_manager: DeclarationsInterfaceManager
     lsp_client_manager: LeanLSPClientManager
     _coord_lock: threading.Lock = field(init=False, repr=False)
     _scope_locks: dict[tuple[str, tuple[str, ...]], threading.Lock] = field(
@@ -158,8 +172,11 @@ class DiagnosticsServiceImpl(DiagnosticsService):
                 toolchain_config=config.toolchain,
                 backend_config=config.backends.lean_interact,
             ),
-            "native": NativeDeclarationsBackend(),
         }
+        self.declarations_manager = DeclarationsInterfaceManager(
+            config=config,
+            backends=self._build_declarations_interface_backends(self.declarations_backends),
+        )
         self.lsp_client_manager = lsp_client_manager or LeanLSPClientManager(
             backend_config=config.backends.lsp
         )
@@ -422,6 +439,18 @@ class DiagnosticsServiceImpl(DiagnosticsService):
             )
 
     def _run_lint_no_sorry_impl(self, req: LintRequest, budget: _RequestBudget) -> NoSorryResult:
+        manager = NoSorryInterfaceManager(
+            config=self.config,
+            resolver=self.resolver,
+            lean_runner=lambda inner_req: self._run_lint_no_sorry_lean_impl(inner_req, budget),
+        )
+        return manager.run(req)
+
+    def _run_lint_no_sorry_lean_impl(
+        self,
+        req: LintRequest,
+        budget: _RequestBudget,
+    ) -> NoSorryResult:
         if not req.targets:
             return NoSorryResult(
                 check_id="no_sorry",
@@ -627,20 +656,6 @@ class DiagnosticsServiceImpl(DiagnosticsService):
                 unresolved=tuple(),
             )
 
-        backend = self._resolve_declarations_backend()
-        if backend is None:
-            return AxiomAuditResult(
-                check_id="axiom_audit",
-                success=False,
-                message=(
-                    f"unsupported declarations backend: "
-                    f"{self.config.declarations.default_backend}"
-                ),
-                declared_axioms=tuple(),
-                usage_issues=tuple(),
-                unresolved=tuple(),
-            )
-
         declared_axioms: list[AxiomDeclaredItem] = []
         unresolved: list[AxiomUsageUnresolved] = []
         modules_by_dot = {module.dot: module for module in resolved.modules}
@@ -659,7 +674,7 @@ class DiagnosticsServiceImpl(DiagnosticsService):
             )
         )
         backend_reqs = tuple(
-            DeclarationsBackendRequest(
+            DeclarationsInterfaceRequest(
                 project_root=options.project_root,
                 target_dot=module.dot,
                 timeout_seconds=options.timeout_seconds,
@@ -667,17 +682,36 @@ class DiagnosticsServiceImpl(DiagnosticsService):
             for module in modules_for_extract
         )
         with audit_stage("extract_batch"):
-            declarations_resps = backend.extract_batch(backend_reqs)
+            declarations_resps = self.declarations_manager.extract_batch(backend_reqs)
         declarations_resp_by_dot = {
             module.dot: resp
             for module, resp in zip(modules_for_extract, declarations_resps)
         }
+        axiom_decl_manager = AxiomDeclsInterfaceManager(
+            backend_name=self.config.diagnostics.axiom_declaration_backend,
+            lean_runner=self._run_axiom_decls_lean,
+        )
 
         for module in resolved.modules:
-            alias_exports = self._find_top_level_alias_exports(
-                module=module,
-                project_root=options.project_root,
+            axiom_decl_resp = axiom_decl_manager.run(
+                AxiomDeclsInterfaceRequest(
+                    project_root=options.project_root,
+                    module_dot=module.dot,
+                    allowed_kinds=tuple(sorted(decl_kind_filter)),
+                    include_content=options.include_content,
+                    context_lines=options.context_lines,
+                )
             )
+            if not axiom_decl_resp.success and axiom_decl_resp.error_message:
+                unresolved.append(
+                    AxiomUsageUnresolved(
+                        fileName=module.dot,
+                        declaration=None,
+                        reason=axiom_decl_resp.error_message,
+                    )
+                )
+            declared_axioms.extend(axiom_decl_resp.declared_axioms)
+            alias_exports = axiom_decl_resp.alias_exports
             for export_name in alias_exports:
                 unresolved.append(
                     AxiomUsageUnresolved(
@@ -691,12 +725,10 @@ class DiagnosticsServiceImpl(DiagnosticsService):
                 )
             declarations_resp = declarations_resp_by_dot.get(
                 module.dot,
-                DeclarationsBackendResponse(
+                DeclarationsInterfaceResponse(
                     success=True,
                     error_message=None,
                     declarations=tuple(),
-                    messages=tuple(),
-                    sorries=tuple(),
                 ),
             )
             if not declarations_resp.success and declarations_resp.error_message:
@@ -708,17 +740,6 @@ class DiagnosticsServiceImpl(DiagnosticsService):
                     )
                 )
 
-            if declarations_resp.declarations:
-                declared_axioms.extend(
-                    self._collect_declared_axioms(
-                        module=module,
-                        declarations=declarations_resp.declarations,
-                        project_root=options.project_root,
-                        include_content=options.include_content,
-                        context_lines=options.context_lines,
-                        decl_kind_filter=decl_kind_filter,
-                    )
-                )
             declarations = self._collect_checkable_declarations(
                 declarations=declarations_resp.declarations,
                 decl_kind_filter=decl_kind_filter,
@@ -961,8 +982,23 @@ class DiagnosticsServiceImpl(DiagnosticsService):
             with self._coord_lock:
                 self._inflight_calls.pop(inflight_key, None)
 
-    def _resolve_declarations_backend(self) -> DeclarationsBackend | None:
-        return self.declarations_backends.get(self.config.declarations.default_backend)
+    def _build_declarations_interface_backends(
+        self,
+        backends: dict[str, DeclarationsBackend],
+    ) -> dict[str, object]:
+        mapped: dict[str, object] = {
+            "text_ast": TextAstDeclarationsInterfaceBackend(
+                include_value=self.config.declarations.default_include_value
+            ),
+            "simple_lean": SimpleLeanDeclarationsInterfaceBackend(),
+        }
+        lean_interact = backends.get("lean_interact")
+        if lean_interact is not None:
+            mapped["lean_interact"] = LeanInteractDeclarationsInterfaceBackend(
+                backend=lean_interact,
+                include_value=self.config.declarations.default_include_value,
+            )
+        return mapped
 
     def _collect_checkable_declarations(
         self,
@@ -972,11 +1008,7 @@ class DiagnosticsServiceImpl(DiagnosticsService):
     ) -> tuple[str, ...]:
         names: list[str] = []
         for decl in declarations:
-            full_name = str(
-                getattr(decl, "full_name", None)
-                or getattr(decl, "name", None)
-                or ""
-            ).strip()
+            full_name = str(getattr(decl, "name", None) or "").strip()
             if not full_name:
                 continue
             kind = self._decl_kind(decl)
@@ -984,6 +1016,67 @@ class DiagnosticsServiceImpl(DiagnosticsService):
                 continue
             names.append(full_name)
         return tuple(dict.fromkeys(names))
+
+    def _run_axiom_decls_lean(
+        self,
+        req: AxiomDeclsInterfaceRequest,
+    ) -> AxiomDeclsInterfaceResponse:
+        try:
+            declarations_resp = self.declarations_manager.extract(
+                DeclarationsInterfaceRequest(
+                    project_root=req.project_root,
+                    target_dot=req.module_dot,
+                    timeout_seconds=self.config.declarations.default_timeout_seconds,
+                )
+            )
+            alias_exports = self._find_top_level_alias_exports(
+                module=LeanPath.from_dot(req.module_dot),
+                project_root=req.project_root,
+            )
+        except Exception as exc:
+            return AxiomDeclsInterfaceResponse(
+                success=False,
+                error_message=str(exc),
+                declared_axioms=tuple(),
+                alias_exports=tuple(),
+            )
+        if not declarations_resp.success:
+            return AxiomDeclsInterfaceResponse(
+                success=False,
+                error_message=declarations_resp.error_message,
+                declared_axioms=tuple(),
+                alias_exports=alias_exports,
+            )
+        allowed = {item.strip().lower() for item in req.allowed_kinds if item.strip()}
+        declared_axioms: list[AxiomDeclaredItem] = []
+        for decl in declarations_resp.declarations:
+            kind = (decl.kind or "").strip().lower()
+            if kind not in allowed:
+                continue
+            declared_axioms.append(
+                AxiomDeclaredItem(
+                    fileName=req.module_dot,
+                    declaration=decl.name or None,
+                    kind=decl.kind,
+                    pos=(
+                        Position(line=decl.decl_start_pos.line, column=decl.decl_start_pos.column)
+                        if decl.decl_start_pos is not None
+                        else None
+                    ),
+                    endPos=(
+                        Position(line=decl.decl_end_pos.line, column=decl.decl_end_pos.column)
+                        if decl.decl_end_pos is not None
+                        else None
+                    ),
+                    content=decl.full_declaration if req.include_content else None,
+                )
+            )
+        return AxiomDeclsInterfaceResponse(
+            success=True,
+            error_message=None,
+            declared_axioms=tuple(declared_axioms),
+            alias_exports=alias_exports,
+        )
 
     def _collect_declared_axioms(
         self,

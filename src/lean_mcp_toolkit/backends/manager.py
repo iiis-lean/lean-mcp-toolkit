@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from ..config import ToolkitConfig
 from .context import BackendContext
-from .declarations import LeanInteractDeclarationsBackend, NativeDeclarationsBackend
+from .declarations import LeanInteractDeclarationsBackend, SimpleLeanDeclarationsBackend
 from .keys import BackendKey
 from .lean import LeanCommandRuntime
 from .lean.path import TargetResolver
@@ -43,7 +43,8 @@ def build_backend_context(
                     toolchain_config=config.toolchain,
                     backend_config=config.backends.lean_interact,
                 ),
-                "native": NativeDeclarationsBackend(),
+                "simple_lean": SimpleLeanDeclarationsBackend(),
+                "native": SimpleLeanDeclarationsBackend(),
             },
         )
 
