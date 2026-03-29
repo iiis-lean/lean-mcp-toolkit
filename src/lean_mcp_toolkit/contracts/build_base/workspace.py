@@ -12,7 +12,6 @@ class BuildWorkspaceRequest(DictModel):
     project_root: str | None = None
     targets: tuple[str, ...] | None = None
     target_facet: str | None = None
-    jobs: int | None = None
     timeout_seconds: int | None = None
     clean_first: bool | None = None
 
@@ -29,7 +28,6 @@ class BuildWorkspaceRequest(DictModel):
                 if data.get("target_facet") is not None and str(data["target_facet"]).strip()
                 else None
             ),
-            jobs=to_int(data.get("jobs"), default=None) if "jobs" in data else None,
             timeout_seconds=(
                 to_int(data.get("timeout_seconds"), default=None)
                 if "timeout_seconds" in data
@@ -47,7 +45,6 @@ class BuildWorkspaceRequest(DictModel):
             "project_root": self.project_root,
             "targets": list(self.targets) if self.targets is not None else None,
             "target_facet": self.target_facet,
-            "jobs": self.jobs,
             "timeout_seconds": self.timeout_seconds,
             "clean_first": self.clean_first,
         }
@@ -60,7 +57,6 @@ class BuildWorkspaceResponse(DictModel):
     project_root: str = ""
     targets: tuple[str, ...] = field(default_factory=tuple)
     target_facet: str | None = None
-    jobs: int | None = None
     executed_commands: tuple[tuple[str, ...], ...] = field(default_factory=tuple)
     returncode: int = 0
     timed_out: bool = False
@@ -87,7 +83,6 @@ class BuildWorkspaceResponse(DictModel):
             target_facet=(
                 str(data["target_facet"]) if data.get("target_facet") is not None else None
             ),
-            jobs=to_int(data.get("jobs"), default=None),
             executed_commands=tuple(commands),
             returncode=int(data.get("returncode") or 0),
             timed_out=bool(data.get("timed_out", False)),
@@ -102,7 +97,6 @@ class BuildWorkspaceResponse(DictModel):
             "project_root": self.project_root,
             "targets": list(self.targets),
             "target_facet": self.target_facet,
-            "jobs": self.jobs,
             "executed_commands": [list(item) for item in self.executed_commands],
             "returncode": self.returncode,
             "timed_out": self.timed_out,
@@ -123,7 +117,6 @@ class BuildWorkspaceResponse(DictModel):
         chunks.append(f"- project_root: `{self.project_root}`")
         chunks.append(f"- targets: `{list(self.targets)}`")
         chunks.append(f"- target_facet: `{self.target_facet or 'none'}`")
-        chunks.append(f"- jobs: `{self.jobs if self.jobs is not None else 'default'}`")
         chunks.append(f"- returncode: `{self.returncode}`")
         chunks.append(f"- timed_out: `{str(self.timed_out).lower()}`")
         if self.error_message:

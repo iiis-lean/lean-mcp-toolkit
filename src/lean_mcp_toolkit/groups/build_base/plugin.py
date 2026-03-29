@@ -55,13 +55,6 @@ _WORKSPACE_PARAMS: tuple[ToolParamSpec, ...] = (
         description="Optional `lake build` target facet, for example `deps` or `leanArts`.",
     ),
     ToolParamSpec(
-        name="jobs",
-        type_hint="int | null",
-        required=False,
-        default_value="build_base.default_jobs or backends.lean_command.lake_build_jobs",
-        description="Optional `lake build -j` override.",
-    ),
-    ToolParamSpec(
         name="timeout_seconds",
         type_hint="int | null",
         required=False,
@@ -83,7 +76,6 @@ _WORKSPACE_RETURNS: tuple[ToolReturnSpec, ...] = (
     ToolReturnSpec("project_root", "str", "Resolved project root."),
     ToolReturnSpec("targets", "list[str]", "Resolved module targets passed to lake build."),
     ToolReturnSpec("target_facet", "str | null", "Target facet used for build."),
-    ToolReturnSpec("jobs", "int | null", "Parallel jobs passed to lake build."),
     ToolReturnSpec("executed_commands", "list[list[str]]", "Executed command argv arrays."),
     ToolReturnSpec("returncode", "int", "Return code of the final executed command."),
     ToolReturnSpec("timed_out", "bool", "Whether the final command timed out."),
@@ -163,7 +155,6 @@ class BuildBaseGroupPlugin(GroupPlugin):
                     str | None,
                     Field(description=_param_desc(spec, "target_facet")),
                 ] = None,
-                jobs: Annotated[int | None, Field(description=_param_desc(spec, "jobs"))] = None,
                 timeout_seconds: Annotated[
                     int | None,
                     Field(description=_param_desc(spec, "timeout_seconds")),
@@ -178,7 +169,6 @@ class BuildBaseGroupPlugin(GroupPlugin):
                         "project_root": project_root,
                         "targets": normalize_str_list(targets),
                         "target_facet": target_facet,
-                        "jobs": jobs,
                         "timeout_seconds": timeout_seconds,
                         "clean_first": clean_first,
                     }

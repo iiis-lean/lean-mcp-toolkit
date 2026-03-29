@@ -46,15 +46,6 @@ class BuildBaseServiceImpl(BuildBaseService):
                 if req.timeout_seconds is not None
                 else self.config.build_base.default_timeout_seconds
             )
-            jobs = (
-                req.jobs
-                if req.jobs is not None
-                else (
-                    self.config.build_base.default_jobs
-                    if self.config.build_base.default_jobs is not None
-                    else self.config.backends.lean_command.lake_build_jobs
-                )
-            )
 
             normalized_targets: tuple[str, ...]
             if req.targets is None:
@@ -77,7 +68,6 @@ class BuildBaseServiceImpl(BuildBaseService):
                 project_root=str(project_root),
                 targets=tuple(),
                 target_facet=facet,
-                jobs=jobs,
                 executed_commands=tuple(),
                 returncode=2,
                 timed_out=False,
@@ -105,7 +95,6 @@ class BuildBaseServiceImpl(BuildBaseService):
                     project_root=project_root,
                     targets=normalized_targets,
                     target_facet=facet,
-                    jobs=jobs,
                     executed_commands=tuple(executed_commands),
                     stdout_chunks=stdout_chunks,
                     stderr_chunks=stderr_chunks,
@@ -119,7 +108,6 @@ class BuildBaseServiceImpl(BuildBaseService):
                 module_targets=normalized_targets,
                 target_facet=facet,
                 timeout_s=timeout_seconds,
-                jobs=jobs,
             )
         executed_commands.append(build_result.args)
         if build_result.stdout:
@@ -130,7 +118,6 @@ class BuildBaseServiceImpl(BuildBaseService):
             project_root=project_root,
             targets=normalized_targets,
             target_facet=facet,
-            jobs=jobs,
             executed_commands=tuple(executed_commands),
             stdout_chunks=stdout_chunks,
             stderr_chunks=stderr_chunks,
@@ -153,7 +140,6 @@ class BuildBaseServiceImpl(BuildBaseService):
         project_root: Path,
         targets: tuple[str, ...],
         target_facet: str | None,
-        jobs: int | None,
         executed_commands: tuple[tuple[str, ...], ...],
         stdout_chunks: list[str],
         stderr_chunks: list[str],
@@ -172,7 +158,6 @@ class BuildBaseServiceImpl(BuildBaseService):
             project_root=str(project_root),
             targets=targets,
             target_facet=target_facet,
-            jobs=jobs,
             executed_commands=executed_commands,
             returncode=result.returncode,
             timed_out=result.timed_out,

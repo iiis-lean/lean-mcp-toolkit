@@ -31,7 +31,7 @@ class _FakeRuntime:
         module_targets: tuple[str, ...],
         target_facet: str | None = None,
         timeout_s: int | None,
-        jobs: int | None,
+        jobs: int | None = None,
     ) -> CommandResult:
         _ = project_root
         _ = timeout_s
@@ -98,7 +98,7 @@ class _AxiomProbeRuntime:
         module_targets: tuple[str, ...],
         target_facet: str | None = None,
         timeout_s: int | None,
-        jobs: int | None,
+        jobs: int | None = None,
     ) -> CommandResult:
         _ = project_root
         _ = timeout_s
@@ -160,7 +160,7 @@ class _FailBuildDepsRuntime:
         module_targets: tuple[str, ...],
         target_facet: str | None = None,
         timeout_s: int | None,
-        jobs: int | None,
+        jobs: int | None = None,
     ) -> CommandResult:
         _ = project_root
         _ = module_targets
@@ -200,7 +200,7 @@ class _FailEmitRuntime:
         module_targets: tuple[str, ...],
         target_facet: str | None = None,
         timeout_s: int | None,
-        jobs: int | None,
+        jobs: int | None = None,
     ) -> CommandResult:
         _ = project_root
         _ = module_targets
@@ -238,7 +238,7 @@ class _BatchOnlyRuntime:
         module_targets: tuple[str, ...],
         target_facet: str | None = None,
         timeout_s: int | None,
-        jobs: int | None,
+        jobs: int | None = None,
     ) -> CommandResult:
         _ = project_root
         _ = module_targets
@@ -313,7 +313,7 @@ class _CoordinatedRuntime:
         module_targets: tuple[str, ...],
         target_facet: str | None = None,
         timeout_s: int | None,
-        jobs: int | None,
+        jobs: int | None = None,
     ) -> CommandResult:
         _ = project_root
         _ = module_targets
@@ -400,7 +400,7 @@ class _SlowBuildRuntime:
         module_targets: tuple[str, ...],
         target_facet: str | None = None,
         timeout_s: int | None,
-        jobs: int | None,
+        jobs: int | None = None,
     ) -> CommandResult:
         _ = project_root
         _ = module_targets

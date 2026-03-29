@@ -39,7 +39,7 @@ class _FakeRuntime:
     clean_result: CommandResult
     build_result: CommandResult
     clean_calls: list[tuple[Path, int | None]] | None = None
-    build_calls: list[tuple[Path, tuple[str, ...], str | None, int | None, int | None]] | None = None
+    build_calls: list[tuple[Path, tuple[str, ...], str | None, int | None]] | None = None
 
     def __post_init__(self) -> None:
         if self.clean_calls is None:
@@ -63,11 +63,8 @@ class _FakeRuntime:
         module_targets: tuple[str, ...],
         target_facet: str | None = None,
         timeout_s: int | None,
-        jobs: int | None,
     ) -> CommandResult:
-        self.build_calls.append(
-            (project_root.resolve(), module_targets, target_facet, timeout_s, jobs)
-        )
+        self.build_calls.append((project_root.resolve(), module_targets, target_facet, timeout_s))
         return self.build_result
 
 
@@ -86,7 +83,7 @@ def test_build_base_service_builds_workspace_with_defaults(tmp_path: Path) -> No
         config=ToolkitConfig.from_dict(
             {
                 "server": {"default_project_root": str(tmp_path)},
-                "build_base": {"default_timeout_seconds": 17, "default_jobs": 6},
+                "build_base": {"default_timeout_seconds": 17},
             }
         ),
         runtime=runtime,
@@ -98,13 +95,12 @@ def test_build_base_service_builds_workspace_with_defaults(tmp_path: Path) -> No
     assert resp.success is True
     assert resp.project_root == str(tmp_path.resolve())
     assert resp.targets == tuple()
-    assert resp.jobs == 6
     assert resp.executed_commands == (("lake", "build"),)
     assert resp.stdout == "build ok"
     assert resolver.calls == []
     assert runtime.clean_calls == []
     assert runtime.build_calls == [
-        (tmp_path.resolve(), tuple(), None, 17, 6),
+        (tmp_path.resolve(), tuple(), None, 17),
     ]
 
 
@@ -117,7 +113,7 @@ def test_build_base_service_supports_clean_targets_and_facet(tmp_path: Path) -> 
             stderr="",
         ),
         build_result=CommandResult(
-            args=("lake", "build", "-j", "8", "Foo.Bar:deps"),
+            args=("lake", "build", "Foo.Bar:deps"),
             returncode=0,
             stdout="build ok\n",
             stderr="warn only\n",
@@ -135,7 +131,6 @@ def test_build_base_service_supports_clean_targets_and_facet(tmp_path: Path) -> 
             {
                 "targets": ["Foo/Bar.lean"],
                 "target_facet": "deps",
-                "jobs": 8,
                 "timeout_seconds": 31,
                 "clean_first": True,
             }
@@ -145,17 +140,16 @@ def test_build_base_service_supports_clean_targets_and_facet(tmp_path: Path) -> 
     assert resp.success is True
     assert resp.targets == ("Foo.Bar",)
     assert resp.target_facet == "deps"
-    assert resp.jobs == 8
     assert resp.executed_commands == (
         ("lake", "clean"),
-        ("lake", "build", "-j", "8", "Foo.Bar:deps"),
+        ("lake", "build", "Foo.Bar:deps"),
     )
     assert resp.stdout == "clean ok\n\nbuild ok"
     assert resp.stderr == "warn only"
     assert resolver.calls == [(tmp_path.resolve(), ("Foo/Bar.lean",))]
     assert runtime.clean_calls == [(tmp_path.resolve(), 31)]
     assert runtime.build_calls == [
-        (tmp_path.resolve(), ("Foo.Bar",), "deps", 31, 8),
+        (tmp_path.resolve(), ("Foo.Bar",), "deps", 31),
     ]
 
 

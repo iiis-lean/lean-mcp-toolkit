@@ -229,7 +229,6 @@ class DiagnosticsServiceImpl(DiagnosticsService):
                         budget,
                         operation="build_deps",
                     ),
-                    jobs=self.config.backends.lean_command.lake_build_jobs,
                     deadline_monotonic=budget.deadline_monotonic,
                 )
             if not deps_result.ok:
@@ -281,7 +280,6 @@ class DiagnosticsServiceImpl(DiagnosticsService):
                             budget,
                             operation="emit_artifacts",
                         ),
-                        jobs=self.config.backends.lean_command.lake_build_jobs,
                         deadline_monotonic=budget.deadline_monotonic,
                     )
                 if not emit_result.ok:
@@ -613,7 +611,6 @@ class DiagnosticsServiceImpl(DiagnosticsService):
                     budget,
                     operation="axiom_audit.prepare_target",
                 ),
-                jobs=self.config.backends.lean_command.lake_build_jobs,
                 deadline_monotonic=budget.deadline_monotonic,
             )
         if not artifact_result.ok:
@@ -1347,6 +1344,7 @@ class DiagnosticsServiceImpl(DiagnosticsService):
                 project_root=options.project_root,
                 rel_file=rel_file,
                 timeout_s=options.timeout_seconds,
+                threads=self.config.backends.lean_command.lean_json_threads,
             )
 
         combined_text = "\n".join([cmd_result.stdout, cmd_result.stderr]).strip()
@@ -1410,6 +1408,7 @@ class DiagnosticsServiceImpl(DiagnosticsService):
                     project_root=project_root,
                     rel_files=rel_files,
                     timeout_s=timeout_seconds,
+                    threads=self.config.backends.lean_command.lean_json_threads,
                     deadline_monotonic=deadline_monotonic,
                 )
             )
@@ -1421,6 +1420,7 @@ class DiagnosticsServiceImpl(DiagnosticsService):
                     project_root=project_root,
                     rel_file=rel_file,
                     timeout_s=timeout_seconds,
+                    threads=self.config.backends.lean_command.lean_json_threads,
                     deadline_monotonic=deadline_monotonic,
                 ),
             )

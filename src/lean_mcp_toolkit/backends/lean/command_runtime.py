@@ -45,13 +45,10 @@ class LeanCommandRuntime:
         module_targets: tuple[str, ...],
         target_facet: str | None = None,
         timeout_s: int | None,
-        jobs: int | None,
         deadline_monotonic: float | None = None,
         cancel_event: threading.Event | None = None,
     ) -> CommandResult:
         cmd = self._lake_prefix() + ["build"]
-        if jobs is not None and jobs > 0:
-            cmd.extend(["-j", str(jobs)])
         if target_facet:
             cmd.extend(f"{target}:{target_facet}" for target in module_targets)
         else:
@@ -89,18 +86,22 @@ class LeanCommandRuntime:
         project_root: Path,
         rel_file: str,
         timeout_s: int | None,
+        threads: int | None = None,
         deadline_monotonic: float | None = None,
         cancel_event: threading.Event | None = None,
     ) -> CommandResult:
+        thread_count = threads if threads is not None else self.backend_config.lean_json_threads
+        thread_args = ["-j", str(thread_count)] if thread_count is not None and thread_count > 0 else []
         if self.toolchain_config.use_lake_env_for_lean:
             cmd = self._lake_prefix() + [
                 "env",
                 self.toolchain_config.lean_bin,
                 "--json",
+                *thread_args,
                 rel_file,
             ]
         else:
-            cmd = self._lean_prefix() + ["--json", rel_file]
+            cmd = self._lean_prefix() + ["--json", *thread_args, rel_file]
 
         with self._lean_guard():
             return self._run_command(
@@ -117,6 +118,7 @@ class LeanCommandRuntime:
         project_root: Path,
         rel_files: tuple[str, ...],
         timeout_s: int | None,
+        threads: int | None = None,
         deadline_monotonic: float | None = None,
         cancel_event: threading.Event | None = None,
     ) -> tuple[tuple[str, CommandResult], ...]:
@@ -135,6 +137,7 @@ class LeanCommandRuntime:
                         project_root=project_root,
                         rel_file=rel_file,
                         timeout_s=timeout_s,
+                        threads=threads,
                     ),
                 )
                 for rel_file in rel_files
@@ -153,6 +156,7 @@ class LeanCommandRuntime:
                     project_root=project_root,
                     rel_file=rel_file,
                     timeout_s=timeout_s,
+                    threads=threads,
                     deadline_monotonic=deadline_monotonic,
                     cancel_event=shared_cancel_event,
                 )

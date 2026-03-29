@@ -18,10 +18,9 @@ class _FakeHttpJsonClient:
             "project_root": "/tmp/demo",
             "targets": ["Foo.Bar"],
             "target_facet": "deps",
-            "jobs": 8,
             "executed_commands": [
                 ["lake", "clean"],
-                ["lake", "build", "-j", "8", "Foo.Bar:deps"],
+                ["lake", "build", "Foo.Bar:deps"],
             ],
             "returncode": 0,
             "timed_out": False,
@@ -43,7 +42,6 @@ def test_build_base_http_client_roundtrip() -> None:
                 "project_root": "/tmp/demo",
                 "targets": ["Foo/Bar.lean"],
                 "target_facet": "deps",
-                "jobs": 8,
                 "clean_first": True,
             }
         )
@@ -54,15 +52,13 @@ def test_build_base_http_client_roundtrip() -> None:
         "project_root": "/tmp/demo",
         "targets": ["Foo/Bar.lean"],
         "target_facet": "deps",
-        "jobs": 8,
         "timeout_seconds": None,
         "clean_first": True,
     }
     assert resp.success is True
     assert resp.targets == ("Foo.Bar",)
     assert resp.target_facet == "deps"
-    assert resp.jobs == 8
     assert resp.executed_commands == (
         ("lake", "clean"),
-        ("lake", "build", "-j", "8", "Foo.Bar:deps"),
+        ("lake", "build", "Foo.Bar:deps"),
     )

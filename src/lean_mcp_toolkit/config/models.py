@@ -125,7 +125,6 @@ class GroupActivationConfig:
 class BuildBaseConfig:
     enabled: bool = False
     default_timeout_seconds: int | None = None
-    default_jobs: int | None = None
     default_clean_first: bool = False
 
     @classmethod
@@ -133,7 +132,6 @@ class BuildBaseConfig:
         return cls(
             enabled=to_bool(data.get("enabled"), default=False),
             default_timeout_seconds=to_int(data.get("default_timeout_seconds"), default=None),
-            default_jobs=to_int(data.get("default_jobs"), default=None),
             default_clean_first=to_bool(data.get("default_clean_first"), default=False),
         )
 
@@ -141,7 +139,6 @@ class BuildBaseConfig:
         return {
             "enabled": self.enabled,
             "default_timeout_seconds": self.default_timeout_seconds,
-            "default_jobs": self.default_jobs,
             "default_clean_first": self.default_clean_first,
         }
 
@@ -1049,7 +1046,7 @@ class LeanCommandBackendConfig:
     max_concurrent_lean_checks: int = 4
     max_concurrent_lake_build: int = 1
     enable_concurrency_limits: bool = False
-    lake_build_jobs: int | None = None
+    lean_json_threads: int | None = None
 
     @classmethod
     def from_dict(cls, data: JsonDict) -> "LeanCommandBackendConfig":
@@ -1063,7 +1060,7 @@ class LeanCommandBackendConfig:
             enable_concurrency_limits=to_bool(
                 data.get("enable_concurrency_limits"), default=False
             ),
-            lake_build_jobs=to_int(data.get("lake_build_jobs"), default=None),
+            lean_json_threads=to_int(data.get("lean_json_threads"), default=None),
         )
 
     def to_dict(self) -> JsonDict:
@@ -1071,7 +1068,7 @@ class LeanCommandBackendConfig:
             "max_concurrent_lean_checks": self.max_concurrent_lean_checks,
             "max_concurrent_lake_build": self.max_concurrent_lake_build,
             "enable_concurrency_limits": self.enable_concurrency_limits,
-            "lake_build_jobs": self.lake_build_jobs,
+            "lean_json_threads": self.lean_json_threads,
         }
 
 
