@@ -30,6 +30,7 @@ server = [
 
 [project.scripts]
 lean-mcp-toolkit = "lean_mcp_toolkit.app.cli:main"
+lean-cli-toolkit = "lean_mcp_toolkit.app.client_cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

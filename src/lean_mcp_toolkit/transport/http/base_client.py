@@ -20,17 +20,26 @@ class HttpJsonClient:
         self.config = config
 
     def post_json(self, path: str, payload: dict) -> dict:
+        return self._request_json("POST", path, payload)
+
+    def get_json(self, path: str) -> dict:
+        return self._request_json("GET", path, None)
+
+    def _request_json(self, method: str, path: str, payload: dict | None) -> dict:
         url = self._build_url(path)
-        data = json.dumps(payload).encode("utf-8")
+        data = None
+        if payload is not None:
+            data = json.dumps(payload).encode("utf-8")
         headers = {
-            "Content-Type": "application/json",
             "Accept": "application/json",
         }
+        if payload is not None:
+            headers["Content-Type"] = "application/json"
         headers.update(self.config.headers)
         if self.config.auth_token:
             headers["Authorization"] = f"Bearer {self.config.auth_token}"
 
-        request = urllib.request.Request(url=url, method="POST", data=data, headers=headers)
+        request = urllib.request.Request(url=url, method=method, data=data, headers=headers)
         context = None
         if not self.config.verify_ssl:
             context = ssl._create_unverified_context()  # noqa: SLF001
