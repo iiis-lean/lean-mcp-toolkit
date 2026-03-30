@@ -1,34 +1,105 @@
 # lean-mcp-toolkit
 
-A unified Lean MCP toolkit that aggregates diagnostics, search, and quality-check tools behind one configurable server, with shared schemas for both MCP and HTTP API access.
+![Python](https://img.shields.io/badge/python-3.11%2B-blue)
+![Lean 4](https://img.shields.io/badge/lean-4-informational)
+![MCP](https://img.shields.io/badge/MCP-supported-green)
+![HTTP API](https://img.shields.io/badge/HTTP%20API-supported-green)
+![CLI](https://img.shields.io/badge/CLI-supported-green)
 
-## Goals
+`lean-mcp-toolkit` is a unified Lean tool server that exposes one configurable
+tool catalog through MCP, HTTP API, and CLI entrypoints. It combines LSP-based
+inspection tools, declaration/search utilities, diagnostics/lint workflows, and
+lightweight source-analysis backends behind shared request/response schemas.
 
-- Provide a single MCP server with grouped, composable Lean tools.
-- Keep workflow-control tools out of this repository; focus on single-agent independent tools.
-- Support the same request/response schemas for both MCP and HTTP API surfaces.
-- Allow startup-time selection of tool groups and individual tools.
+Quick links: [Usage](docs/usage/README.md) · [Tool Catalog](docs/tool_catalog/README.md) · [Architecture](docs/architecture/README.md) · [Configuration](docs/configuration/README.md)
 
-## Planned Tool Sources
+## Overview
 
-- lean-lsp-mcp-upstream
-- lean-explore
-- local aggregate tools (`compile_check`, `linter_check`)
+This project focuses on single-agent Lean tooling:
 
-## Planned Naming
+- Lean file inspection, proof-state queries, and widget access
+- Declaration extraction, symbol location, and indexed declaration search
+- Build, diagnostics, and lint checks such as `no_sorry` and `axiom_audit`
+- Configurable backend selection for selected capabilities
+- One shared tool catalog across MCP, HTTP API, remote CLI, and local shell
 
-Tool names are planned in dotted form:
+## Access Modes
 
-- `quality.compile_check`
-- `quality.linter_check`
-- `lsp.diagnostic_messages`
-- `search.search_summary`
+`lean-mcp-toolkit` supports four access surfaces:
+
+- **MCP server** for MCP-compatible clients
+- **HTTP API** with JSON request/response contracts under `/api/v1`
+- **Remote CLI** via `lean-cli-toolkit`, which reads the live tool catalog from a running server
+- **Local interactive shell** via `lean-mcp-toolkit shell`
+
+Visible tool names depend on the active server configuration (enabled groups,
+tool naming mode, include/exclude filters). The remote CLI always reflects the
+currently exposed aliases reported by the running server.
+
+## Quick Start
+
+Start a server:
+
+```bash
+lean-mcp-toolkit serve --config path/to/toolkit.yaml
+```
+
+Inspect the live tool catalog:
+
+```bash
+lean-cli-toolkit tools
+```
+
+Run a remote tool command:
+
+```bash
+lean-cli-toolkit diagnostics lint \
+  --project-root /path/to/project \
+  --targets MyProject/Package.lean
+```
+
+Start a local interactive shell:
+
+```bash
+lean-mcp-toolkit shell --config path/to/toolkit.yaml
+```
+
+For complete startup and CLI usage, see [docs/usage/README.md](docs/usage/README.md).
+
+## Tool Groups
+
+The toolkit is configured by tool groups internally, but end users typically
+interact with canonical tool names or visible aliases.
+
+| Group | Theme | Example tools |
+|---|---|---|
+| `diagnostics` | build, file diagnostics, lint checks | `diagnostics.build`, `diagnostics.lint`, `diagnostics.lint.no_sorry` |
+| `declarations` | declaration extraction and symbol location | `declarations.extract`, `declarations.locate` |
+| `lsp_core` / `lsp_assist` / `lsp_heavy` | Lean LSP inspection and proof-assist queries | `lsp.hover`, `lsp.goal`, `lsp.proof_profile` |
+| `search_core` | LeanExplore-backed declaration search | `search.mathlib_decl.find`, `search.mathlib_decl.get` |
+| `search_nav` | local repository navigation and lightweight source search | `search.repo_nav.tree`, `search.local_decl.find`, `search.local_refs.find` |
+| `mathlib_nav` | mathlib tree/outline/read navigation | `search.mathlib_nav.tree`, `search.mathlib_nav.file_outline` |
+| `search_alt` | external search providers | `search_alt.leansearch`, `search_alt.leandex`, `search_alt.loogle`, `search_alt.leanfinder` |
+| `proof_search_alt` | external proof-search providers | `proof_search_alt.state_search`, `proof_search_alt.hammer_premise` |
+| `build_base` | direct workspace build entrypoint | `build.workspace` |
+
+For the full tool-by-tool reference, backend notes, provenance, and upstream
+name mapping, see [docs/tool_catalog/tool_reference.md](docs/tool_catalog/tool_reference.md).
+
+## Documentation
+
+- [Usage](docs/usage/README.md): server startup, HTTP access, remote CLI, and local shell
+- [Tool Catalog](docs/tool_catalog/README.md): canonical tool inventory and navigation guide
+- [Tool Reference](docs/tool_catalog/tool_reference.md): detailed tool tables, provenance, and backend notes
+- [Architecture](docs/architecture/README.md): server/plugin/backend/interface structure
+- [Configuration](docs/configuration/README.md): runtime configuration, backend selection, and naming controls
 
 ## Repository Layout
 
 - `src/`: source code
-- `tests/`: tests
-- `docs/`: reusable public docs (English)
-- `dev_docs/`: local development docs (Chinese)
-- `data/`: local data and artifacts (ignored)
-- `configs/`: local config and templates
+- `tests/`: test suite
+- `docs/`: public and reusable documentation
+- `dev_docs/`: local development notes and design records
+- `data/`: local data and generated artifacts
+- `configs/`: configuration files and templates
+
