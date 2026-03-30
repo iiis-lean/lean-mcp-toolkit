@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "lean-mcp-toolkit"
 version = "0.1.0"
-description = "Unified Lean MCP/HTTP toolkit with shared contracts"
+description = "Unified Lean tool server with MCP, HTTP API, remote CLI, and configurable backends"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [

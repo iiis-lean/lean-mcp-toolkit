@@ -1,4 +1,4 @@
-# lean-mcp-toolkit
+# Lean MCP Toolkit
 
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![Lean 4](https://img.shields.io/badge/lean-4-informational)
@@ -7,9 +7,10 @@
 ![CLI](https://img.shields.io/badge/CLI-supported-green)
 
 `lean-mcp-toolkit` is a unified Lean tool server that exposes one configurable
-tool catalog through MCP, HTTP API, and CLI entrypoints. It combines LSP-based
-inspection tools, declaration/search utilities, diagnostics/lint workflows, and
-lightweight source-analysis backends behind shared request/response schemas.
+tool catalog through MCP, HTTP API, remote CLI, and local shell entrypoints. It
+combines LSP-based inspection tools, declaration/search utilities,
+diagnostics/lint workflows, and lightweight source-analysis backends behind
+shared contracts.
 
 Quick links: [Usage](docs/usage/README.md) · [Tool Catalog](docs/tool_catalog/README.md) · [Architecture](docs/architecture/README.md) · [Configuration](docs/configuration/README.md)
 
@@ -102,4 +103,3 @@ name mapping, see [docs/tool_catalog/tool_reference.md](docs/tool_catalog/tool_r
 - `dev_docs/`: local development notes and design records
 - `data/`: local data and generated artifacts
 - `configs/`: configuration files and templates
-
