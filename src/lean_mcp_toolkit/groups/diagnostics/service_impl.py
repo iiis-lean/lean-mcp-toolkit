@@ -1011,11 +1011,22 @@ class DiagnosticsServiceImpl(DiagnosticsService):
             full_name = str(getattr(decl, "name", None) or "").strip()
             if not full_name:
                 continue
+            short_name = str(getattr(decl, "short_name", None) or "").strip()
+            if self._is_anonymous_instance_name(full_name) or self._is_anonymous_instance_name(short_name):
+                continue
             kind = self._decl_kind(decl)
             if kind in decl_kind_filter:
                 continue
             names.append(full_name)
         return tuple(dict.fromkeys(names))
+
+    @staticmethod
+    def _is_anonymous_instance_name(name: str) -> bool:
+        normalized = name.strip()
+        if not normalized:
+            return False
+        short = normalized.split(".")[-1]
+        return short.startswith("_anonymous_instance_")
 
     def _run_axiom_decls_lean(
         self,

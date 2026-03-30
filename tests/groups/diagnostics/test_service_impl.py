@@ -896,6 +896,59 @@ def test_run_lint_axiom_audit_text_ast_rejects_top_level_alias_exports(tmp_path:
     assert "top-level alias declarations are disallowed" in check.unresolved[0].reason
 
 
+def test_run_lint_axiom_audit_text_ast_qualifies_relative_dotted_names_and_skips_anonymous_instances(
+    tmp_path: Path,
+) -> None:
+    _write(
+        tmp_path / "A" / "Pkg.lean",
+        "\n".join(
+            [
+                "namespace A",
+                "",
+                "structure Box where",
+                "  value : Nat",
+                "",
+                "def Box.size (b : Box) : Nat :=",
+                "  b.value",
+                "",
+                "instance : Inhabited Box where",
+                "  default := ⟨0⟩",
+                "",
+                "end A",
+                "",
+            ]
+        ),
+    )
+    cfg = ToolkitConfig.from_dict(
+        {
+            "server": {"default_project_root": str(tmp_path)},
+            "diagnostics": {
+                "default_enabled_checks": ["axiom_audit"],
+                "default_build_deps": False,
+                "axiom_declaration_backend": "text_ast",
+            },
+            "declarations": {"default_backend": "text_ast"},
+        }
+    )
+    runtime = _AxiomProbeRuntime(axiom_map={"A.Box": tuple(), "A.Box.size": tuple()})
+    svc = DiagnosticsServiceImpl(
+        config=cfg,
+        runtime=runtime,
+        declarations_backends={},
+    )
+
+    lint_resp = svc.run_lint(LintRequest.from_dict({"targets": ["A/Pkg.lean"]}))
+
+    assert lint_resp.success is True
+    check = lint_resp.checks[0]
+    assert isinstance(check, AxiomAuditResult)
+    assert check.success is True
+    assert check.unresolved == tuple()
+    assert "A.Box" in runtime.probed_decls
+    assert "A.Box.size" in runtime.probed_decls
+    assert not any("_anonymous_instance_" in name for name in runtime.probed_decls)
+
+
 def test_run_lint_axiom_audit_skips_files_without_top_level_declarations(tmp_path: Path) -> None:
     _write(tmp_path / "A" / "Empty.lean", "import Mathlib\n\nnamespace A.Empty\n\nend A.Empty\n")
     _write(tmp_path / "A" / "Full.lean", "theorem t : True := by\n  trivial\n")

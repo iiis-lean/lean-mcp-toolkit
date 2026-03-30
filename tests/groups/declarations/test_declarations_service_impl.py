@@ -320,3 +320,41 @@ def test_text_ast_declarations_normalize_kind_signature_and_ranges(tmp_path: Pat
             "  rfl",
         ]
     )
+
+
+def test_text_ast_declarations_qualify_relative_dotted_names_inside_namespace(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "A" / "B.lean",
+        "\n".join(
+            [
+                "namespace A.B",
+                "",
+                "structure Box where",
+                "  value : Nat",
+                "",
+                "def Box.size (b : Box) : Nat :=",
+                "  b.value",
+                "",
+                "end A.B",
+                "",
+            ]
+        ),
+    )
+    cfg = ToolkitConfig.from_dict(
+        {
+            "server": {"default_project_root": str(tmp_path)},
+            "declarations": {
+                "default_backend": "text_ast",
+                "default_include_value": True,
+            },
+        }
+    )
+    svc = DeclarationsServiceImpl(config=cfg)
+
+    resp = svc.extract(DeclarationExtractRequest.from_dict({"target": "A/B.lean"}))
+
+    assert resp.success is True
+    assert resp.total_declarations == 2
+    structure_decl, dotted_decl = resp.declarations
+    assert structure_decl.name == "A.B.Box"
+    assert dotted_decl.name == "A.B.Box.size"
