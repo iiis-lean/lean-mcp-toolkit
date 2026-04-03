@@ -50,6 +50,8 @@ class _FakeProofManager:
 
 
 def test_proof_search_alt_service_roundtrip(tmp_path: Path) -> None:
+    (tmp_path / "lean-toolchain").write_text("leanprover/lean4:v4.28.0\n", encoding="utf-8")
+    (tmp_path / "Subdir").mkdir(parents=True, exist_ok=True)
     source_file = tmp_path / "Main.lean"
     source_file.write_text("theorem t : True := by\n  trivial\n", encoding="utf-8")
     cfg = ToolkitConfig.from_dict(
@@ -80,3 +82,12 @@ def test_proof_search_alt_service_roundtrip(tmp_path: Path) -> None:
     assert state.goal == "⊢ True"
     assert hammer.items[0].name == "True.intro"
 
+    state_from_nested_root = service.run_state_search(
+        ProofSearchAltStateSearchRequest(
+            project_root=str(tmp_path / "Subdir"),
+            file_path="Main.lean",
+            line=1,
+            column=1,
+        )
+    )
+    assert state_from_nested_root.success is True

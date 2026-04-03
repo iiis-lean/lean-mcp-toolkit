@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import os
 from pathlib import Path
 
+from ...backends.lean.path import resolve_project_root
 from ...backends.search_providers import SearchAltBackendManager
 from ...config import ToolkitConfig
 from ...contracts.search_alt import (
@@ -200,8 +200,11 @@ class SearchAltServiceImpl(SearchAltService):
         root = self.config.server.default_project_root
         if not root:
             return None
-        resolved = Path(root).expanduser().resolve()
-        if resolved.exists() and resolved.is_dir():
-            return resolved
-        return None
-
+        try:
+            return resolve_project_root(
+                root,
+                default_project_root=None,
+                allow_cwd_fallback=False,
+            )
+        except Exception:
+            return None

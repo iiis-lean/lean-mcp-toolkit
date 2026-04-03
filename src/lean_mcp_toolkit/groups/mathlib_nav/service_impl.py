@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 import os
 from pathlib import Path
 
+from ...backends.lean.path import resolve_project_root
 from ...config import ToolkitConfig
 from ...contracts.mathlib_nav import (
     MathlibNavFileOutlineRequest,
@@ -110,9 +111,11 @@ class MathlibNavServiceImpl(MathlibNavService):
             or (self.config.server.default_project_root or "").strip()
             or os.getcwd()
         )
-        project = Path(raw_project).expanduser().resolve()
-        if not project.exists() or not project.is_dir():
-            raise FileNotFoundError(f"project_root is not a directory: {project}")
+        project = resolve_project_root(
+            raw_project,
+            default_project_root=self.config.server.default_project_root,
+            allow_cwd_fallback=True,
+        )
 
         candidates = (
             project / ".lake" / "packages" / "mathlib" / "Mathlib",

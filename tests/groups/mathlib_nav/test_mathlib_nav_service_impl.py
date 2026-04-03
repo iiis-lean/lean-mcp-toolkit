@@ -80,6 +80,26 @@ def test_mathlib_nav_service_tree_outline_read(tmp_path: Path) -> None:
     assert read.window.start_line == 1
 
 
+def test_mathlib_nav_service_accepts_project_subdirectory_as_project_root(tmp_path: Path) -> None:
+    project = _build_project_with_mathlib(tmp_path)
+    nested = project / "Pkg" / "Node"
+    nested.mkdir(parents=True, exist_ok=True)
+    svc = MathlibNavServiceImpl(config=ToolkitConfig())
+
+    outline = svc.run_mathlib_nav_file_outline(
+        MathlibNavFileOutlineRequest.from_dict(
+            {
+                "project_root": str(nested),
+                "target": "Linear.Probe",
+            }
+        )
+    )
+
+    assert outline.success is True
+    assert outline.target is not None
+    assert outline.target.module_path == "Linear.Probe"
+
+
 def test_mathlib_nav_service_explicit_mathlib_root(tmp_path: Path) -> None:
     project = _build_project_with_mathlib(tmp_path)
     explicit_root = project / ".lake" / "packages" / "mathlib"

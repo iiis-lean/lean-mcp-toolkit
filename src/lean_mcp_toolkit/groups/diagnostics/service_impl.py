@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import inspect
-import os
 from pathlib import Path
 import re
 import threading
@@ -16,7 +15,7 @@ from ...backends.declarations import (
     LeanInteractDeclarationsBackend,
 )
 from ...backends.lean import CommandResult, LeanCommandRuntime
-from ...backends.lean.path import LeanPath, TargetResolver
+from ...backends.lean.path import LeanPath, TargetResolver, resolve_project_root
 from ...backends.lsp import LeanLSPClientManager
 from ...config import ToolkitConfig
 from ...contracts.diagnostics import (
@@ -1432,8 +1431,11 @@ class DiagnosticsServiceImpl(DiagnosticsService):
         return "lint requires explicit Lean file or directory targets; targets must be non-empty"
 
     def _resolve_project_root(self, project_root: str | None) -> Path:
-        root = project_root or self.config.server.default_project_root or os.getcwd()
-        return Path(root).expanduser().resolve()
+        return resolve_project_root(
+            project_root,
+            default_project_root=self.config.server.default_project_root,
+            allow_cwd_fallback=True,
+        )
 
     def _run_file_diagnostics(
         self,

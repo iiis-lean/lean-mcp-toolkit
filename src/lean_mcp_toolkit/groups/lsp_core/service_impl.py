@@ -18,12 +18,12 @@ Method mapping:
 from __future__ import annotations
 
 from dataclasses import dataclass
-import os
 from pathlib import Path
 from typing import Any
 
-from ...backends.lsp import LeanLSPClientManager
 from ...backends.lean.path import LeanPath
+from ...backends.lean.path import resolve_project_root
+from ...backends.lsp import LeanLSPClientManager
 from ...config import ToolkitConfig
 from ...contracts.lsp_core import (
     CodeAction,
@@ -384,11 +384,11 @@ class LspCoreServiceImpl(LspCoreService):
             )
 
     def _resolve_project_root(self, project_root: str | None) -> Path:
-        root = project_root or self.config.server.default_project_root or os.getcwd()
-        resolved = Path(root).expanduser().resolve()
-        if not resolved.exists() or not resolved.is_dir():
-            raise ValueError(f"project_root is not a directory: {resolved}")
-        return resolved
+        return resolve_project_root(
+            project_root,
+            default_project_root=self.config.server.default_project_root,
+            allow_cwd_fallback=True,
+        )
 
     def _normalize_file_path(self, *, project_root: Path, file_path: str) -> str:
         text = file_path.strip()

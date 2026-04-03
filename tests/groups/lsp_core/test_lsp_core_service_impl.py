@@ -129,6 +129,7 @@ class _FakeLspClientManager:
 
 def test_lsp_core_service_structured_and_markdown(tmp_path: Path) -> None:
     content = "import Mathlib\n\n theorem foo : True := by\n  trivial\n"
+    (tmp_path / "lean-toolchain").write_text("leanprover/lean4:v4.28.0\n", encoding="utf-8")
     file_path = tmp_path / "A" / "B.lean"
     file_path.parent.mkdir(parents=True, exist_ok=True)
     file_path.write_text(content, encoding="utf-8")
@@ -173,3 +174,14 @@ def test_lsp_core_service_structured_and_markdown(tmp_path: Path) -> None:
     assert len(actions.actions) == 1
     assert actions.actions[0].title == "Try this"
     assert actions.actions[0].edits[0].new_text == "exact trivial"
+
+    outline_from_nested_root = service.run_file_outline(
+        LspFileOutlineRequest.from_dict(
+            {
+                "project_root": str(tmp_path / "A"),
+                "file_path": "A/B.lean",
+            }
+        )
+    )
+    assert not isinstance(outline_from_nested_root, MarkdownResponse)
+    assert outline_from_nested_root.success is True

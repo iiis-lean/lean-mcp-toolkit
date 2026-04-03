@@ -130,6 +130,7 @@ def _write(path: Path, text: str) -> None:
 
 
 def test_declarations_extract_normalizes_target_and_calls_backend(tmp_path: Path) -> None:
+    (tmp_path / "lean-toolchain").write_text("leanprover/lean4:v4.28.0\n", encoding="utf-8")
     _write(tmp_path / "A" / "B.lean", "theorem foo : True := by trivial\n")
     backend = _FakeBackend()
     cfg = ToolkitConfig.from_dict(
@@ -155,6 +156,28 @@ def test_declarations_extract_normalizes_target_and_calls_backend(tmp_path: Path
     assert backend.last_req is not None
     assert backend.last_req.target_dot == "A.B"
     assert backend.last_req.timeout_seconds == 15
+
+
+def test_declarations_extract_accepts_nested_project_root(tmp_path: Path) -> None:
+    (tmp_path / "lakefile.toml").write_text("name = \"Demo\"\n", encoding="utf-8")
+    _write(tmp_path / "A" / "B.lean", "theorem foo : True := by trivial\n")
+    nested = tmp_path / "A"
+    backend = _FakeBackend()
+    cfg = ToolkitConfig.from_dict({"declarations": {"default_backend": "lean_interact"}})
+    svc = DeclarationsServiceImpl(config=cfg, backends={"lean_interact": backend})
+
+    resp = svc.extract(
+        DeclarationExtractRequest.from_dict(
+            {
+                "project_root": str(nested),
+                "target": "A/B.lean",
+            }
+        )
+    )
+
+    assert resp.success is True
+    assert backend.last_req is not None
+    assert backend.last_req.project_root == tmp_path.resolve()
 
 
 def test_declarations_extract_invalid_target_returns_failure(tmp_path: Path) -> None:

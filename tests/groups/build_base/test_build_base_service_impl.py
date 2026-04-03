@@ -69,6 +69,7 @@ class _FakeRuntime:
 
 
 def test_build_base_service_builds_workspace_with_defaults(tmp_path: Path) -> None:
+    (tmp_path / "lean-toolchain").write_text("leanprover/lean4:v4.28.0\n", encoding="utf-8")
     runtime = _FakeRuntime(
         clean_result=CommandResult(args=("lake", "clean"), returncode=0, stdout="", stderr=""),
         build_result=CommandResult(
@@ -102,6 +103,28 @@ def test_build_base_service_builds_workspace_with_defaults(tmp_path: Path) -> No
     assert runtime.build_calls == [
         (tmp_path.resolve(), tuple(), None, 17),
     ]
+
+
+def test_build_base_service_resolves_project_root_from_nested_default(tmp_path: Path) -> None:
+    (tmp_path / "lakefile.toml").write_text("name = \"Demo\"\n", encoding="utf-8")
+    nested = tmp_path / "Pkg" / "Node"
+    nested.mkdir(parents=True, exist_ok=True)
+    runtime = _FakeRuntime(
+        clean_result=CommandResult(args=("lake", "clean"), returncode=0, stdout="", stderr=""),
+        build_result=CommandResult(args=("lake", "build"), returncode=0, stdout="", stderr=""),
+    )
+    resolver = _FakeResolver(resolved_targets=tuple())
+    svc = BuildBaseServiceImpl(
+        config=ToolkitConfig.from_dict({"server": {"default_project_root": str(nested)}}),
+        runtime=runtime,
+        resolver=resolver,
+    )
+
+    resp = svc.run_workspace(BuildWorkspaceRequest.from_dict({}))
+
+    assert resp.success is True
+    assert resp.project_root == str(tmp_path.resolve())
+    assert runtime.build_calls == [(tmp_path.resolve(), tuple(), None, None)]
 
 
 def test_build_base_service_supports_clean_targets_and_facet(tmp_path: Path) -> None:

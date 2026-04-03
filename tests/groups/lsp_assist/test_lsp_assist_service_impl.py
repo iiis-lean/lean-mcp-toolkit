@@ -119,6 +119,7 @@ class _FakeLspClientManager:
 
 
 def test_lsp_assist_service_roundtrip(tmp_path: Path) -> None:
+    (tmp_path / "lean-toolchain").write_text("leanprover/lean4:v4.28.0\n", encoding="utf-8")
     target_file = tmp_path / "A" / "B.lean"
     target_file.parent.mkdir(parents=True, exist_ok=True)
     target_file.write_text("def foo := 1\ntheorem t : True := by\n  trivial\n", encoding="utf-8")
@@ -193,3 +194,14 @@ def test_lsp_assist_service_roundtrip(tmp_path: Path) -> None:
     assert soundness.axiom_count == 1
     assert soundness.axioms == ("Classical.choice",)
 
+    comp_from_nested_root = service.run_completions(
+        LspCompletionsRequest.from_dict(
+            {
+                "project_root": str(tmp_path / "A"),
+                "file_path": "Main.lean",
+                "line": 4,
+                "column": 5,
+            }
+        )
+    )
+    assert comp_from_nested_root.success is True

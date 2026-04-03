@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import os
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 from ...backends.declarations import DeclarationsBackend
+from ...backends.lean.path import LeanPath, resolve_project_root
 from ...backends.lsp import LeanLSPClientManager
-from ...backends.lean.path import LeanPath
 from ...config import ToolkitConfig
 from ...contracts.declarations import (
     DeclarationExtractRequest,
@@ -207,11 +206,11 @@ class DeclarationsServiceImpl(DeclarationsService):
         )
 
     def _resolve_project_root(self, project_root: str | None) -> Path:
-        root = project_root or self.config.server.default_project_root or os.getcwd()
-        resolved = Path(root).expanduser().resolve()
-        if not resolved.exists() or not resolved.is_dir():
-            raise ValueError(f"project_root is not a directory: {resolved}")
-        return resolved
+        return resolve_project_root(
+            project_root,
+            default_project_root=self.config.server.default_project_root,
+            allow_cwd_fallback=True,
+        )
 
     def _build_interface_backends(
         self,

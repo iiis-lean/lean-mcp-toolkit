@@ -1,7 +1,8 @@
 """Shared Lean path resolution helpers."""
 
 from .lean_path import LeanPath
+from .project_root import resolve_project_root
 from .target_models import ResolvedTargets
 from .target_resolver import TargetResolver
 
-__all__ = ["LeanPath", "ResolvedTargets", "TargetResolver"]
+__all__ = ["LeanPath", "ResolvedTargets", "TargetResolver", "resolve_project_root"]

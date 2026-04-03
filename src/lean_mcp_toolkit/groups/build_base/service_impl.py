@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ...backends.lean import CommandResult, LeanCommandRuntime
-from ...backends.lean.path import TargetResolver
+from ...backends.lean.path import TargetResolver, resolve_project_root
 from ...config import ToolkitConfig
 from ...contracts.build_base import BuildWorkspaceRequest, BuildWorkspaceResponse
 from ...core.services import BuildBaseService
@@ -126,13 +126,11 @@ class BuildBaseServiceImpl(BuildBaseService):
         )
 
     def _resolve_project_root(self, project_root: str | None) -> Path:
-        raw = (project_root or self.config.server.default_project_root or "").strip()
-        if not raw:
-            raise ValueError("project_root is required")
-        root = Path(raw).expanduser().resolve()
-        if not root.exists() or not root.is_dir():
-            raise ValueError(f"project_root is not a directory: {root}")
-        return root
+        return resolve_project_root(
+            project_root,
+            default_project_root=self.config.server.default_project_root,
+            allow_cwd_fallback=False,
+        )
 
     def _response_from_result(
         self,
