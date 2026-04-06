@@ -58,6 +58,8 @@ class LeanInteractDeclarationsBackend:
                 timeout_per_req=timeout,
             )
         except Exception as exc:
+            if self._should_recycle_runtime(exc):
+                self.runtime_manager.recycle_runtime(project_root)
             error = f"lean_interact execution failed: {self._format_exception(exc)}"
             return tuple(
                 DeclarationsBackendResponse(
@@ -89,6 +91,8 @@ class LeanInteractDeclarationsBackend:
                 timeout=timeout,
             )
         except Exception as exc:
+            if self._should_recycle_runtime(exc):
+                self.runtime_manager.recycle_runtime(req.project_root)
             return DeclarationsBackendResponse(
                 success=False,
                 error_message=f"lean_interact execution failed: {self._format_exception(exc)}",
@@ -176,3 +180,10 @@ class LeanInteractDeclarationsBackend:
         if message:
             return message
         return exc.__class__.__name__
+
+    @staticmethod
+    def _should_recycle_runtime(exc: Exception) -> bool:
+        if isinstance(exc, TimeoutError):
+            return True
+        lowered = str(exc).strip().lower()
+        return "timed out" in lowered or "timeout" in lowered or "deadline" in lowered

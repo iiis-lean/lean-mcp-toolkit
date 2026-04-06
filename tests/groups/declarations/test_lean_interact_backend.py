@@ -122,6 +122,7 @@ class _FakeLeanREPLConfig:
 class _FakeLeanServer:
     created: list[object] = []
     last_run: dict | None = None
+    close_calls: int = 0
     response_factory = staticmethod(
         lambda: _FakeResponse(
             declarations=[],
@@ -138,6 +139,10 @@ class _FakeLeanServer:
         self.__class__.last_run = {"file_command": file_command, "timeout": timeout}
         return self.__class__.response_factory()
 
+    def close(self):
+        self.__class__.close_calls += 1
+        return None
+
 
 class _FakeAutoLeanServer(_FakeLeanServer):
     created: list[object] = []
@@ -147,6 +152,7 @@ class _FakeLeanServerPool:
     created: list[dict] = []
     last_run: dict | None = None
     last_run_batch: dict | None = None
+    close_calls: int = 0
     response_factory = staticmethod(
         lambda: _FakeResponse(
             declarations=[],
@@ -180,6 +186,7 @@ class _FakeLeanServerPool:
         return [self.__class__.response_factory() for _ in requests]
 
     def close(self):
+        self.__class__.close_calls += 1
         return None
 
 
@@ -200,10 +207,13 @@ def _reset_fakes() -> None:
     _FakeLeanREPLConfig.created = []
     _FakeLeanServer.created = []
     _FakeLeanServer.last_run = None
+    _FakeLeanServer.close_calls = 0
     _FakeAutoLeanServer.created = []
+    _FakeAutoLeanServer.close_calls = 0
     _FakeLeanServerPool.created = []
     _FakeLeanServerPool.last_run = None
     _FakeLeanServerPool.last_run_batch = None
+    _FakeLeanServerPool.close_calls = 0
     _FakeLeanServer.response_factory = staticmethod(
         lambda: _FakeResponse(
             declarations=[],
@@ -557,3 +567,53 @@ def test_lean_interact_backend_includes_exception_type_for_empty_message(
 
     assert resp.success is False
     assert resp.error_message == "lean_interact execution failed: AssertionError"
+
+
+def test_lean_interact_backend_recycles_runtime_on_timeout(monkeypatch, tmp_path: Path) -> None:
+    _reset_fakes()
+    backend = LeanInteractDeclarationsBackend(
+        toolchain_config=ToolchainConfig(),
+        backend_config=LeanInteractBackendConfig(use_server_pool=False),
+    )
+    monkeypatch.setattr(backend.runtime_manager, "_load_lean_interact", lambda: _fake_module_dict())
+    _FakeLeanServer.response_factory = staticmethod(lambda: (_ for _ in ()).throw(TimeoutError("timed out")))
+
+    resp = backend.extract(
+        DeclarationsBackendRequest(
+            project_root=tmp_path,
+            target_dot="A.B",
+            timeout_seconds=5,
+        )
+    )
+
+    assert resp.success is False
+    assert "timed out" in (resp.error_message or "")
+    assert len(backend.runtime_manager._runtimes) == 0
+    assert _FakeLeanServer.close_calls == 1
+
+
+def test_lean_interact_backend_recycles_batch_runtime_on_timeout(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _reset_fakes()
+    backend = LeanInteractDeclarationsBackend(
+        toolchain_config=ToolchainConfig(),
+        backend_config=LeanInteractBackendConfig(),
+    )
+    monkeypatch.setattr(backend.runtime_manager, "_load_lean_interact", lambda: _fake_module_dict())
+    _FakeLeanServerPool.response_factory = staticmethod(
+        lambda: (_ for _ in ()).throw(TimeoutError("timed out"))
+    )
+
+    responses = backend.extract_batch(
+        (
+            DeclarationsBackendRequest(project_root=tmp_path, target_dot="A.B", timeout_seconds=5),
+            DeclarationsBackendRequest(project_root=tmp_path, target_dot="A.C", timeout_seconds=5),
+        )
+    )
+
+    assert len(responses) == 2
+    assert all(resp.success is False for resp in responses)
+    assert len(backend.runtime_manager._runtimes) == 0
+    assert _FakeLeanServerPool.close_calls == 1

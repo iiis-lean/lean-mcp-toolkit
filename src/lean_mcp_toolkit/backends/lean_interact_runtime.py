@@ -42,16 +42,15 @@ class LeanInteractRuntimeManager:
             runtimes = tuple(self._runtimes.values())
             self._runtimes.clear()
         for runtime in runtimes:
-            try:
-                close = getattr(runtime, "close", None)
-                if callable(close):
-                    close()
-                    continue
-                kill = getattr(runtime, "kill", None)
-                if callable(kill):
-                    kill()
-            except Exception:
-                continue
+            self._close_runtime(runtime)
+
+    def close_runtime(self, project_root: Path) -> None:
+        runtime = self._pop_runtime(project_root)
+        if runtime is not None:
+            self._close_runtime(runtime)
+
+    def recycle_runtime(self, project_root: Path) -> None:
+        self.close_runtime(project_root)
 
     def run(
         self,
@@ -98,6 +97,11 @@ class LeanInteractRuntimeManager:
             runtime = self._create_runtime(project_root)
             self._runtimes[key] = runtime
             return runtime
+
+    def _pop_runtime(self, project_root: Path) -> Any | None:
+        key = str(project_root)
+        with self._runtime_lock:
+            return self._runtimes.pop(key, None)
 
     def _create_runtime(self, project_root: Path) -> Any:
         lean_interact = self._load_lean_interact()
@@ -166,6 +170,19 @@ class LeanInteractRuntimeManager:
         if lean_version is None:
             return None
         return _LEAN_VERSION_TO_REPL_REV.get(self._normalize_lean_version(lean_version))
+
+    @staticmethod
+    def _close_runtime(runtime: Any) -> None:
+        try:
+            close = getattr(runtime, "close", None)
+            if callable(close):
+                close()
+                return
+            kill = getattr(runtime, "kill", None)
+            if callable(kill):
+                kill()
+        except Exception:
+            return
 
     @staticmethod
     def _read_project_lean_version(project_root: Path) -> str | None:
