@@ -26,6 +26,7 @@ def _has_real_lsp_runtime() -> bool:
 
 
 def _init_lake_project(base_dir: Path, project_name: str) -> tuple[Path, Path]:
+    base_dir.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         ["lake", "init", project_name],
         cwd=base_dir,

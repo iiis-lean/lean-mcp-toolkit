@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
+import time
 
 from lean_mcp_toolkit.config import ToolkitConfig
 from lean_mcp_toolkit.contracts.lsp_core import (
@@ -23,6 +24,7 @@ class _DiagResult:
 class _FakeLspClient:
     file_content: str
     diag_error: Exception | None = None
+    diag_delay_seconds: float = 0.0
     diag_timeouts: list[float] | None = None
     closed_paths: list[list[str]] | None = None
 
@@ -79,6 +81,8 @@ class _FakeLspClient:
         _ = rel_path, start_line, end_line
         if self.diag_timeouts is not None:
             self.diag_timeouts.append(inactivity_timeout)
+        if self.diag_delay_seconds > 0:
+            time.sleep(self.diag_delay_seconds)
         if self.diag_error is not None:
             raise self.diag_error
         return _DiagResult(
@@ -242,6 +246,46 @@ def test_lsp_core_run_snippet_clamps_timeout_and_recycles_on_failure(tmp_path: P
     assert snippet.success is False
     assert "timed out" in (snippet.error_message or "")
     assert fake_client.diag_timeouts == [120.0]
+    assert fake_client.closed_paths == []
+    assert manager.recycled_roots == [tmp_path.resolve()]
+    assert list(tmp_path.glob("_mcp_snippet_*.lean")) == []
+
+
+def test_lsp_core_run_snippet_hard_timeout_recycles_when_diagnostics_blocks(tmp_path: Path) -> None:
+    (tmp_path / "lean-toolchain").write_text("leanprover/lean4:v4.28.0\n", encoding="utf-8")
+    cfg = ToolkitConfig.from_dict(
+        {
+            "server": {"default_project_root": str(tmp_path)},
+            "lsp_core": {
+                "run_snippet_default_timeout_seconds": 1,
+                "run_snippet_max_timeout_seconds": 1,
+            },
+        }
+    )
+    fake_client = _FakeLspClient(
+        file_content="",
+        diag_delay_seconds=5.0,
+        diag_timeouts=[],
+        closed_paths=[],
+    )
+    manager = _FakeLspClientManager(client=fake_client, recycled_roots=[])
+    service = LspCoreServiceImpl(config=cfg, lsp_client_manager=manager)
+
+    started = time.monotonic()
+    snippet = service.run_snippet(
+        LspRunSnippetRequest.from_dict(
+            {
+                "code": "import Mathlib\n#check Nat\n",
+                "timeout_seconds": 1,
+            }
+        )
+    )
+    elapsed = time.monotonic() - started
+
+    assert snippet.success is False
+    assert "timed out" in (snippet.error_message or "").lower()
+    assert elapsed < 4.0
+    assert fake_client.diag_timeouts == [1.0]
     assert fake_client.closed_paths == []
     assert manager.recycled_roots == [tmp_path.resolve()]
     assert list(tmp_path.glob("_mcp_snippet_*.lean")) == []

@@ -18,6 +18,7 @@ Method mapping:
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -410,9 +411,10 @@ class LspCoreServiceImpl(LspCoreService):
             client.open_file(rel_path)
 
             inactivity_timeout = float(self._resolve_run_snippet_timeout_seconds(req.timeout_seconds))
-            raw_diag = client.get_diagnostics(
-                rel_path,
-                inactivity_timeout=inactivity_timeout,
+            raw_diag = self._get_diagnostics_with_hard_timeout(
+                client=client,
+                rel_path=rel_path,
+                timeout_seconds=inactivity_timeout,
             )
             diagnostics = tuple(
                 self._map_diagnostic(item)
@@ -476,6 +478,28 @@ class LspCoreServiceImpl(LspCoreService):
 
         max_timeout = max(1, int(self.config.lsp_core.run_snippet_max_timeout_seconds))
         return min(max(1, int(timeout_seconds)), max_timeout)
+
+    @staticmethod
+    def _get_diagnostics_with_hard_timeout(
+        *,
+        client: Any,
+        rel_path: str,
+        timeout_seconds: float,
+    ) -> Any:
+        executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="toolkit-lsp-snippet")
+        future = executor.submit(
+            client.get_diagnostics,
+            rel_path,
+            None,
+            None,
+            timeout_seconds,
+        )
+        try:
+            return future.result(timeout=max(1.0, timeout_seconds + 1.0))
+        except FuturesTimeoutError as exc:
+            raise TimeoutError(f"LSP diagnostics timed out after {timeout_seconds:.1f}s") from exc
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
 
     def _resolve_project_root(self, project_root: str | None) -> Path:
         return resolve_project_root(
