@@ -138,8 +138,8 @@ _RUN_SNIPPET_PARAMS: tuple[ToolParamSpec, ...] = (
         name="timeout_seconds",
         type_hint="int | null",
         required=False,
-        default_value="lsp_assist.run_snippet_default_timeout_seconds",
-        description="Diagnostics wait timeout in seconds. Values above lsp_assist.run_snippet_max_timeout_seconds are clamped.",
+        default_value="lsp_core.run_snippet_default_timeout_seconds",
+        description="Diagnostics wait timeout in seconds. Values above lsp_core.run_snippet_max_timeout_seconds are clamped.",
     ),
 )
 

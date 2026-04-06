@@ -398,7 +398,7 @@ class LspCoreServiceImpl(LspCoreService):
             code = req.code
             if not code.strip():
                 raise ValueError("code is required")
-            max_chars = max(1, self.config.lsp_assist.run_snippet_max_code_chars)
+            max_chars = max(1, self.config.lsp_core.run_snippet_max_code_chars)
             if len(code) > max_chars:
                 raise ValueError(f"code exceeds max length: {len(code)} > {max_chars}")
 
@@ -469,12 +469,12 @@ class LspCoreServiceImpl(LspCoreService):
         timeout_seconds = (
             requested_timeout
             if requested_timeout is not None
-            else self.config.lsp_assist.run_snippet_default_timeout_seconds
+            else self.config.lsp_core.run_snippet_default_timeout_seconds
         )
         if timeout_seconds is None or timeout_seconds <= 0:
             timeout_seconds = self.config.backends.lsp.diagnostics_timeout_seconds
 
-        max_timeout = max(1, int(self.config.lsp_assist.run_snippet_max_timeout_seconds))
+        max_timeout = max(1, int(self.config.lsp_core.run_snippet_max_timeout_seconds))
         return min(max(1, int(timeout_seconds)), max_timeout)
 
     def _resolve_project_root(self, project_root: str | None) -> Path:

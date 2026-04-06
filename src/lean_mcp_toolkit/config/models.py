@@ -260,6 +260,9 @@ class LspCoreConfig:
     default_max_declarations: int | None = None
     hover_include_diagnostics_default: bool = True
     code_actions_max_actions: int | None = None
+    run_snippet_default_timeout_seconds: int = 30
+    run_snippet_max_timeout_seconds: int = 120
+    run_snippet_max_code_chars: int = 20000
 
     @classmethod
     def from_dict(cls, data: JsonDict) -> "LspCoreConfig":
@@ -275,6 +278,15 @@ class LspCoreConfig:
                 default=True,
             ),
             code_actions_max_actions=to_int(data.get("code_actions_max_actions"), default=None),
+            run_snippet_default_timeout_seconds=(
+                to_int(data.get("run_snippet_default_timeout_seconds"), default=30) or 30
+            ),
+            run_snippet_max_timeout_seconds=(
+                to_int(data.get("run_snippet_max_timeout_seconds"), default=120) or 120
+            ),
+            run_snippet_max_code_chars=(
+                to_int(data.get("run_snippet_max_code_chars"), default=20000) or 20000
+            ),
         )
 
     def to_dict(self) -> JsonDict:
@@ -284,6 +296,9 @@ class LspCoreConfig:
             "default_max_declarations": self.default_max_declarations,
             "hover_include_diagnostics_default": self.hover_include_diagnostics_default,
             "code_actions_max_actions": self.code_actions_max_actions,
+            "run_snippet_default_timeout_seconds": self.run_snippet_default_timeout_seconds,
+            "run_snippet_max_timeout_seconds": self.run_snippet_max_timeout_seconds,
+            "run_snippet_max_code_chars": self.run_snippet_max_code_chars,
         }
 
 
@@ -293,9 +308,6 @@ class LspAssistConfig:
     default_max_completions: int = 32
     multi_attempt_default_max_attempts: int | None = None
     multi_attempt_max_snippets_hard_limit: int = 16
-    run_snippet_default_timeout_seconds: int = 30
-    run_snippet_max_timeout_seconds: int = 120
-    run_snippet_max_code_chars: int = 20000
     theorem_soundness_scan_source_default: bool = True
     declaration_file_include_content_default: bool = False
 
@@ -310,15 +322,6 @@ class LspAssistConfig:
             ),
             multi_attempt_max_snippets_hard_limit=(
                 to_int(data.get("multi_attempt_max_snippets_hard_limit"), default=16) or 16
-            ),
-            run_snippet_default_timeout_seconds=(
-                to_int(data.get("run_snippet_default_timeout_seconds"), default=30) or 30
-            ),
-            run_snippet_max_timeout_seconds=(
-                to_int(data.get("run_snippet_max_timeout_seconds"), default=120) or 120
-            ),
-            run_snippet_max_code_chars=(
-                to_int(data.get("run_snippet_max_code_chars"), default=20000) or 20000
             ),
             theorem_soundness_scan_source_default=to_bool(
                 data.get("theorem_soundness_scan_source_default"),
@@ -336,9 +339,6 @@ class LspAssistConfig:
             "default_max_completions": self.default_max_completions,
             "multi_attempt_default_max_attempts": self.multi_attempt_default_max_attempts,
             "multi_attempt_max_snippets_hard_limit": self.multi_attempt_max_snippets_hard_limit,
-            "run_snippet_default_timeout_seconds": self.run_snippet_default_timeout_seconds,
-            "run_snippet_max_timeout_seconds": self.run_snippet_max_timeout_seconds,
-            "run_snippet_max_code_chars": self.run_snippet_max_code_chars,
             "theorem_soundness_scan_source_default": self.theorem_soundness_scan_source_default,
             "declaration_file_include_content_default": self.declaration_file_include_content_default,
         }

@@ -215,7 +215,7 @@ def test_lsp_core_run_snippet_clamps_timeout_and_recycles_on_failure(tmp_path: P
     cfg = ToolkitConfig.from_dict(
         {
             "server": {"default_project_root": str(tmp_path)},
-            "lsp_assist": {
+            "lsp_core": {
                 "run_snippet_default_timeout_seconds": 30,
                 "run_snippet_max_timeout_seconds": 120,
             },

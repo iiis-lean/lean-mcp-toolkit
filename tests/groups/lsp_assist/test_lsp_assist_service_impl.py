@@ -226,10 +226,12 @@ def test_lsp_assist_run_snippet_clamps_timeout_and_recycles_on_failure(tmp_path:
         {
             "server": {"default_project_root": str(tmp_path)},
             "groups": {"enabled_groups": ["lsp_assist"]},
-            "lsp_assist": {
-                "enabled": True,
+            "lsp_core": {
                 "run_snippet_default_timeout_seconds": 30,
                 "run_snippet_max_timeout_seconds": 120,
+            },
+            "lsp_assist": {
+                "enabled": True,
             },
         }
     )
