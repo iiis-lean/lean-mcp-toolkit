@@ -68,12 +68,16 @@ class SearchCoreServiceImpl(SearchCoreService):
             else self.config.search_core.default_packages
         )
 
-        result = self.lean_explore_backend.search(
-            query=query,
-            limit=max(1, int(limit)),
-            rerank_top=rerank_top,
-            packages=tuple(packages) if packages is not None else None,
-        )
+        try:
+            result = self.lean_explore_backend.search(
+                query=query,
+                limit=max(1, int(limit)),
+                rerank_top=rerank_top,
+                packages=tuple(packages) if packages is not None else None,
+            )
+        except Exception:
+            self._recycle_backend_best_effort()
+            raise
 
         items = tuple(
             self._project_item(
@@ -101,7 +105,11 @@ class SearchCoreServiceImpl(SearchCoreService):
         if declaration_id <= 0:
             return MathlibDeclGetResponse(found=False, item=None)
 
-        item = self.lean_explore_backend.get_by_id(declaration_id)
+        try:
+            item = self.lean_explore_backend.get_by_id(declaration_id)
+        except Exception:
+            self._recycle_backend_best_effort()
+            raise
         if item is None:
             return MathlibDeclGetResponse(found=False, item=None)
 
@@ -115,6 +123,11 @@ class SearchCoreServiceImpl(SearchCoreService):
             include_informalization=req.include_informalization,
         )
         return MathlibDeclGetResponse(found=True, item=projected)
+
+    def close(self) -> None:
+        close = getattr(self.lean_explore_backend, "close", None)
+        if callable(close):
+            close()
 
     @staticmethod
     def _project_item(
@@ -137,6 +150,14 @@ class SearchCoreServiceImpl(SearchCoreService):
             dependencies=record.dependencies if include_dependencies else None,
             informalization=record.informalization if include_informalization else None,
         )
+
+    def _recycle_backend_best_effort(self) -> None:
+        recycle = getattr(self.lean_explore_backend, "recycle", None)
+        if callable(recycle):
+            try:
+                recycle()
+            except Exception:
+                pass
 
 
 __all__ = ["SearchCoreServiceImpl"]

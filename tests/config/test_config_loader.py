@@ -46,6 +46,9 @@ def test_default_diagnostics_config() -> None:
         "Quot.sound",
     )
     assert cfg.diagnostics.axiom_audit_include_sorry_ax is False
+    assert cfg.lsp_assist.run_snippet_default_timeout_seconds == 30
+    assert cfg.lsp_assist.run_snippet_max_timeout_seconds == 120
+    assert cfg.backends.lean_explore.local_timeout_seconds == 30
 
 
 def test_default_nav_group_activation() -> None:

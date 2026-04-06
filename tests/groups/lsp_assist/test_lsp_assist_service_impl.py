@@ -16,14 +16,18 @@ from lean_mcp_toolkit.groups.lsp_assist.service_impl import LspAssistServiceImpl
 class _FakeLspClient:
     file_content: str
     target_uri: str
+    diag_error: Exception | None = None
+    diag_timeouts: list[float] | None = None
+    closed_paths: list[list[str]] | None = None
 
     def open_file(self, rel_path: str, force_reopen: bool = False) -> None:
         _ = rel_path
         _ = force_reopen
 
     def close_files(self, paths, blocking: bool = True):
-        _ = paths
         _ = blocking
+        if self.closed_paths is not None:
+            self.closed_paths.append(list(paths))
 
     def get_file_content(self, rel_path: str) -> str:
         _ = rel_path
@@ -74,7 +78,11 @@ class _FakeLspClient:
         end_line: int | None = None,
         inactivity_timeout: float = 15.0,
     ):
-        _ = start_line, end_line, inactivity_timeout
+        _ = start_line, end_line
+        if self.diag_timeouts is not None:
+            self.diag_timeouts.append(inactivity_timeout)
+        if self.diag_error is not None and rel_path.startswith("_mcp_snippet_"):
+            raise self.diag_error
         if rel_path.startswith("_mcp_snippet_"):
             return [
                 {
@@ -112,10 +120,15 @@ class _FakeLspClient:
 @dataclass(slots=True)
 class _FakeLspClientManager:
     client: _FakeLspClient
+    recycled_roots: list[Path] | None = None
 
     def get_client(self, project_root: Path):
         _ = project_root
         return self.client
+
+    def recycle_client(self, project_root: Path) -> None:
+        if self.recycled_roots is not None:
+            self.recycled_roots.append(project_root.resolve())
 
 
 def test_lsp_assist_service_roundtrip(tmp_path: Path) -> None:
@@ -205,3 +218,43 @@ def test_lsp_assist_service_roundtrip(tmp_path: Path) -> None:
         )
     )
     assert comp_from_nested_root.success is True
+
+
+def test_lsp_assist_run_snippet_clamps_timeout_and_recycles_on_failure(tmp_path: Path) -> None:
+    (tmp_path / "lean-toolchain").write_text("leanprover/lean4:v4.28.0\n", encoding="utf-8")
+    cfg = ToolkitConfig.from_dict(
+        {
+            "server": {"default_project_root": str(tmp_path)},
+            "groups": {"enabled_groups": ["lsp_assist"]},
+            "lsp_assist": {
+                "enabled": True,
+                "run_snippet_default_timeout_seconds": 30,
+                "run_snippet_max_timeout_seconds": 120,
+            },
+        }
+    )
+    fake_client = _FakeLspClient(
+        file_content="",
+        target_uri=tmp_path.resolve().as_uri(),
+        diag_error=TimeoutError("timed out"),
+        diag_timeouts=[],
+        closed_paths=[],
+    )
+    manager = _FakeLspClientManager(client=fake_client, recycled_roots=[])
+    service = LspAssistServiceImpl(config=cfg, lsp_client_manager=manager)
+
+    snippet = service.run_snippet(
+        LspRunSnippetRequest.from_dict(
+            {
+                "code": "import Mathlib\n#check Nat\n",
+                "timeout_seconds": 999,
+            }
+        )
+    )
+
+    assert snippet.success is False
+    assert "timed out" in (snippet.error_message or "")
+    assert fake_client.diag_timeouts == [120.0]
+    assert fake_client.closed_paths == []
+    assert manager.recycled_roots == [tmp_path.resolve()]
+    assert list(tmp_path.glob("_mcp_snippet_*.lean")) == []

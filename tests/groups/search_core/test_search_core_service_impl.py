@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+import pytest
+
 from lean_mcp_toolkit.backends.lean_explore import LeanExploreRecord, LeanExploreSearchResult
 from lean_mcp_toolkit.config import ToolkitConfig
 from lean_mcp_toolkit.contracts.search_core import (
@@ -12,6 +14,8 @@ from lean_mcp_toolkit.groups.search_core.service_impl import SearchCoreServiceIm
 @dataclass(slots=True)
 class _FakeLeanExploreBackend:
     items: tuple[LeanExploreRecord, ...]
+    error: Exception | None = None
+    recycle_calls: int = 0
 
     def search(
         self,
@@ -22,13 +26,20 @@ class _FakeLeanExploreBackend:
         packages: tuple[str, ...] | None,
     ) -> LeanExploreSearchResult:
         _ = limit, rerank_top, packages
+        if self.error is not None:
+            raise self.error
         return LeanExploreSearchResult(query=query, processing_time_ms=7, items=self.items)
 
     def get_by_id(self, declaration_id: int) -> LeanExploreRecord | None:
+        if self.error is not None:
+            raise self.error
         for item in self.items:
             if item.id == declaration_id:
                 return item
         return None
+
+    def recycle(self) -> None:
+        self.recycle_calls += 1
 
 
 
@@ -73,3 +84,14 @@ def test_search_core_service_mathlib_find_and_get() -> None:
     assert get_resp.found is True
     assert get_resp.item is not None
     assert get_resp.item.source_text == "def succ"
+
+
+def test_search_core_service_recycles_backend_on_error() -> None:
+    cfg = ToolkitConfig()
+    backend = _FakeLeanExploreBackend(items=tuple(), error=RuntimeError("backend failed"))
+    svc = SearchCoreServiceImpl(config=cfg, lean_explore_backend=backend)
+
+    with pytest.raises(RuntimeError, match="backend failed"):
+        svc.run_mathlib_decl_find(MathlibDeclFindRequest.from_dict({"query": "Nat"}))
+
+    assert backend.recycle_calls == 1

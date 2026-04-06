@@ -34,6 +34,26 @@ class LeanExploreBackendAdapter(LeanExploreBackend):
     def get_by_id(self, declaration_id: int) -> LeanExploreRecord | None:
         return self._get_backend().get_by_id(declaration_id)
 
+    def close(self) -> None:
+        if self._backend is None:
+            return
+        close = getattr(self._backend, "close", None)
+        if callable(close):
+            close()
+        self._backend = None
+
+    def recycle(self) -> None:
+        if self._backend is None:
+            return
+        recycle = getattr(self._backend, "recycle", None)
+        if callable(recycle):
+            recycle()
+        else:
+            close = getattr(self._backend, "close", None)
+            if callable(close):
+                close()
+        self._backend = None
+
     def _get_backend(self) -> LeanExploreBackend:
         if self._backend is not None:
             return self._backend

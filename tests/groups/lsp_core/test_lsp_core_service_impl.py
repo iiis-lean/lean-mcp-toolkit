@@ -22,12 +22,16 @@ class _DiagResult:
 @dataclass(slots=True)
 class _FakeLspClient:
     file_content: str
+    diag_error: Exception | None = None
+    diag_timeouts: list[float] | None = None
+    closed_paths: list[list[str]] | None = None
 
     def open_file(self, rel_path: str) -> None:
         _ = rel_path
 
     def close_files(self, rel_paths: list[str]) -> None:
-        _ = rel_paths
+        if self.closed_paths is not None:
+            self.closed_paths.append(list(rel_paths))
 
     def get_file_content(self, rel_path: str) -> str:
         _ = rel_path
@@ -72,7 +76,11 @@ class _FakeLspClient:
         end_line: int | None = None,
         inactivity_timeout: float = 15.0,
     ) -> _DiagResult:
-        _ = rel_path, start_line, end_line, inactivity_timeout
+        _ = rel_path, start_line, end_line
+        if self.diag_timeouts is not None:
+            self.diag_timeouts.append(inactivity_timeout)
+        if self.diag_error is not None:
+            raise self.diag_error
         return _DiagResult(
             success=True,
             diagnostics=[
@@ -124,10 +132,15 @@ class _FakeLspClient:
 @dataclass(slots=True)
 class _FakeLspClientManager:
     client: _FakeLspClient
+    recycled_roots: list[Path] | None = None
 
     def get_client(self, project_root: Path):
         _ = project_root
         return self.client
+
+    def recycle_client(self, project_root: Path) -> None:
+        if self.recycled_roots is not None:
+            self.recycled_roots.append(project_root.resolve())
 
 
 
@@ -195,3 +208,40 @@ def test_lsp_core_service_structured_and_markdown(tmp_path: Path) -> None:
     )
     assert not isinstance(outline_from_nested_root, MarkdownResponse)
     assert outline_from_nested_root.success is True
+
+
+def test_lsp_core_run_snippet_clamps_timeout_and_recycles_on_failure(tmp_path: Path) -> None:
+    (tmp_path / "lean-toolchain").write_text("leanprover/lean4:v4.28.0\n", encoding="utf-8")
+    cfg = ToolkitConfig.from_dict(
+        {
+            "server": {"default_project_root": str(tmp_path)},
+            "lsp_assist": {
+                "run_snippet_default_timeout_seconds": 30,
+                "run_snippet_max_timeout_seconds": 120,
+            },
+        }
+    )
+    fake_client = _FakeLspClient(
+        file_content="",
+        diag_error=TimeoutError("timed out"),
+        diag_timeouts=[],
+        closed_paths=[],
+    )
+    manager = _FakeLspClientManager(client=fake_client, recycled_roots=[])
+    service = LspCoreServiceImpl(config=cfg, lsp_client_manager=manager)
+
+    snippet = service.run_snippet(
+        LspRunSnippetRequest.from_dict(
+            {
+                "code": "import Mathlib\n#check Nat\n",
+                "timeout_seconds": 999,
+            }
+        )
+    )
+
+    assert snippet.success is False
+    assert "timed out" in (snippet.error_message or "")
+    assert fake_client.diag_timeouts == [120.0]
+    assert fake_client.closed_paths == []
+    assert manager.recycled_roots == [tmp_path.resolve()]
+    assert list(tmp_path.glob("_mcp_snippet_*.lean")) == []

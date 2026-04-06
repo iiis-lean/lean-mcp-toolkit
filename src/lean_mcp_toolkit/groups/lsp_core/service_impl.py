@@ -388,9 +388,11 @@ class LspCoreServiceImpl(LspCoreService):
 
     def run_snippet(self, req: LspRunSnippetRequest) -> LspRunSnippetResponse:
         """Run a temporary Lean snippet inside the current project."""
+        project_root: Path | None = None
         snippet_path: Path | None = None
         rel_path: str | None = None
         client: Any | None = None
+        recycle_client = False
         try:
             project_root = self._resolve_project_root(req.project_root)
             code = req.code
@@ -407,16 +409,7 @@ class LspCoreServiceImpl(LspCoreService):
             client = self.lsp_client_manager.get_client(project_root)
             client.open_file(rel_path)
 
-            timeout_seconds = (
-                req.timeout_seconds
-                if req.timeout_seconds is not None
-                else self.config.lsp_assist.run_snippet_default_timeout_seconds
-            )
-            inactivity_timeout = float(
-                timeout_seconds
-                if timeout_seconds is not None
-                else self.config.backends.lsp.diagnostics_timeout_seconds
-            )
+            inactivity_timeout = float(self._resolve_run_snippet_timeout_seconds(req.timeout_seconds))
             raw_diag = client.get_diagnostics(
                 rel_path,
                 inactivity_timeout=inactivity_timeout,
@@ -446,6 +439,7 @@ class LspCoreServiceImpl(LspCoreService):
                 info_count=info_count,
             )
         except Exception as exc:
+            recycle_client = client is not None and project_root is not None
             return LspRunSnippetResponse(
                 success=False,
                 error_message=str(exc),
@@ -455,7 +449,12 @@ class LspCoreServiceImpl(LspCoreService):
                 info_count=0,
             )
         finally:
-            if client is not None and rel_path is not None:
+            if recycle_client and project_root is not None:
+                try:
+                    self.lsp_client_manager.recycle_client(project_root)
+                except Exception:
+                    pass
+            elif client is not None and rel_path is not None:
                 try:
                     client.close_files([rel_path])
                 except Exception:
@@ -465,6 +464,18 @@ class LspCoreServiceImpl(LspCoreService):
                     snippet_path.unlink(missing_ok=True)
                 except Exception:
                     pass
+
+    def _resolve_run_snippet_timeout_seconds(self, requested_timeout: int | None) -> int:
+        timeout_seconds = (
+            requested_timeout
+            if requested_timeout is not None
+            else self.config.lsp_assist.run_snippet_default_timeout_seconds
+        )
+        if timeout_seconds is None or timeout_seconds <= 0:
+            timeout_seconds = self.config.backends.lsp.diagnostics_timeout_seconds
+
+        max_timeout = max(1, int(self.config.lsp_assist.run_snippet_max_timeout_seconds))
+        return min(max(1, int(timeout_seconds)), max_timeout)
 
     def _resolve_project_root(self, project_root: str | None) -> Path:
         return resolve_project_root(

@@ -11,7 +11,12 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ...config import LeanExploreBackendConfig, SearchCoreConfig
-from .base import LeanExploreRecord, LeanExploreSearchResult, run_async
+from .base import (
+    LeanExploreRecord,
+    LeanExploreSearchResult,
+    close_resource_best_effort,
+    run_async,
+)
 from .version_map import resolve_toolchain_id
 
 
@@ -21,6 +26,7 @@ class LeanExploreLocalBackend:
 
     backend_config: LeanExploreBackendConfig
     search_config: SearchCoreConfig
+    _engine: Any | None = field(default=None, init=False, repr=False)
     _service: Any | None = field(default=None, init=False, repr=False)
 
     def search(
@@ -38,7 +44,8 @@ class LeanExploreLocalBackend:
                 limit=limit,
                 rerank_top=rerank_top,
                 packages=list(packages) if packages is not None else None,
-            )
+            ),
+            timeout_seconds=float(self.backend_config.local_timeout_seconds),
         )
         items = tuple(self._to_record(item) for item in getattr(response, "results", []))
         return LeanExploreSearchResult(
@@ -53,7 +60,10 @@ class LeanExploreLocalBackend:
 
     def get_by_id(self, declaration_id: int) -> LeanExploreRecord | None:
         service = self._get_service()
-        item = run_async(service.get_by_id(int(declaration_id)))
+        item = run_async(
+            service.get_by_id(int(declaration_id)),
+            timeout_seconds=float(self.backend_config.local_timeout_seconds),
+        )
         if item is None:
             return None
         return self._to_record(item)
@@ -84,15 +94,28 @@ class LeanExploreLocalBackend:
                     limit=1,
                     rerank_top=0,
                     packages=["Mathlib"],
-                )
+                ),
+                timeout_seconds=float(self.backend_config.local_timeout_seconds),
             )
             if len(getattr(probe, "results", [])) == 0:
                 raise RuntimeError(
                     "lean_explore local backend initialized but Mathlib index probe returned empty"
                 )
 
+        self._engine = engine
         self._service = service
         return self._service
+
+    def close(self) -> None:
+        if self._service is not None:
+            close_resource_best_effort(self._service)
+            self._service = None
+        if self._engine is not None:
+            close_resource_best_effort(self._engine)
+            self._engine = None
+
+    def recycle(self) -> None:
+        self.close()
 
     def _configure_env(self) -> None:
         toolchain_id = resolve_toolchain_id(self.search_config.mathlib_lean_version)

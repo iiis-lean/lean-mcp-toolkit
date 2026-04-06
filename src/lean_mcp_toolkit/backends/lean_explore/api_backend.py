@@ -11,7 +11,12 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ...config import LeanExploreBackendConfig
-from .base import LeanExploreRecord, LeanExploreSearchResult, run_async
+from .base import (
+    LeanExploreRecord,
+    LeanExploreSearchResult,
+    close_resource_best_effort,
+    run_async,
+)
 
 
 @dataclass(slots=True)
@@ -77,6 +82,14 @@ class LeanExploreApiBackend:
         client.base_url = self.backend_config.api_base_url.rstrip("/")
         self._client = client
         return self._client
+
+    def close(self) -> None:
+        if self._client is not None:
+            close_resource_best_effort(self._client)
+            self._client = None
+
+    def recycle(self) -> None:
+        self.close()
 
     @staticmethod
     def _to_record(item: Any) -> LeanExploreRecord:

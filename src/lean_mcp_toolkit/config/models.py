@@ -293,7 +293,8 @@ class LspAssistConfig:
     default_max_completions: int = 32
     multi_attempt_default_max_attempts: int | None = None
     multi_attempt_max_snippets_hard_limit: int = 16
-    run_snippet_default_timeout_seconds: int | None = None
+    run_snippet_default_timeout_seconds: int = 30
+    run_snippet_max_timeout_seconds: int = 120
     run_snippet_max_code_chars: int = 20000
     theorem_soundness_scan_source_default: bool = True
     declaration_file_include_content_default: bool = False
@@ -310,9 +311,11 @@ class LspAssistConfig:
             multi_attempt_max_snippets_hard_limit=(
                 to_int(data.get("multi_attempt_max_snippets_hard_limit"), default=16) or 16
             ),
-            run_snippet_default_timeout_seconds=to_int(
-                data.get("run_snippet_default_timeout_seconds"),
-                default=None,
+            run_snippet_default_timeout_seconds=(
+                to_int(data.get("run_snippet_default_timeout_seconds"), default=30) or 30
+            ),
+            run_snippet_max_timeout_seconds=(
+                to_int(data.get("run_snippet_max_timeout_seconds"), default=120) or 120
             ),
             run_snippet_max_code_chars=(
                 to_int(data.get("run_snippet_max_code_chars"), default=20000) or 20000
@@ -334,6 +337,7 @@ class LspAssistConfig:
             "multi_attempt_default_max_attempts": self.multi_attempt_default_max_attempts,
             "multi_attempt_max_snippets_hard_limit": self.multi_attempt_max_snippets_hard_limit,
             "run_snippet_default_timeout_seconds": self.run_snippet_default_timeout_seconds,
+            "run_snippet_max_timeout_seconds": self.run_snippet_max_timeout_seconds,
             "run_snippet_max_code_chars": self.run_snippet_max_code_chars,
             "theorem_soundness_scan_source_default": self.theorem_soundness_scan_source_default,
             "declaration_file_include_content_default": self.declaration_file_include_content_default,
@@ -1189,6 +1193,7 @@ class LeanExploreBackendConfig:
     fetch_timeout_seconds: int = 1800
     startup_verify_index: bool = True
     startup_verify_mathlib: bool = True
+    local_timeout_seconds: int = 30
     api_base_url: str = "https://www.leanexplore.com/api/v2"
     api_key_env: str = "LEANEXPLORE_API_KEY"
     api_timeout_seconds: int = 30
@@ -1215,6 +1220,9 @@ class LeanExploreBackendConfig:
             ),
             startup_verify_index=to_bool(data.get("startup_verify_index"), default=True),
             startup_verify_mathlib=to_bool(data.get("startup_verify_mathlib"), default=True),
+            local_timeout_seconds=(
+                to_int(data.get("local_timeout_seconds"), default=30) or 30
+            ),
             api_base_url=str(data.get("api_base_url") or "https://www.leanexplore.com/api/v2"),
             api_key_env=str(data.get("api_key_env") or "LEANEXPLORE_API_KEY"),
             api_timeout_seconds=to_int(data.get("api_timeout_seconds"), default=30) or 30,
@@ -1231,6 +1239,7 @@ class LeanExploreBackendConfig:
             "fetch_timeout_seconds": self.fetch_timeout_seconds,
             "startup_verify_index": self.startup_verify_index,
             "startup_verify_mathlib": self.startup_verify_mathlib,
+            "local_timeout_seconds": self.local_timeout_seconds,
             "api_base_url": self.api_base_url,
             "api_key_env": self.api_key_env,
             "api_timeout_seconds": self.api_timeout_seconds,
