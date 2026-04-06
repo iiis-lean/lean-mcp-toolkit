@@ -16,6 +16,7 @@ class _FakeLeanExploreBackend:
     items: tuple[LeanExploreRecord, ...]
     error: Exception | None = None
     recycle_calls: int = 0
+    close_calls: int = 0
 
     def search(
         self,
@@ -40,6 +41,9 @@ class _FakeLeanExploreBackend:
 
     def recycle(self) -> None:
         self.recycle_calls += 1
+
+    def close(self) -> None:
+        self.close_calls += 1
 
 
 
@@ -95,3 +99,17 @@ def test_search_core_service_recycles_backend_on_error() -> None:
         svc.run_mathlib_decl_find(MathlibDeclFindRequest.from_dict({"query": "Nat"}))
 
     assert backend.recycle_calls == 1
+
+
+def test_search_core_service_recycles_backend_on_get_error_and_closes_backend() -> None:
+    cfg = ToolkitConfig()
+    backend = _FakeLeanExploreBackend(items=tuple(), error=RuntimeError("backend failed"))
+    svc = SearchCoreServiceImpl(config=cfg, lean_explore_backend=backend)
+
+    with pytest.raises(RuntimeError, match="backend failed"):
+        svc.run_mathlib_decl_get(MathlibDeclGetRequest.from_dict({"declaration_id": 1}))
+
+    svc.close()
+
+    assert backend.recycle_calls == 1
+    assert backend.close_calls == 1
