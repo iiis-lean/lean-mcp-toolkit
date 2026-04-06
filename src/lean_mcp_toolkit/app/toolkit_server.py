@@ -7,7 +7,8 @@ from dataclasses import dataclass, field
 import logging
 from typing import Any
 
-from ..backends import BackendContext, build_backend_context
+from ..backends import BackendContext, BackendKey, build_backend_context
+from ..backends.lean.path import resolve_project_root
 from ..config import ToolkitConfig, load_toolkit_config
 from ..core.services import (
     BuildBaseService,
@@ -201,6 +202,24 @@ class ToolkitServer:
                 return {"timing": None}
             return {"timing": logger.load_call_timing(project_root=project_root, call_id=call_id)}
 
+        @app.post(
+            f"{self.api_prefix}/debug/backends/recycle/lsp",
+            summary="Recycle LSP backend for one project",
+            description="Drop cached Lean LSP client state for the selected project root.",
+        )
+        def _debug_recycle_lsp(payload: dict[str, Any] | None = None):
+            body = payload or {}
+            return self.recycle_lsp_backend(project_root=body.get("project_root"))
+
+        @app.post(
+            f"{self.api_prefix}/debug/backends/recycle/lean_interact",
+            summary="Recycle lean_interact backend for one project",
+            description="Drop cached lean_interact runtime state for the selected project root.",
+        )
+        def _debug_recycle_lean_interact(payload: dict[str, Any] | None = None):
+            body = payload or {}
+            return self.recycle_lean_interact_backend(project_root=body.get("project_root"))
+
         for route_path, handler in sorted(self._api_route_handlers.items()):
             endpoint = self._make_fastapi_endpoint(handler=handler, route_path=route_path)
             spec = self._tool_specs_by_api_path.get(route_path)
@@ -360,6 +379,60 @@ class ToolkitServer:
         self._close_value(self._backend_context)
         self._backend_context = None
 
+    def recycle_lsp_backend(self, *, project_root: str | None = None) -> dict[str, Any]:
+        resolved_root = self._resolve_backend_project_root(project_root)
+        manager = self._get_backend(BackendKey.LSP_CLIENT_MANAGER)
+        if manager is None:
+            return {
+                "ok": False,
+                "backend": "lsp",
+                "project_root": resolved_root,
+                "message": "lsp backend is not initialized",
+            }
+        recycle = getattr(manager, "recycle_client", None)
+        if not callable(recycle):
+            return {
+                "ok": False,
+                "backend": "lsp",
+                "project_root": resolved_root,
+                "message": "lsp backend does not support recycle_client",
+            }
+        recycle(resolve_project_root(resolved_root, allow_cwd_fallback=False))
+        return {
+            "ok": True,
+            "backend": "lsp",
+            "project_root": resolved_root,
+            "message": "recycled lsp backend for project",
+        }
+
+    def recycle_lean_interact_backend(self, *, project_root: str | None = None) -> dict[str, Any]:
+        resolved_root = self._resolve_backend_project_root(project_root)
+        backend_map = self._get_backend(BackendKey.DECLARATIONS_BACKENDS)
+        if not isinstance(backend_map, dict):
+            return {
+                "ok": False,
+                "backend": "lean_interact",
+                "project_root": resolved_root,
+                "message": "declarations backends are not initialized",
+            }
+        lean_interact_backend = backend_map.get("lean_interact")
+        runtime_manager = getattr(lean_interact_backend, "runtime_manager", None)
+        recycle = getattr(runtime_manager, "recycle_runtime", None)
+        if not callable(recycle):
+            return {
+                "ok": False,
+                "backend": "lean_interact",
+                "project_root": resolved_root,
+                "message": "lean_interact backend does not support recycle_runtime",
+            }
+        recycle(resolve_project_root(resolved_root, allow_cwd_fallback=False))
+        return {
+            "ok": True,
+            "backend": "lean_interact",
+            "project_root": resolved_root,
+            "message": "recycled lean_interact backend for project",
+        }
+
     def run(self) -> None:
         self.run_startup_warmup()
         mode = self.config.server.mode
@@ -395,6 +468,19 @@ class ToolkitServer:
                 close()
             except Exception:
                 pass
+
+    def _get_backend(self, key: str) -> Any:
+        if self._backend_context is None:
+            return None
+        return self._backend_context.get(key)
+
+    def _resolve_backend_project_root(self, project_root: str | None) -> str:
+        resolved = resolve_project_root(
+            project_root,
+            default_project_root=self.config.server.default_project_root,
+            allow_cwd_fallback=True,
+        )
+        return str(resolved.resolve())
 
     def run_startup_warmup(self) -> dict[str, Any] | None:
         policy = self.config.warmup.policy
