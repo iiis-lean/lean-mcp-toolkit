@@ -227,7 +227,7 @@ class ToolkitWarmupRunner:
         use_probe_file: bool,
         probe_handle: _ProbeHandle | None,
     ) -> None:
-        if call_name == "search.mathlib_decl.find":
+        if call_name == "lean_explore.find":
             if self.search_core is None:
                 raise RuntimeError("search_core service is not available")
             req = MathlibDeclFindRequest.from_dict(dict(call_request))

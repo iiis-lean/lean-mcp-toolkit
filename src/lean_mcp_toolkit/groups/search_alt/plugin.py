@@ -56,10 +56,10 @@ _COMMON_RETURNS: tuple[ToolReturnSpec, ...] = (
 )
 
 _TOOL_SPECS: tuple[GroupToolSpec, ...] = (
-    GroupToolSpec("search_alt", "search_alt.leansearch", "leansearch", "/search_alt/leansearch", "Search Lean declarations via LeanSearch.", _SEARCH_PARAMS, _COMMON_RETURNS),
-    GroupToolSpec("search_alt", "search_alt.leandex", "leandex", "/search_alt/leandex", "Search Lean declarations via LeanDex.", _SEARCH_PARAMS, _COMMON_RETURNS),
-    GroupToolSpec("search_alt", "search_alt.loogle", "loogle", "/search_alt/loogle", "Search Lean declarations via Loogle.", _SEARCH_PARAMS, _COMMON_RETURNS),
-    GroupToolSpec("search_alt", "search_alt.leanfinder", "leanfinder", "/search_alt/leanfinder", "Search Lean declarations via LeanFinder.", _SEARCH_PARAMS, _COMMON_RETURNS),
+    GroupToolSpec("search_alt", "leansearch", "leansearch", "/search_alt/leansearch", "Search Lean declarations via LeanSearch.", _SEARCH_PARAMS, _COMMON_RETURNS),
+    GroupToolSpec("search_alt", "leandex", "leandex", "/search_alt/leandex", "Search Lean declarations via LeanDex.", _SEARCH_PARAMS, _COMMON_RETURNS),
+    GroupToolSpec("search_alt", "loogle", "loogle", "/search_alt/loogle", "Search Lean declarations via Loogle.", _SEARCH_PARAMS, _COMMON_RETURNS),
+    GroupToolSpec("search_alt", "leanfinder", "leanfinder", "/search_alt/leanfinder", "Search Lean declarations via LeanFinder.", _SEARCH_PARAMS, _COMMON_RETURNS),
 )
 
 _TOOL_SPEC_MAP = {spec.canonical_name: spec for spec in _TOOL_SPECS}
@@ -91,10 +91,10 @@ class SearchAltGroupPlugin(GroupPlugin):
 
     def tool_handlers(self, service: Any) -> Mapping[str, ToolHandler]:
         return {
-            "search_alt.leansearch": lambda payload: handle_search_alt_leansearch(service, payload),
-            "search_alt.leandex": lambda payload: handle_search_alt_leandex(service, payload),
-            "search_alt.loogle": lambda payload: handle_search_alt_loogle(service, payload),
-            "search_alt.leanfinder": lambda payload: handle_search_alt_leanfinder(service, payload),
+            "leansearch": lambda payload: handle_search_alt_leansearch(service, payload),
+            "leandex": lambda payload: handle_search_alt_leandex(service, payload),
+            "loogle": lambda payload: handle_search_alt_loogle(service, payload),
+            "leanfinder": lambda payload: handle_search_alt_leanfinder(service, payload),
         }
 
     def register_mcp_tools(
@@ -108,10 +108,10 @@ class SearchAltGroupPlugin(GroupPlugin):
     ) -> None:
         _ = normalize_str_list
         handler_map = {
-            "search_alt.leansearch": handle_search_alt_leansearch,
-            "search_alt.leandex": handle_search_alt_leandex,
-            "search_alt.loogle": handle_search_alt_loogle,
-            "search_alt.leanfinder": handle_search_alt_leanfinder,
+            "leansearch": handle_search_alt_leansearch,
+            "leandex": handle_search_alt_leandex,
+            "loogle": handle_search_alt_loogle,
+            "leanfinder": handle_search_alt_leanfinder,
         }
         for canonical_name, handler in handler_map.items():
             spec = _TOOL_SPEC_MAP[canonical_name]

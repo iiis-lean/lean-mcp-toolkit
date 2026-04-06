@@ -1,4 +1,4 @@
-"""Contracts for search_alt.loogle."""
+"""Contracts for loogle."""
 
 from __future__ import annotations
 

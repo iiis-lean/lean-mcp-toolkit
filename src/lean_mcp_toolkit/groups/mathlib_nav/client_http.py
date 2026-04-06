@@ -6,6 +6,8 @@ from ...contracts.base import JsonDict
 from ...contracts.mathlib_nav import (
     MathlibNavFileOutlineRequest,
     MathlibNavFileOutlineResponse,
+    MathlibNavGrepRequest,
+    MathlibNavGrepResponse,
     MathlibNavReadRequest,
     MathlibNavReadResponse,
     MathlibNavTreeRequest,
@@ -29,6 +31,11 @@ class MathlibNavHttpClient(MathlibNavService):
     ) -> MathlibNavFileOutlineResponse:
         return MathlibNavFileOutlineResponse.from_dict(
             self._post("/search/mathlib_nav/file_outline", req.to_dict())
+        )
+
+    def run_mathlib_nav_grep(self, req: MathlibNavGrepRequest) -> MathlibNavGrepResponse:
+        return MathlibNavGrepResponse.from_dict(
+            self._post("/search/mathlib_nav/grep", req.to_dict())
         )
 
     def run_mathlib_nav_read(self, req: MathlibNavReadRequest) -> MathlibNavReadResponse:

@@ -16,6 +16,7 @@ from ...contracts.lsp_core import (
     LspTermGoalResponse,
     MarkdownResponse,
 )
+from ...contracts.lsp_assist import LspRunSnippetRequest, LspRunSnippetResponse
 from ...core.services import LspCoreService
 from ...transport.http import HttpConfig, HttpJsonClient
 
@@ -53,6 +54,10 @@ class LspCoreHttpClient(LspCoreService):
     ) -> LspCodeActionsResponse | MarkdownResponse:
         data = self._post("/lsp/code_actions", req.to_dict())
         return _parse_lsp_response(data, LspCodeActionsResponse)
+
+    def run_snippet(self, req: LspRunSnippetRequest) -> LspRunSnippetResponse:
+        data = self._post("/lsp/run_snippet", req.to_dict())
+        return LspRunSnippetResponse.from_dict(data)
 
     def _post(self, path: str, payload: JsonDict) -> JsonDict:
         return self.http_client.post_json(path, payload)

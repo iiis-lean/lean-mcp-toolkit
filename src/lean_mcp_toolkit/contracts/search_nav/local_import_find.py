@@ -1,4 +1,4 @@
-"""Contracts for search.local_import.find."""
+"""Contracts for repo_nav.local_import.find."""
 
 from __future__ import annotations
 

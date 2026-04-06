@@ -11,6 +11,8 @@ from ...config import ToolkitConfig
 from ...contracts.mathlib_nav import (
     MathlibNavFileOutlineRequest,
     MathlibNavFileOutlineResponse,
+    MathlibNavGrepRequest,
+    MathlibNavGrepResponse,
     MathlibNavReadRequest,
     MathlibNavReadResponse,
     MathlibNavTreeRequest,
@@ -18,6 +20,7 @@ from ...contracts.mathlib_nav import (
 )
 from ...contracts.search_nav import (
     RepoNavFileOutlineRequest,
+    RepoNavGrepRequest,
     RepoNavReadRequest,
     RepoNavTreeRequest,
 )
@@ -73,6 +76,37 @@ class MathlibNavServiceImpl(MathlibNavService):
             return self.repo_nav_service.run_repo_nav_file_outline(inner_req)
         except Exception as exc:
             return MathlibNavFileOutlineResponse(success=False, error_message=str(exc))
+
+    def run_mathlib_nav_grep(self, req: MathlibNavGrepRequest) -> MathlibNavGrepResponse:
+        try:
+            mathlib_root = self._resolve_mathlib_root(
+                project_root=req.project_root,
+                mathlib_root=req.mathlib_root,
+            )
+            base = (req.base or "").strip()
+            target = (req.target or "").strip()
+            if base and target:
+                raise ValueError("base and target are mutually exclusive")
+
+            path_filter = None
+            if target:
+                path_filter = self._mathlib_target_to_path_filter(target)
+            elif base:
+                path_filter = self._mathlib_base_to_path_filter(base)
+
+            inner_req = RepoNavGrepRequest(
+                repo_root=str(mathlib_root),
+                query=req.query,
+                match_mode=req.match_mode,
+                path_filter=path_filter,
+                include_deps=False,
+                limit=req.limit,
+                context_lines=req.context_lines,
+                scopes=req.scopes,
+            )
+            return self.repo_nav_service.run_repo_nav_grep(inner_req)
+        except Exception as exc:
+            return MathlibNavGrepResponse(success=False, error_message=str(exc), query=req.query)
 
     def run_mathlib_nav_read(self, req: MathlibNavReadRequest) -> MathlibNavReadResponse:
         try:
@@ -148,6 +182,30 @@ class MathlibNavServiceImpl(MathlibNavService):
         if text.startswith("Mathlib\\"):
             return text[len("Mathlib\\") :]
         return text
+
+    def _mathlib_base_to_path_filter(self, raw: str) -> str:
+        locator = self._normalize_mathlib_locator(raw, allow_empty=False)
+        if locator is None:
+            raise ValueError("base must not be empty")
+        return self._locator_to_path_prefix(locator)
+
+    def _mathlib_target_to_path_filter(self, raw: str) -> str:
+        locator = self._normalize_mathlib_locator(raw, allow_empty=False)
+        if locator is None:
+            raise ValueError("target must not be empty")
+        if "/" in locator or "\\" in locator:
+            normalized = locator.replace("\\", "/")
+            return normalized if normalized.endswith(".lean") else f"{normalized}.lean"
+        return f"{locator.replace('.', '/')}.lean"
+
+    @staticmethod
+    def _locator_to_path_prefix(locator: str) -> str:
+        normalized = locator.replace("\\", "/").strip("/")
+        if "/" not in normalized and normalized.endswith(".lean"):
+            return normalized
+        if "/" in normalized:
+            return normalized
+        return normalized.replace(".", "/")
 
 
 __all__ = ["MathlibNavServiceImpl"]

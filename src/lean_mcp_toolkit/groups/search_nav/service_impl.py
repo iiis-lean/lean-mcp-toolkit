@@ -28,6 +28,8 @@ from ...contracts.search_nav import (
     RepoNavDeclarationItem,
     RepoNavFileOutlineRequest,
     RepoNavFileOutlineResponse,
+    RepoNavGrepRequest,
+    RepoNavGrepResponse,
     RepoNavOutlineSummary,
     RepoNavReadRequest,
     RepoNavReadResponse,
@@ -71,6 +73,13 @@ _TEXT_SCOPES_DEFAULT = (
     "decl_doc",
     "decl_header",
     "decl_sig",
+)
+
+_GREP_SCOPES_DEFAULT = (
+    "decl_header",
+    "decl_sig",
+    "body",
+    "comment",
 )
 
 _REF_SCOPES_DEFAULT = (
@@ -318,6 +327,75 @@ class SearchNavServiceImpl(SearchNavService):
             )
         except Exception as exc:
             return RepoNavReadResponse(success=False, error_message=str(exc))
+
+    def run_repo_nav_grep(self, req: RepoNavGrepRequest) -> RepoNavGrepResponse:
+        try:
+            repo_root = self._resolve_repo_root(req.repo_root)
+            include_deps = req.include_deps if req.include_deps is not None else True
+            limit = req.limit or self.config.search_nav.default_limit
+            context_lines = req.context_lines if req.context_lines is not None else 1
+            query = req.query.strip()
+            path_filter = self._normalize_path_filter(repo_root, req.path_filter)
+            module_filter = (req.module_filter or "").strip()
+            scopes = tuple(req.scopes or _GREP_SCOPES_DEFAULT)
+
+            if not query:
+                return RepoNavGrepResponse(
+                    success=True,
+                    query="",
+                    match_mode=req.match_mode,
+                    path_filter=path_filter,
+                    count=0,
+                    items=tuple(),
+                )
+
+            items: list[LocalTextFindItem] = []
+            for lean_file in self._iter_lean_files(repo_root, include_deps=include_deps):
+                if path_filter and not self._matches_path_filter(lean_file.file_path, path_filter):
+                    continue
+                if module_filter and not self._match_text(
+                    lean_file.module_path or "",
+                    module_filter,
+                    "prefix",
+                ):
+                    continue
+                lines = self._read_lines(lean_file.abs_path)
+                for item in self._extract_text_hits(
+                    lines=lines,
+                    file_path=lean_file.file_path,
+                    module_path=lean_file.module_path,
+                    query=query,
+                    text_match=req.match_mode,
+                    scopes=scopes,
+                    context_lines=context_lines,
+                ):
+                    items.append(item)
+                    if len(items) >= limit:
+                        return RepoNavGrepResponse(
+                            success=True,
+                            query=query,
+                            match_mode=req.match_mode,
+                            path_filter=path_filter,
+                            count=len(items),
+                            items=tuple(items),
+                        )
+
+            return RepoNavGrepResponse(
+                success=True,
+                query=query,
+                match_mode=req.match_mode,
+                path_filter=path_filter,
+                count=len(items),
+                items=tuple(items),
+            )
+        except Exception as exc:
+            return RepoNavGrepResponse(
+                success=False,
+                error_message=str(exc),
+                query=req.query,
+                match_mode=req.match_mode,
+                path_filter=req.path_filter,
+            )
 
     def run_local_decl_find(self, req: LocalDeclFindRequest) -> LocalDeclFindResponse:
         try:
@@ -840,11 +918,13 @@ class SearchNavServiceImpl(SearchNavService):
                 if path.name.startswith("."):
                     continue
                 path_str = path.as_posix()
+                rel_to_root = path.relative_to(root).as_posix()
+                rel_to_repo = path.relative_to(repo_root).as_posix()
                 if "/.git/" in path_str or path_str.endswith("/.git"):
                     continue
-                if "/.lake/build/" in path_str:
+                if rel_to_root.startswith(".lake/build/"):
                     continue
-                if origin == "project" and "/.lake/packages/" in path_str:
+                if origin == "project" and rel_to_repo.startswith(".lake/packages/"):
                     continue
                 try:
                     if path.stat().st_size > max_file_bytes:
@@ -853,11 +933,11 @@ class SearchNavServiceImpl(SearchNavService):
                     continue
 
                 if origin == "project":
-                    rel = path.relative_to(repo_root).as_posix()
+                    rel = rel_to_repo
                 else:
-                    rel = f".lake/packages/{root.name}/{path.relative_to(root).as_posix()}"
+                    rel = f".lake/packages/{root.name}/{rel_to_root}"
 
-                module_path = self._module_from_file_rel(path.relative_to(root).as_posix())
+                module_path = self._module_from_file_rel(rel_to_root)
 
                 yield _LeanFile(
                     abs_path=path,
@@ -868,6 +948,37 @@ class SearchNavServiceImpl(SearchNavService):
                 produced += 1
                 if produced >= max_files:
                     return
+
+    @staticmethod
+    def _normalize_path_filter(repo_root: Path, raw: str | None) -> str | None:
+        text = (raw or "").strip()
+        if not text:
+            return None
+
+        path = Path(text).expanduser()
+        if path.is_absolute():
+            resolved = path.resolve()
+            try:
+                return resolved.relative_to(repo_root).as_posix()
+            except ValueError as exc:
+                raise ValueError(f"path_filter resolves outside repo_root: {resolved}") from exc
+
+        normalized = text.replace("\\", "/")
+        if normalized.startswith("./"):
+            normalized = normalized[2:]
+        if "." in normalized and "/" not in normalized and not normalized.endswith(".lean"):
+            normalized = normalized.replace(".", "/")
+        return normalized.strip("/")
+
+    @staticmethod
+    def _matches_path_filter(file_path: str, path_filter: str) -> bool:
+        if not path_filter:
+            return True
+        normalized_file = file_path.strip("/")
+        normalized_filter = path_filter.strip("/")
+        return normalized_file == normalized_filter or normalized_file.startswith(
+            normalized_filter + "/"
+        )
 
     @staticmethod
     def _strip_line_comment(line: str) -> str:

@@ -16,6 +16,8 @@ from lean_mcp_toolkit.contracts.search_nav import (
     LocalTextFindResponse,
     RepoNavFileOutlineRequest,
     RepoNavFileOutlineResponse,
+    RepoNavGrepRequest,
+    RepoNavGrepResponse,
     RepoNavReadRequest,
     RepoNavReadResponse,
     RepoNavReadWindow,
@@ -197,3 +199,33 @@ def test_local_search_contracts_roundtrip() -> None:
         ),
     )
     assert LocalRefsFindResponse.from_dict(refs_resp.to_dict()).items[0].matched_as == "full_name"
+
+    grep_req = RepoNavGrepRequest.from_dict(
+        {
+            "query": "proof_wanted",
+            "match_mode": "regex",
+            "path_filter": "Mathlib/GroupTheory",
+            "include_deps": True,
+            "scopes": ["body", "comment"],
+        }
+    )
+    assert grep_req.match_mode == "regex"
+    assert grep_req.path_filter == "Mathlib/GroupTheory"
+    grep_resp = RepoNavGrepResponse(
+        success=True,
+        query="proof_wanted",
+        match_mode="regex",
+        path_filter="Mathlib/GroupTheory",
+        count=1,
+        items=(
+            LocalTextFindItem(
+                scope="body",
+                file_path="Mathlib/GroupTheory/Test.lean",
+                module_path="Mathlib.GroupTheory.Test",
+                line_start=8,
+                line_end=8,
+                snippet="8 | theorem proof_wanted := by",
+            ),
+        ),
+    )
+    assert RepoNavGrepResponse.from_dict(grep_resp.to_dict()).items[0].scope == "body"

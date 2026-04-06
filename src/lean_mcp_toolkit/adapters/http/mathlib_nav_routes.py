@@ -5,6 +5,7 @@ from __future__ import annotations
 from ...contracts.base import JsonDict
 from ...contracts.mathlib_nav import (
     MathlibNavFileOutlineRequest,
+    MathlibNavGrepRequest,
     MathlibNavReadRequest,
     MathlibNavTreeRequest,
 )
@@ -24,6 +25,11 @@ def handle_search_mathlib_nav_file_outline(
     return service.run_mathlib_nav_file_outline(req).to_dict()
 
 
+def handle_search_mathlib_nav_grep(service: MathlibNavService, payload: JsonDict) -> JsonDict:
+    req = MathlibNavGrepRequest.from_dict(payload)
+    return service.run_mathlib_nav_grep(req).to_dict()
+
+
 def handle_search_mathlib_nav_read(service: MathlibNavService, payload: JsonDict) -> JsonDict:
     req = MathlibNavReadRequest.from_dict(payload)
     return service.run_mathlib_nav_read(req).to_dict()
@@ -32,5 +38,6 @@ def handle_search_mathlib_nav_read(service: MathlibNavService, payload: JsonDict
 __all__ = [
     "handle_search_mathlib_nav_tree",
     "handle_search_mathlib_nav_file_outline",
+    "handle_search_mathlib_nav_grep",
     "handle_search_mathlib_nav_read",
 ]

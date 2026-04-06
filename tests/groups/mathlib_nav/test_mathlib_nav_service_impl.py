@@ -3,6 +3,7 @@ from pathlib import Path
 from lean_mcp_toolkit.config import ToolkitConfig
 from lean_mcp_toolkit.contracts.mathlib_nav import (
     MathlibNavFileOutlineRequest,
+    MathlibNavGrepRequest,
     MathlibNavReadRequest,
     MathlibNavTreeRequest,
 )
@@ -78,6 +79,20 @@ def test_mathlib_nav_service_tree_outline_read(tmp_path: Path) -> None:
     assert read.success is True
     assert read.window is not None
     assert read.window.start_line == 1
+
+    grep = svc.run_mathlib_nav_grep(
+        MathlibNavGrepRequest.from_dict(
+            {
+                "project_root": str(project),
+                "query": "test decl",
+                "target": "Linear.Probe",
+                "scopes": ["decl_doc"],
+            }
+        )
+    )
+    assert grep.success is True
+    assert grep.count == 1
+    assert grep.items[0].file_path == "Linear/Probe.lean"
 
 
 def test_mathlib_nav_service_accepts_project_subdirectory_as_project_root(tmp_path: Path) -> None:
@@ -160,3 +175,22 @@ def test_mathlib_nav_service_accepts_mathlib_prefixed_inputs(tmp_path: Path) -> 
     assert read.success is True
     assert read.window is not None
     assert read.window.start_line == 1
+
+
+def test_mathlib_nav_grep_rejects_base_and_target_together(tmp_path: Path) -> None:
+    project = _build_project_with_mathlib(tmp_path)
+    svc = MathlibNavServiceImpl(config=ToolkitConfig())
+
+    grep = svc.run_mathlib_nav_grep(
+        MathlibNavGrepRequest.from_dict(
+            {
+                "project_root": str(project),
+                "query": "probe",
+                "base": "Linear",
+                "target": "Linear.Probe",
+            }
+        )
+    )
+
+    assert grep.success is False
+    assert "mutually exclusive" in (grep.error_message or "")

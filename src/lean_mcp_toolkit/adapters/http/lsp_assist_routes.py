@@ -7,7 +7,6 @@ from ...contracts.lsp_assist import (
     LspCompletionsRequest,
     LspDeclarationFileRequest,
     LspMultiAttemptRequest,
-    LspRunSnippetRequest,
     LspTheoremSoundnessRequest,
 )
 from ...core.services import LspAssistService
@@ -30,15 +29,7 @@ def handle_lsp_multi_attempt(service: LspAssistService, payload: JsonDict) -> Js
     resp = service.run_multi_attempt(req)
     return resp.to_dict()
 
-
-def handle_lsp_run_snippet(service: LspAssistService, payload: JsonDict) -> JsonDict:
-    req = LspRunSnippetRequest.from_dict(payload)
-    resp = service.run_snippet(req)
-    return resp.to_dict()
-
-
 def handle_lsp_theorem_soundness(service: LspAssistService, payload: JsonDict) -> JsonDict:
     req = LspTheoremSoundnessRequest.from_dict(payload)
     resp = service.run_theorem_soundness(req)
     return resp.to_dict()
-

@@ -76,13 +76,13 @@ def test_warmup_runner_success_and_cleanup(tmp_path: Path) -> None:
                 },
                 "plan": {
                     "order": [
-                        "search.mathlib_decl.find",
+                        "lean_explore.find",
                         "declarations.extract",
                         "diagnostics.file",
                     ]
                 },
                 "calls": {
-                    "search.mathlib_decl.find": {
+                    "lean_explore.find": {
                         "enabled": True,
                         "request": {"query": "Nat.succ", "limit": 1, "rerank_top": 0},
                     },

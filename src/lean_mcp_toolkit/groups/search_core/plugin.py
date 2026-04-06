@@ -105,7 +105,7 @@ _GET_PARAMS: tuple[ToolParamSpec, ...] = (
         name="declaration_id",
         type_hint="int",
         required=True,
-        description="Declaration id returned by search.mathlib_decl.find.",
+        description="Declaration id returned by lean_explore.find.",
     ),
     ToolParamSpec(
         name="include_module",
@@ -187,8 +187,8 @@ _GET_RETURNS: tuple[ToolReturnSpec, ...] = (
 _TOOL_SPECS: tuple[GroupToolSpec, ...] = (
     GroupToolSpec(
         group_name="search_core",
-        canonical_name="search.mathlib_decl.find",
-        raw_name="mathlib_decl.find",
+        canonical_name="lean_explore.find",
+        raw_name="lean_explore.find",
         api_path="/search/mathlib_decl/find",
         description="Search declaration index (LeanExplore backend) and return summary items.",
         params=_SEARCH_PARAMS,
@@ -196,8 +196,8 @@ _TOOL_SPECS: tuple[GroupToolSpec, ...] = (
     ),
     GroupToolSpec(
         group_name="search_core",
-        canonical_name="search.mathlib_decl.get",
-        raw_name="mathlib_decl.get",
+        canonical_name="lean_explore.get",
+        raw_name="lean_explore.get",
         api_path="/search/mathlib_decl/get",
         description="Get one declaration detail by declaration id.",
         params=_GET_PARAMS,
@@ -239,10 +239,10 @@ class SearchCoreGroupPlugin(GroupPlugin):
 
     def tool_handlers(self, service: Any) -> Mapping[str, ToolHandler]:
         return {
-            "search.mathlib_decl.find": (
+            "lean_explore.find": (
                 lambda payload: handle_search_mathlib_decl_find(service, payload)
             ),
-            "search.mathlib_decl.get": (
+            "lean_explore.get": (
                 lambda payload: handle_search_mathlib_decl_get(service, payload)
             ),
         }
@@ -256,10 +256,10 @@ class SearchCoreGroupPlugin(GroupPlugin):
         normalize_str_list,
         prune_none,
     ) -> None:
-        search_spec = _TOOL_SPEC_MAP["search.mathlib_decl.find"]
-        get_spec = _TOOL_SPEC_MAP["search.mathlib_decl.get"]
+        search_spec = _TOOL_SPEC_MAP["lean_explore.find"]
+        get_spec = _TOOL_SPEC_MAP["lean_explore.get"]
 
-        for alias in aliases_by_canonical.get("search.mathlib_decl.find", ()): 
+        for alias in aliases_by_canonical.get("lean_explore.find", ()):
             self._register_mathlib_find(
                 mcp=mcp,
                 alias=alias,
@@ -268,7 +268,7 @@ class SearchCoreGroupPlugin(GroupPlugin):
                 normalize_str_list=normalize_str_list,
                 prune_none=prune_none,
             )
-        for alias in aliases_by_canonical.get("search.mathlib_decl.get", ()): 
+        for alias in aliases_by_canonical.get("lean_explore.get", ()):
             self._register_mathlib_get(
                 mcp=mcp,
                 alias=alias,

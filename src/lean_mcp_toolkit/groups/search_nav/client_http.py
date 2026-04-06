@@ -16,6 +16,8 @@ from ...contracts.search_nav import (
     LocalTextFindResponse,
     RepoNavFileOutlineRequest,
     RepoNavFileOutlineResponse,
+    RepoNavGrepRequest,
+    RepoNavGrepResponse,
     RepoNavReadRequest,
     RepoNavReadResponse,
     RepoNavTreeRequest,
@@ -40,6 +42,9 @@ class SearchNavHttpClient(SearchNavService):
         return RepoNavFileOutlineResponse.from_dict(
             self._post("/search/repo_nav/file_outline", req.to_dict())
         )
+
+    def run_repo_nav_grep(self, req: RepoNavGrepRequest) -> RepoNavGrepResponse:
+        return RepoNavGrepResponse.from_dict(self._post("/search/repo_nav/grep", req.to_dict()))
 
     def run_repo_nav_read(self, req: RepoNavReadRequest) -> RepoNavReadResponse:
         return RepoNavReadResponse.from_dict(self._post("/search/repo_nav/read", req.to_dict()))

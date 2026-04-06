@@ -1,4 +1,4 @@
-"""Contracts for search_alt.leandex."""
+"""Contracts for leandex."""
 
 from __future__ import annotations
 

@@ -59,6 +59,7 @@ The `Source` and `Original name / upstream reference` columns follow these rules
 | `lsp.term_goal` | Return expected type / term goal at a position. | `lean-lsp-mcp` / upstream | `lean_term_goal` | LSP client based. |
 | `lsp.hover` | Return hover/type/doc information at a position. | `lean-lsp-mcp` / upstream | `lean_hover_info` | LSP client based. |
 | `lsp.code_actions` | Return code actions / resolved edits at a line. | `lean-lsp-mcp` / upstream | `lean_code_actions` | LSP client based. |
+| `lsp.run_snippet` | Run a self-contained Lean snippet and report diagnostics. | Local implementation inspired by LSP tool workflows |  | Toolkit-owned core LSP utility. |
 
 ### Assistive LSP tools
 
@@ -67,7 +68,6 @@ The `Source` and `Original name / upstream reference` columns follow these rules
 | `lsp.completions` | Return IDE completions at a position. | `lean-lsp-mcp` / upstream | `lean_completions` | LSP client based. |
 | `lsp.declaration_file` | Locate the declaration file for a symbol. | `lean-lsp-mcp` / upstream | `lean_declaration_file` | LSP client based. |
 | `lsp.multi_attempt` | Try multiple tactic snippets against one goal. | `lean-lsp-mcp` / upstream | `lean_multi_attempt` | LSP client based. |
-| `lsp.run_snippet` | Run a self-contained Lean snippet and report diagnostics. | Local implementation inspired by LSP tool workflows |  | Uses command/runtime execution rather than a migrated MCP tool. |
 | `lsp.theorem_soundness` | Inspect theorem verification / soundness-oriented checks. | Local implementation |  | Toolkit-owned higher-level LSP-assisted tool. |
 
 ### Heavy LSP tools
@@ -82,8 +82,8 @@ The `Source` and `Original name / upstream reference` columns follow these rules
 
 | Canonical tool | Summary | Source | Original name / upstream reference | Backend notes |
 |---|---|---|---|---|
-| `search.mathlib_decl.find` | Search indexed declarations by name or meaning. | `lean-explore` | search endpoint in `lean-explore` | Supports local and remote LeanExplore backends. |
-| `search.mathlib_decl.get` | Fetch one indexed declaration by id. | `lean-explore` | get-by-id endpoint in `lean-explore` | Supports local and remote LeanExplore backends. |
+| `lean_explore.find` | Search indexed declarations by name or meaning. | `lean-explore` | search endpoint in `lean-explore` | Supports local and remote LeanExplore backends. |
+| `lean_explore.get` | Fetch one indexed declaration by id. | `lean-explore` | get-by-id endpoint in `lean-explore` | Supports local and remote LeanExplore backends. |
 
 ## Repository and Mathlib Navigation
 
@@ -91,31 +91,33 @@ The `Source` and `Original name / upstream reference` columns follow these rules
 
 | Canonical tool | Summary | Source | Original name / upstream reference | Backend notes |
 |---|---|---|---|---|
-| `search.mathlib_nav.tree` | Browse the mathlib/module tree. | Local implementation |  | Source-navigation utility. |
-| `search.mathlib_nav.file_outline` | Read a structured file outline for a mathlib file/module. | Local implementation |  | Source-navigation utility. |
-| `search.mathlib_nav.read` | Read a file window with optional line numbers. | Local implementation |  | Source-navigation utility. |
+| `mathlib_nav.tree` | Browse the mathlib/module tree. | Local implementation |  | Source-navigation utility. |
+| `mathlib_nav.file_outline` | Read a structured file outline for a mathlib file/module. | Local implementation |  | Source-navigation utility. |
+| `mathlib_nav.read` | Read a file window with optional line numbers. | Local implementation |  | Source-navigation utility. |
+| `mathlib_nav.grep` | Grep Mathlib source text with grep-like defaults. | Local implementation |  | Source-navigation utility for Mathlib text exploration. |
 
 ### Local repository navigation
 
 | Canonical tool | Summary | Source | Original name / upstream reference | Backend notes |
 |---|---|---|---|---|
-| `search.repo_nav.tree` | Browse the project repository tree. | Local implementation |  | Source-navigation utility. |
-| `search.repo_nav.file_outline` | Return a structured outline for a local Lean file. | Local implementation |  | Source-navigation utility. |
-| `search.repo_nav.read` | Read a local Lean file window. | Local implementation |  | Source-navigation utility. |
-| `search.local_decl.find` | Find declarations in local Lean source trees. | Local implementation |  | Lightweight source search. |
-| `search.local_import.find` | Find import relationships around a module query. | Local implementation |  | Lightweight source search. |
-| `search.local_scope.find` | Find namespace/section/open/export scope commands. | Local implementation |  | Lightweight source search. |
-| `search.local_text.find` | Search text inside structured Lean source scopes. | Local implementation |  | Lightweight source search. |
-| `search.local_refs.find` | Find lightweight source references for a symbol. | Local implementation |  | Lightweight source search. |
+| `repo_nav.tree` | Browse the project repository tree. | Local implementation |  | Source-navigation utility. |
+| `repo_nav.file_outline` | Return a structured outline for a local Lean file. | Local implementation |  | Source-navigation utility. |
+| `repo_nav.read` | Read a local Lean file window. | Local implementation |  | Source-navigation utility. |
+| `repo_nav.local_decl.find` | Find declarations in local Lean source trees. | Local implementation |  | Lightweight source search. |
+| `repo_nav.local_import.find` | Find import relationships around a module query. | Local implementation |  | Lightweight source search. |
+| `repo_nav.local_scope.find` | Find namespace/section/open/export scope commands. | Local implementation |  | Lightweight source search. |
+| `repo_nav.local_text.find` | Search text inside structured Lean source scopes. | Local implementation |  | Lightweight source search. |
+| `repo_nav.local_refs.find` | Find lightweight source references for a symbol. | Local implementation |  | Lightweight source search. |
+| `repo_nav.grep` | Grep local Lean source text with grep-like defaults. | Local implementation |  | Lightweight source search with repo/dependency path filtering. |
 
 ## External Search Providers
 
 | Canonical tool | Summary | Source | Original name / upstream reference | Backend notes |
 |---|---|---|---|---|
-| `search_alt.leansearch` | Query LeanSearch. | LeanSearch provider |  | External provider adapter. |
-| `search_alt.leandex` | Query LeanDex. | LeanDex provider |  | External provider adapter. |
-| `search_alt.loogle` | Query Loogle. | Loogle provider |  | External provider adapter. |
-| `search_alt.leanfinder` | Query LeanFinder. | LeanFinder provider |  | External provider adapter. |
+| `leansearch` | Query LeanSearch. | LeanSearch provider |  | External provider adapter. |
+| `leandex` | Query LeanDex. | LeanDex provider |  | External provider adapter. |
+| `loogle` | Query Loogle. | Loogle provider |  | External provider adapter. |
+| `leanfinder` | Query LeanFinder. | LeanFinder provider |  | External provider adapter. |
 | `proof_search_alt.state_search` | Query state-search style theorem suggestions. | External proof-search provider |  | Uses LSP goal text plus provider call. |
 | `proof_search_alt.hammer_premise` | Query hammer/premise suggestions. | External proof-search provider |  | Uses LSP goal text plus provider call. |
 
@@ -125,4 +127,3 @@ The `Source` and `Original name / upstream reference` columns follow these rules
 - MCP-visible aliases and CLI command paths depend on naming mode and enabled groups.
 - Selected capabilities support multiple backends; see [../configuration/README.md](../configuration/README.md) for the relevant configuration fields.
 - `text_ast` is a toolkit-owned lightweight backend informed by LongCat-Flash-Prover design ideas, but it is not a direct code import of that project.
-

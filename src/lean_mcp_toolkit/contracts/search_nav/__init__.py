@@ -9,6 +9,7 @@ from .local_import_find import (
 from .local_refs_find import LocalRefsFindItem, LocalRefsFindRequest, LocalRefsFindResponse
 from .local_scope_find import LocalScopeFindItem, LocalScopeFindRequest, LocalScopeFindResponse
 from .local_text_find import LocalTextFindItem, LocalTextFindRequest, LocalTextFindResponse
+from .repo_nav_grep import RepoNavGrepRequest, RepoNavGrepResponse
 from .repo_nav_file_outline import (
     RepoNavDeclarationItem,
     RepoNavFileOutlineRequest,
@@ -43,6 +44,8 @@ __all__ = [
     "RepoNavReadRequest",
     "RepoNavReadWindow",
     "RepoNavReadResponse",
+    "RepoNavGrepRequest",
+    "RepoNavGrepResponse",
     "LocalDeclFindRequest",
     "LocalDeclFindItem",
     "LocalDeclFindResponse",

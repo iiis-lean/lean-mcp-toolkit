@@ -9,6 +9,7 @@ from .file_outline import (
     MathlibNavSectionItem,
     MathlibNavTarget,
 )
+from .grep import MathlibNavGrepItem, MathlibNavGrepRequest, MathlibNavGrepResponse
 from .read import MathlibNavReadRequest, MathlibNavReadResponse, MathlibNavReadWindow
 from .tree import (
     MathlibNavResolution,
@@ -31,6 +32,9 @@ __all__ = [
     "MathlibNavScopeCmdItem",
     "MathlibNavOutlineSummary",
     "MathlibNavFileOutlineResponse",
+    "MathlibNavGrepRequest",
+    "MathlibNavGrepItem",
+    "MathlibNavGrepResponse",
     "MathlibNavReadRequest",
     "MathlibNavReadWindow",
     "MathlibNavReadResponse",

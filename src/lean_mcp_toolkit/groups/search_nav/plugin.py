@@ -18,6 +18,7 @@ from ...adapters.http import (
     handle_search_local_scope_find,
     handle_search_local_text_find,
     handle_search_repo_nav_file_outline,
+    handle_search_repo_nav_grep,
     handle_search_repo_nav_read,
     handle_search_repo_nav_tree,
 )
@@ -70,6 +71,18 @@ _READ_PARAMS: tuple[ToolParamSpec, ...] = (
     ToolParamSpec("end_line", "int | null", "End line (1-based).", False, "null"),
     ToolParamSpec("max_lines", "int | null", "Maximum lines to return.", False, "search_nav.read_default_max_lines"),
     ToolParamSpec("with_line_numbers", "bool | null", "Attach line numbers in output content.", False, "search_nav.read_with_line_numbers_default"),
+)
+
+_GREP_PARAMS: tuple[ToolParamSpec, ...] = (
+    ToolParamSpec("repo_root", "str | null", "Lean project/repo root.", False, "server default project root"),
+    ToolParamSpec("query", "str", "Text or regex query.", True),
+    ToolParamSpec("match_mode", "phrase | word | regex", "Text match strategy.", False, "phrase"),
+    ToolParamSpec("path_filter", "str | null", "Optional relative path prefix or file path filter.", False, "null"),
+    ToolParamSpec("module_filter", "str | null", "Optional module prefix filter.", False, "null"),
+    ToolParamSpec("include_deps", "bool | null", "Whether to scan dependencies under .lake/packages.", False, "true"),
+    ToolParamSpec("context_lines", "int | null", "Snippet context lines.", False, "1"),
+    ToolParamSpec("limit", "int | null", "Max results.", False, "search_nav.default_limit"),
+    ToolParamSpec("scopes", "list[str] | str | null", "Scopes to scan.", False, "[decl_header, decl_sig, body, comment]"),
 )
 
 _LOCAL_DECL_PARAMS: tuple[ToolParamSpec, ...] = (
@@ -129,7 +142,7 @@ _LOCAL_REFS_PARAMS: tuple[ToolParamSpec, ...] = (
 _TOOL_SPECS: tuple[GroupToolSpec, ...] = (
     GroupToolSpec(
         group_name="search_nav",
-        canonical_name="search.repo_nav.tree",
+        canonical_name="repo_nav.tree",
         raw_name="repo_nav.tree",
         api_path="/search/repo_nav/tree",
         description="List Lean repo tree entries from base path/module.",
@@ -144,7 +157,7 @@ _TOOL_SPECS: tuple[GroupToolSpec, ...] = (
     ),
     GroupToolSpec(
         group_name="search_nav",
-        canonical_name="search.repo_nav.file_outline",
+        canonical_name="repo_nav.file_outline",
         raw_name="repo_nav.file_outline",
         api_path="/search/repo_nav/file_outline",
         description="Read structured file outline (imports/docs/declarations/scope commands).",
@@ -163,7 +176,7 @@ _TOOL_SPECS: tuple[GroupToolSpec, ...] = (
     ),
     GroupToolSpec(
         group_name="search_nav",
-        canonical_name="search.repo_nav.read",
+        canonical_name="repo_nav.read",
         raw_name="repo_nav.read",
         api_path="/search/repo_nav/read",
         description="Read file content window with optional line numbers.",
@@ -178,8 +191,8 @@ _TOOL_SPECS: tuple[GroupToolSpec, ...] = (
     ),
     GroupToolSpec(
         group_name="search_nav",
-        canonical_name="search.local_decl.find",
-        raw_name="local_decl.find",
+        canonical_name="repo_nav.local_decl.find",
+        raw_name="repo_nav.local_decl.find",
         api_path="/search/local_decl/find",
         description="Find named declarations in local project/dependency Lean sources.",
         params=_LOCAL_DECL_PARAMS,
@@ -193,8 +206,8 @@ _TOOL_SPECS: tuple[GroupToolSpec, ...] = (
     ),
     GroupToolSpec(
         group_name="search_nav",
-        canonical_name="search.local_import.find",
-        raw_name="local_import.find",
+        canonical_name="repo_nav.local_import.find",
+        raw_name="repo_nav.local_import.find",
         api_path="/search/local_import/find",
         description="Find import dependency edges around a module query.",
         params=_LOCAL_IMPORT_PARAMS,
@@ -208,8 +221,8 @@ _TOOL_SPECS: tuple[GroupToolSpec, ...] = (
     ),
     GroupToolSpec(
         group_name="search_nav",
-        canonical_name="search.local_scope.find",
-        raw_name="local_scope.find",
+        canonical_name="repo_nav.local_scope.find",
+        raw_name="repo_nav.local_scope.find",
         api_path="/search/local_scope/find",
         description="Find namespace/section/open/export/attribute scope commands.",
         params=_LOCAL_SCOPE_PARAMS,
@@ -222,8 +235,8 @@ _TOOL_SPECS: tuple[GroupToolSpec, ...] = (
     ),
     GroupToolSpec(
         group_name="search_nav",
-        canonical_name="search.local_text.find",
-        raw_name="local_text.find",
+        canonical_name="repo_nav.local_text.find",
+        raw_name="repo_nav.local_text.find",
         api_path="/search/local_text/find",
         description="Find text snippets in structured Lean source scopes.",
         params=_LOCAL_TEXT_PARAMS,
@@ -237,8 +250,8 @@ _TOOL_SPECS: tuple[GroupToolSpec, ...] = (
     ),
     GroupToolSpec(
         group_name="search_nav",
-        canonical_name="search.local_refs.find",
-        raw_name="local_refs.find",
+        canonical_name="repo_nav.local_refs.find",
+        raw_name="repo_nav.local_refs.find",
         api_path="/search/local_refs/find",
         description="Find lightweight symbol references in local Lean source files.",
         params=_LOCAL_REFS_PARAMS,
@@ -248,6 +261,23 @@ _TOOL_SPECS: tuple[GroupToolSpec, ...] = (
             ToolReturnSpec("symbol", "str", "Resolved symbol."),
             ToolReturnSpec("count", "int", "Returned item count."),
             ToolReturnSpec("items", "list[LocalRefsFindItem]", "Reference matches."),
+        ),
+    ),
+    GroupToolSpec(
+        group_name="search_nav",
+        canonical_name="repo_nav.grep",
+        raw_name="repo_nav.grep",
+        api_path="/search/repo_nav/grep",
+        description="Grep local Lean source text with grep-like defaults.",
+        params=_GREP_PARAMS,
+        returns=(
+            ToolReturnSpec("success", "bool", "Whether execution succeeded."),
+            ToolReturnSpec("error_message", "str | null", "Error details when failed."),
+            ToolReturnSpec("query", "str", "Resolved query string."),
+            ToolReturnSpec("match_mode", "str", "Resolved text match mode."),
+            ToolReturnSpec("path_filter", "str | null", "Resolved path filter."),
+            ToolReturnSpec("count", "int", "Returned item count."),
+            ToolReturnSpec("items", "list[LocalTextFindItem]", "Text matches."),
         ),
     ),
 )
@@ -280,16 +310,17 @@ class SearchNavGroupPlugin(GroupPlugin):
 
     def tool_handlers(self, service: Any) -> Mapping[str, ToolHandler]:
         return {
-            "search.repo_nav.tree": lambda payload: handle_search_repo_nav_tree(service, payload),
-            "search.repo_nav.file_outline": (
+            "repo_nav.tree": lambda payload: handle_search_repo_nav_tree(service, payload),
+            "repo_nav.file_outline": (
                 lambda payload: handle_search_repo_nav_file_outline(service, payload)
             ),
-            "search.repo_nav.read": lambda payload: handle_search_repo_nav_read(service, payload),
-            "search.local_decl.find": lambda payload: handle_search_local_decl_find(service, payload),
-            "search.local_import.find": lambda payload: handle_search_local_import_find(service, payload),
-            "search.local_scope.find": lambda payload: handle_search_local_scope_find(service, payload),
-            "search.local_text.find": lambda payload: handle_search_local_text_find(service, payload),
-            "search.local_refs.find": lambda payload: handle_search_local_refs_find(service, payload),
+            "repo_nav.read": lambda payload: handle_search_repo_nav_read(service, payload),
+            "repo_nav.local_decl.find": lambda payload: handle_search_local_decl_find(service, payload),
+            "repo_nav.local_import.find": lambda payload: handle_search_local_import_find(service, payload),
+            "repo_nav.local_scope.find": lambda payload: handle_search_local_scope_find(service, payload),
+            "repo_nav.local_text.find": lambda payload: handle_search_local_text_find(service, payload),
+            "repo_nav.local_refs.find": lambda payload: handle_search_local_refs_find(service, payload),
+            "repo_nav.grep": lambda payload: handle_search_repo_nav_grep(service, payload),
         }
 
     def register_mcp_tools(
@@ -303,8 +334,8 @@ class SearchNavGroupPlugin(GroupPlugin):
     ) -> None:
         _ = normalize_str_list
 
-        for alias in aliases_by_canonical.get("search.repo_nav.tree", ()): 
-            spec = _TOOL_SPEC_MAP["search.repo_nav.tree"]
+        for alias in aliases_by_canonical.get("repo_nav.tree", ()):
+            spec = _TOOL_SPEC_MAP["repo_nav.tree"]
 
             @mcp.tool(name=alias, description=spec.render_mcp_description())
             async def _repo_nav_tree(
@@ -332,8 +363,8 @@ class SearchNavGroupPlugin(GroupPlugin):
                     prune_none(payload),
                 )
 
-        for alias in aliases_by_canonical.get("search.repo_nav.file_outline", ()): 
-            spec = _TOOL_SPEC_MAP["search.repo_nav.file_outline"]
+        for alias in aliases_by_canonical.get("repo_nav.file_outline", ()):
+            spec = _TOOL_SPEC_MAP["repo_nav.file_outline"]
 
             @mcp.tool(name=alias, description=spec.render_mcp_description())
             async def _repo_nav_file_outline(
@@ -380,8 +411,8 @@ class SearchNavGroupPlugin(GroupPlugin):
                     prune_none(payload),
                 )
 
-        for alias in aliases_by_canonical.get("search.repo_nav.read", ()): 
-            spec = _TOOL_SPEC_MAP["search.repo_nav.read"]
+        for alias in aliases_by_canonical.get("repo_nav.read", ()):
+            spec = _TOOL_SPEC_MAP["repo_nav.read"]
 
             @mcp.tool(name=alias, description=spec.render_mcp_description())
             async def _repo_nav_read(
@@ -409,8 +440,8 @@ class SearchNavGroupPlugin(GroupPlugin):
                     prune_none(payload),
                 )
 
-        for alias in aliases_by_canonical.get("search.local_decl.find", ()): 
-            spec = _TOOL_SPEC_MAP["search.local_decl.find"]
+        for alias in aliases_by_canonical.get("repo_nav.local_decl.find", ()):
+            spec = _TOOL_SPEC_MAP["repo_nav.local_decl.find"]
 
             @mcp.tool(name=alias, description=spec.render_mcp_description())
             async def _local_decl_find(
@@ -451,8 +482,8 @@ class SearchNavGroupPlugin(GroupPlugin):
                     prune_none(payload),
                 )
 
-        for alias in aliases_by_canonical.get("search.local_import.find", ()): 
-            spec = _TOOL_SPEC_MAP["search.local_import.find"]
+        for alias in aliases_by_canonical.get("repo_nav.local_import.find", ()):
+            spec = _TOOL_SPEC_MAP["repo_nav.local_import.find"]
 
             @mcp.tool(name=alias, description=spec.render_mcp_description())
             async def _local_import_find(
@@ -485,8 +516,8 @@ class SearchNavGroupPlugin(GroupPlugin):
                     prune_none(payload),
                 )
 
-        for alias in aliases_by_canonical.get("search.local_scope.find", ()): 
-            spec = _TOOL_SPEC_MAP["search.local_scope.find"]
+        for alias in aliases_by_canonical.get("repo_nav.local_scope.find", ()):
+            spec = _TOOL_SPEC_MAP["repo_nav.local_scope.find"]
 
             @mcp.tool(name=alias, description=spec.render_mcp_description())
             async def _local_scope_find(
@@ -527,8 +558,8 @@ class SearchNavGroupPlugin(GroupPlugin):
                     prune_none(payload),
                 )
 
-        for alias in aliases_by_canonical.get("search.local_text.find", ()): 
-            spec = _TOOL_SPEC_MAP["search.local_text.find"]
+        for alias in aliases_by_canonical.get("repo_nav.local_text.find", ()):
+            spec = _TOOL_SPEC_MAP["repo_nav.local_text.find"]
 
             @mcp.tool(name=alias, description=spec.render_mcp_description())
             async def _local_text_find(
@@ -569,8 +600,8 @@ class SearchNavGroupPlugin(GroupPlugin):
                     prune_none(payload),
                 )
 
-        for alias in aliases_by_canonical.get("search.local_refs.find", ()): 
-            spec = _TOOL_SPEC_MAP["search.local_refs.find"]
+        for alias in aliases_by_canonical.get("repo_nav.local_refs.find", ()):
+            spec = _TOOL_SPEC_MAP["repo_nav.local_refs.find"]
 
             @mcp.tool(name=alias, description=spec.render_mcp_description())
             async def _local_refs_find(
@@ -610,6 +641,53 @@ class SearchNavGroupPlugin(GroupPlugin):
                 }
                 return await run_sync_mcp_service_handler(
                     handle_search_local_refs_find,
+                    service,
+                    prune_none(payload),
+                )
+
+        for alias in aliases_by_canonical.get("repo_nav.grep", ()):
+            spec = _TOOL_SPEC_MAP["repo_nav.grep"]
+
+            @mcp.tool(name=alias, description=spec.render_mcp_description())
+            async def _repo_nav_grep(
+                query: Annotated[str, Field(description=_param_desc(spec, "query"))],
+                repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
+                match_mode: Annotated[str, Field(description=_param_desc(spec, "match_mode"))] = "phrase",
+                path_filter: Annotated[
+                    str | None,
+                    Field(description=_param_desc(spec, "path_filter")),
+                ] = None,
+                module_filter: Annotated[
+                    str | None,
+                    Field(description=_param_desc(spec, "module_filter")),
+                ] = None,
+                include_deps: Annotated[
+                    bool | None,
+                    Field(description=_param_desc(spec, "include_deps")),
+                ] = None,
+                context_lines: Annotated[
+                    int | None,
+                    Field(description=_param_desc(spec, "context_lines")),
+                ] = None,
+                limit: Annotated[int | None, Field(description=_param_desc(spec, "limit"))] = None,
+                scopes: Annotated[
+                    list[str] | str | None,
+                    Field(description=_param_desc(spec, "scopes")),
+                ] = None,
+            ) -> JsonDict:
+                payload = {
+                    "repo_root": repo_root,
+                    "query": query,
+                    "match_mode": match_mode,
+                    "path_filter": path_filter,
+                    "module_filter": module_filter,
+                    "include_deps": include_deps,
+                    "context_lines": context_lines,
+                    "limit": limit,
+                    "scopes": scopes,
+                }
+                return await run_sync_mcp_service_handler(
+                    handle_search_repo_nav_grep,
                     service,
                     prune_none(payload),
                 )

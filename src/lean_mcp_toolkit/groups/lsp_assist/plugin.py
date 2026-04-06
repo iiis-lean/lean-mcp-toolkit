@@ -15,7 +15,6 @@ from ...adapters.http import (
     handle_lsp_completions,
     handle_lsp_declaration_file,
     handle_lsp_multi_attempt,
-    handle_lsp_run_snippet,
     handle_lsp_theorem_soundness,
 )
 from ...backends.context import BackendContext
@@ -111,29 +110,6 @@ _MULTI_ATTEMPT_PARAMS: tuple[ToolParamSpec, ...] = (
         required=False,
         default_value="lsp_assist.multi_attempt_default_max_attempts",
         description="Optional per-call cap before hard limit is applied.",
-    ),
-)
-
-_RUN_SNIPPET_PARAMS: tuple[ToolParamSpec, ...] = (
-    ToolParamSpec(
-        name="project_root",
-        type_hint="str | null",
-        required=False,
-        default_value="server default project root",
-        description="Lean project root directory. If not provided, server default root is used.",
-    ),
-    ToolParamSpec(
-        name="code",
-        type_hint="str",
-        required=True,
-        description="Self-contained Lean code snippet with required imports.",
-    ),
-    ToolParamSpec(
-        name="timeout_seconds",
-        type_hint="int | null",
-        required=False,
-        default_value="lsp_assist.run_snippet_default_timeout_seconds",
-        description="Diagnostics wait timeout in seconds.",
     ),
 )
 
@@ -239,15 +215,6 @@ _MULTI_ATTEMPT_RETURNS: tuple[ToolReturnSpec, ...] = (
     ToolReturnSpec("any_success", "bool", "Whether any attempt succeeded."),
 )
 
-_RUN_SNIPPET_RETURNS: tuple[ToolReturnSpec, ...] = (
-    ToolReturnSpec("success", "bool", "Whether snippet has no error diagnostics."),
-    ToolReturnSpec("error_message", "str | null", "Failure detail when success=false."),
-    ToolReturnSpec("diagnostics", "list[DiagnosticMessage]", "Snippet diagnostics.", children=_DIAGNOSTIC_RETURNS),
-    ToolReturnSpec("error_count", "int", "Error diagnostics count."),
-    ToolReturnSpec("warning_count", "int", "Warning diagnostics count."),
-    ToolReturnSpec("info_count", "int", "Info/hint diagnostics count."),
-)
-
 _THEOREM_SOUNDNESS_RETURNS: tuple[ToolReturnSpec, ...] = (
     ToolReturnSpec("success", "bool", "Whether theorem soundness check succeeded."),
     ToolReturnSpec("error_message", "str | null", "Failure detail when success=false."),
@@ -292,15 +259,6 @@ _TOOL_SPECS: tuple[GroupToolSpec, ...] = (
         description="Try multiple snippets around a tactic line and collect goals/diagnostics.",
         params=_MULTI_ATTEMPT_PARAMS,
         returns=_MULTI_ATTEMPT_RETURNS,
-    ),
-    GroupToolSpec(
-        group_name="lsp_assist",
-        canonical_name="lsp.run_snippet",
-        raw_name="run_snippet",
-        api_path="/lsp/run_snippet",
-        description="Run a standalone Lean snippet and return diagnostics.",
-        params=_RUN_SNIPPET_PARAMS,
-        returns=_RUN_SNIPPET_RETURNS,
     ),
     GroupToolSpec(
         group_name="lsp_assist",
@@ -350,7 +308,6 @@ class LspAssistGroupPlugin(GroupPlugin):
             "lsp.completions": lambda payload: handle_lsp_completions(service, payload),
             "lsp.declaration_file": lambda payload: handle_lsp_declaration_file(service, payload),
             "lsp.multi_attempt": lambda payload: handle_lsp_multi_attempt(service, payload),
-            "lsp.run_snippet": lambda payload: handle_lsp_run_snippet(service, payload),
             "lsp.theorem_soundness": lambda payload: handle_lsp_theorem_soundness(service, payload),
         }
 
@@ -455,27 +412,6 @@ class LspAssistGroupPlugin(GroupPlugin):
                 }
                 return await run_sync_mcp_service_handler(
                     handle_lsp_multi_attempt,
-                    service,
-                    prune_none(payload),
-                )
-
-            return
-
-        if spec.canonical_name == "lsp.run_snippet":
-
-            @mcp.tool(name=alias, description=spec.render_mcp_description())
-            async def _lsp_run_snippet(
-                project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
-                code: Annotated[str, Field(description=_param_desc(spec, "code"))] = "",
-                timeout_seconds: Annotated[int | None, Field(description=_param_desc(spec, "timeout_seconds"), ge=1)] = None,
-            ) -> JsonDict:
-                payload = {
-                    "project_root": project_root,
-                    "code": code,
-                    "timeout_seconds": timeout_seconds,
-                }
-                return await run_sync_mcp_service_handler(
-                    handle_lsp_run_snippet,
                     service,
                     prune_none(payload),
                 )

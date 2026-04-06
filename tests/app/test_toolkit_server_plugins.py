@@ -174,3 +174,7 @@ def test_builtin_plugins_register_async_mcp_tools() -> None:
             inspect.iscoroutinefunction(handler)
             for handler in mcp.handlers.values()
         ), plugin.group_name
+        if plugin.group_name == "lsp_core":
+            assert "lsp.run_snippet" in mcp.handlers
+        if plugin.group_name == "lsp_assist":
+            assert "lsp.run_snippet" not in mcp.handlers

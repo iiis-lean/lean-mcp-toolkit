@@ -57,6 +57,8 @@ from ...contracts.lsp_heavy import (
 from ...contracts.mathlib_nav import (
     MathlibNavFileOutlineRequest,
     MathlibNavFileOutlineResponse,
+    MathlibNavGrepRequest,
+    MathlibNavGrepResponse,
     MathlibNavReadRequest,
     MathlibNavReadResponse,
     MathlibNavTreeRequest,
@@ -89,6 +91,8 @@ from ...contracts.search_nav import (
     LocalScopeFindResponse,
     LocalTextFindRequest,
     LocalTextFindResponse,
+    RepoNavGrepRequest,
+    RepoNavGrepResponse,
     RepoNavFileOutlineRequest,
     RepoNavFileOutlineResponse,
     RepoNavReadRequest,
@@ -165,6 +169,9 @@ class LspCoreService(Protocol):
         self,
         req: LspCodeActionsRequest,
     ) -> LspCodeActionsResponse | MarkdownResponse:
+        ...
+
+    def run_snippet(self, req: LspRunSnippetRequest) -> LspRunSnippetResponse:
         ...
 
 
@@ -247,6 +254,9 @@ class MathlibNavService(Protocol):
     ) -> MathlibNavFileOutlineResponse:
         ...
 
+    def run_mathlib_nav_grep(self, req: MathlibNavGrepRequest) -> MathlibNavGrepResponse:
+        ...
+
     def run_mathlib_nav_read(self, req: MathlibNavReadRequest) -> MathlibNavReadResponse:
         ...
 
@@ -261,6 +271,9 @@ class SearchNavService(Protocol):
         self,
         req: RepoNavFileOutlineRequest,
     ) -> RepoNavFileOutlineResponse:
+        ...
+
+    def run_repo_nav_grep(self, req: RepoNavGrepRequest) -> RepoNavGrepResponse:
         ...
 
     def run_repo_nav_read(self, req: RepoNavReadRequest) -> RepoNavReadResponse:

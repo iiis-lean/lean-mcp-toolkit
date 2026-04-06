@@ -11,7 +11,6 @@ Method mapping:
 - ``run_completions`` -> ``lean_completions``
 - ``run_declaration_file`` -> ``lean_declaration_file``
 - ``run_multi_attempt`` -> ``lean_multi_attempt``
-- ``run_snippet`` -> toolkit-native helper
 - ``run_theorem_soundness`` -> toolkit-native theorem soundness helper
 """
 

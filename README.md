@@ -77,10 +77,10 @@ interact with canonical tool names or visible aliases.
 | `diagnostics` | build, file diagnostics, lint checks | `diagnostics.build`, `diagnostics.lint`, `diagnostics.lint.no_sorry` |
 | `declarations` | declaration extraction and symbol location | `declarations.extract`, `declarations.locate` |
 | `lsp_core` / `lsp_assist` / `lsp_heavy` | Lean LSP inspection and proof-assist queries | `lsp.hover`, `lsp.goal`, `lsp.proof_profile` |
-| `search_core` | LeanExplore-backed declaration search | `search.mathlib_decl.find`, `search.mathlib_decl.get` |
-| `search_nav` | local repository navigation and lightweight source search | `search.repo_nav.tree`, `search.local_decl.find`, `search.local_refs.find` |
-| `mathlib_nav` | mathlib tree/outline/read navigation | `search.mathlib_nav.tree`, `search.mathlib_nav.file_outline` |
-| `search_alt` | external search providers | `search_alt.leansearch`, `search_alt.leandex`, `search_alt.loogle`, `search_alt.leanfinder` |
+| `search_core` | LeanExplore-backed declaration search | `lean_explore.find`, `lean_explore.get` |
+| `search_nav` | local repository navigation and lightweight source search | `repo_nav.tree`, `repo_nav.local_decl.find`, `repo_nav.grep` |
+| `mathlib_nav` | mathlib tree/outline/read navigation | `mathlib_nav.tree`, `mathlib_nav.file_outline`, `mathlib_nav.grep` |
+| `search_alt` | external search providers | `leansearch`, `leandex`, `loogle`, `leanfinder` |
 | `proof_search_alt` | external proof-search providers | `proof_search_alt.state_search`, `proof_search_alt.hammer_premise` |
 | `build_base` | direct workspace build entrypoint | `build.workspace` |
 

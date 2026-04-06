@@ -9,6 +9,7 @@ from lean_mcp_toolkit.contracts.lsp_core import (
     LspHoverRequest,
     MarkdownResponse,
 )
+from lean_mcp_toolkit.contracts.lsp_assist import LspRunSnippetRequest
 from lean_mcp_toolkit.groups.lsp_core.service_impl import LspCoreServiceImpl
 
 
@@ -24,6 +25,9 @@ class _FakeLspClient:
 
     def open_file(self, rel_path: str) -> None:
         _ = rel_path
+
+    def close_files(self, rel_paths: list[str]) -> None:
+        _ = rel_paths
 
     def get_file_content(self, rel_path: str) -> str:
         _ = rel_path
@@ -174,6 +178,12 @@ def test_lsp_core_service_structured_and_markdown(tmp_path: Path) -> None:
     assert len(actions.actions) == 1
     assert actions.actions[0].title == "Try this"
     assert actions.actions[0].edits[0].new_text == "exact trivial"
+
+    snippet = service.run_snippet(
+        LspRunSnippetRequest.from_dict({"code": "import Mathlib\ndef x := 1\n"})
+    )
+    assert snippet.success is True
+    assert snippet.warning_count == 1
 
     outline_from_nested_root = service.run_file_outline(
         LspFileOutlineRequest.from_dict(

@@ -1,4 +1,4 @@
-"""Contracts for search.mathlib_decl.find."""
+"""Contracts for lean_explore.find."""
 
 from __future__ import annotations
 

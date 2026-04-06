@@ -1,4 +1,4 @@
-"""Contracts for search.repo_nav.tree."""
+"""Contracts for repo_nav.tree."""
 
 from __future__ import annotations
 

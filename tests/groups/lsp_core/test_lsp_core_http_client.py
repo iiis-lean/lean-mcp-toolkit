@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from lean_mcp_toolkit.contracts.lsp_core import LspGoalRequest, MarkdownResponse
+from lean_mcp_toolkit.contracts.lsp_assist import LspRunSnippetRequest
 from lean_mcp_toolkit.groups.lsp_core.client_http import LspCoreHttpClient
 from lean_mcp_toolkit.transport.http import HttpConfig
 
@@ -15,6 +16,14 @@ class _FakeHttpJsonClient:
                 "success": True,
                 "line_context": "theorem t : True := by",
                 "goals": ["⊢ True"],
+            }
+        if path == "/lsp/run_snippet":
+            return {
+                "success": True,
+                "diagnostics": [],
+                "error_count": 0,
+                "warning_count": 0,
+                "info_count": 0,
             }
         raise AssertionError(f"unexpected path: {path}")
 
@@ -42,3 +51,6 @@ def test_lsp_core_http_client_supports_markdown_and_structured() -> None:
     )
     assert isinstance(markdown, MarkdownResponse)
     assert markdown.markdown == "## Goal"
+
+    snippet = client.run_snippet(LspRunSnippetRequest.from_dict({"code": "def x := 1"}))
+    assert snippet.success is True

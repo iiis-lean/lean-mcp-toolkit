@@ -106,13 +106,13 @@ def test_warmup_config_structure() -> None:
                 },
                 "plan": {
                     "order": [
-                        "search.mathlib_decl.find",
+                        "lean_explore.find",
                         "declarations.extract",
                         "diagnostics.file",
                     ]
                 },
                 "calls": {
-                    "search.mathlib_decl.find": {
+                    "lean_explore.find": {
                         "enabled": True,
                         "request": {
                             "query": "Nat.succ",
@@ -142,7 +142,7 @@ def test_warmup_config_structure() -> None:
     assert cfg.warmup.policy.continue_on_error is False
     assert cfg.warmup.policy.default_project_root == "/tmp/demo"
     assert cfg.warmup.plan.order == (
-        "search.mathlib_decl.find",
+        "lean_explore.find",
         "declarations.extract",
         "diagnostics.file",
     )

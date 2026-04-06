@@ -1,4 +1,4 @@
-"""Contracts for search_alt.leansearch."""
+"""Contracts for leansearch."""
 
 from __future__ import annotations
 

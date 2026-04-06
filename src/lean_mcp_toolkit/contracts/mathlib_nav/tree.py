@@ -1,4 +1,4 @@
-"""Contracts for search.mathlib_nav.tree."""
+"""Contracts for mathlib_nav.tree."""
 
 from __future__ import annotations
 

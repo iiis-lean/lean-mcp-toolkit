@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from lean_mcp_toolkit.contracts.mathlib_nav import (
     MathlibNavFileOutlineRequest,
+    MathlibNavGrepRequest,
     MathlibNavReadRequest,
     MathlibNavTreeRequest,
 )
@@ -23,6 +24,13 @@ class _FakeHttpJsonClient:
                 "declarations": [],
                 "scope_cmds": [],
                 "summary": {"total_lines": 1, "decl_count": 0},
+            }
+        if path == "/search/mathlib_nav/grep":
+            return {
+                "success": True,
+                "query": "probe",
+                "count": 1,
+                "items": [{"scope": "decl_header"}],
             }
         if path == "/search/mathlib_nav/read":
             return {
@@ -50,6 +58,10 @@ def test_mathlib_nav_http_client_roundtrip() -> None:
     assert outline.success is True
     assert outline.target is not None
     assert outline.target.module_path == "Linear.Probe"
+
+    grep = client.run_mathlib_nav_grep(MathlibNavGrepRequest.from_dict({"query": "probe"}))
+    assert grep.success is True
+    assert grep.count == 1
 
     read = client.run_mathlib_nav_read(MathlibNavReadRequest.from_dict({"target": "Linear/Probe.lean"}))
     assert read.success is True

@@ -1,6 +1,8 @@
 from lean_mcp_toolkit.contracts.mathlib_nav import (
     MathlibNavFileOutlineRequest,
     MathlibNavFileOutlineResponse,
+    MathlibNavGrepRequest,
+    MathlibNavGrepResponse,
     MathlibNavReadRequest,
     MathlibNavReadResponse,
     MathlibNavTreeRequest,
@@ -84,3 +86,34 @@ def test_mathlib_nav_outline_and_read_contract_roundtrip() -> None:
     assert read_resp.success is True
     assert read_resp.window is not None
     assert read_resp.window.total_lines == 1
+
+    grep_req = MathlibNavGrepRequest.from_dict(
+        {
+            "project_root": "/tmp/proj",
+            "query": "prime degree",
+            "base": "Mathlib.GroupTheory",
+            "match_mode": "phrase",
+        }
+    )
+    assert grep_req.base == "Mathlib.GroupTheory"
+
+    grep_resp = MathlibNavGrepResponse.from_dict(
+        {
+            "success": True,
+            "query": "prime degree",
+            "match_mode": "phrase",
+            "count": 1,
+            "items": [
+                {
+                    "scope": "decl_header",
+                    "file_path": "GroupTheory/Burnside.lean",
+                    "module_path": "GroupTheory.Burnside",
+                    "line_start": 12,
+                    "line_end": 12,
+                    "snippet": "12 | theorem burnside_prime_degree ...",
+                }
+            ],
+        }
+    )
+    assert grep_resp.success is True
+    assert grep_resp.items[0].module_path == "GroupTheory.Burnside"

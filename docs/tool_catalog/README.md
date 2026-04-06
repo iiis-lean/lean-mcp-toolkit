@@ -19,10 +19,10 @@ This section documents the tool surface exposed by `lean-mcp-toolkit`.
 | `lsp_core` | core Lean LSP inspection | `lsp.hover`, `lsp.goal`, `lsp.file_outline` |
 | `lsp_assist` | higher-level LSP proof assistance | `lsp.completions`, `lsp.multi_attempt`, `lsp.theorem_soundness` |
 | `lsp_heavy` | heavier widget/profile inspection | `lsp.widgets`, `lsp.widget_source`, `lsp.proof_profile` |
-| `search_core` | LeanExplore-backed declaration search | `search.mathlib_decl.find`, `search.mathlib_decl.get` |
-| `mathlib_nav` | mathlib tree/outline/read navigation | `search.mathlib_nav.tree`, `search.mathlib_nav.file_outline`, `search.mathlib_nav.read` |
-| `search_nav` | local repository navigation and lightweight source search | `search.repo_nav.tree`, `search.local_decl.find`, `search.local_refs.find` |
-| `search_alt` | external search providers | `search_alt.leansearch`, `search_alt.leandex`, `search_alt.loogle`, `search_alt.leanfinder` |
+| `search_core` | LeanExplore-backed declaration search | `lean_explore.find`, `lean_explore.get` |
+| `mathlib_nav` | mathlib tree/outline/read navigation | `mathlib_nav.tree`, `mathlib_nav.file_outline`, `mathlib_nav.read`, `mathlib_nav.grep` |
+| `search_nav` | local repository navigation and lightweight source search | `repo_nav.tree`, `repo_nav.local_decl.find`, `repo_nav.local_refs.find`, `repo_nav.grep` |
+| `search_alt` | external search providers | `leansearch`, `leandex`, `loogle`, `leanfinder` |
 | `proof_search_alt` | external proof-search providers | `proof_search_alt.state_search`, `proof_search_alt.hammer_premise` |
 
 ## Detailed Reference
@@ -31,4 +31,3 @@ For the detailed per-tool reference, including provenance, upstream names, and
 backend notes, see:
 
 - [tool_reference.md](tool_reference.md)
-

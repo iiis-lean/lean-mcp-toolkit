@@ -13,6 +13,7 @@ Method mapping:
 - ``run_term_goal`` -> ``lean_term_goal``
 - ``run_hover`` -> ``lean_hover_info``
 - ``run_code_actions`` -> ``lean_code_actions``
+- ``run_snippet`` -> toolkit-native helper
 """
 
 from __future__ import annotations
@@ -20,11 +21,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+import uuid
 
 from ...backends.lean.path import LeanPath
 from ...backends.lean.path import resolve_project_root
 from ...backends.lsp import LeanLSPClientManager
 from ...config import ToolkitConfig
+from ...contracts.lsp_assist import LspRunSnippetRequest, LspRunSnippetResponse
 from ...contracts.lsp_core import (
     CodeAction,
     CodeActionEdit,
@@ -382,6 +385,86 @@ class LspCoreServiceImpl(LspCoreService):
                 render_code_actions_markdown(structured),
                 structured,
             )
+
+    def run_snippet(self, req: LspRunSnippetRequest) -> LspRunSnippetResponse:
+        """Run a temporary Lean snippet inside the current project."""
+        snippet_path: Path | None = None
+        rel_path: str | None = None
+        client: Any | None = None
+        try:
+            project_root = self._resolve_project_root(req.project_root)
+            code = req.code
+            if not code.strip():
+                raise ValueError("code is required")
+            max_chars = max(1, self.config.lsp_assist.run_snippet_max_code_chars)
+            if len(code) > max_chars:
+                raise ValueError(f"code exceeds max length: {len(code)} > {max_chars}")
+
+            rel_path = f"_mcp_snippet_{uuid.uuid4().hex}.lean"
+            snippet_path = (project_root / rel_path).resolve()
+            snippet_path.write_text(code, encoding="utf-8")
+
+            client = self.lsp_client_manager.get_client(project_root)
+            client.open_file(rel_path)
+
+            timeout_seconds = (
+                req.timeout_seconds
+                if req.timeout_seconds is not None
+                else self.config.lsp_assist.run_snippet_default_timeout_seconds
+            )
+            inactivity_timeout = float(
+                timeout_seconds
+                if timeout_seconds is not None
+                else self.config.backends.lsp.diagnostics_timeout_seconds
+            )
+            raw_diag = client.get_diagnostics(
+                rel_path,
+                inactivity_timeout=inactivity_timeout,
+            )
+            diagnostics = tuple(
+                self._map_diagnostic(item)
+                for item in self._extract_diagnostics_list(raw_diag)
+            )
+            error_count = 0
+            warning_count = 0
+            info_count = 0
+            for item in diagnostics:
+                sev = (item.severity or "").strip().lower()
+                if sev == "error":
+                    error_count += 1
+                elif sev == "warning":
+                    warning_count += 1
+                else:
+                    info_count += 1
+
+            return LspRunSnippetResponse(
+                success=(error_count == 0),
+                error_message=None,
+                diagnostics=diagnostics,
+                error_count=error_count,
+                warning_count=warning_count,
+                info_count=info_count,
+            )
+        except Exception as exc:
+            return LspRunSnippetResponse(
+                success=False,
+                error_message=str(exc),
+                diagnostics=tuple(),
+                error_count=0,
+                warning_count=0,
+                info_count=0,
+            )
+        finally:
+            if client is not None and rel_path is not None:
+                try:
+                    client.close_files([rel_path])
+                except Exception:
+                    pass
+            if snippet_path is not None:
+                try:
+                    snippet_path.unlink(missing_ok=True)
+                except Exception:
+                    pass
 
     def _resolve_project_root(self, project_root: str | None) -> Path:
         return resolve_project_root(

@@ -927,7 +927,7 @@ class WarmupProbeFileConfig:
 @dataclass(slots=True, frozen=True)
 class WarmupPlanConfig:
     order: tuple[str, ...] = (
-        "search.mathlib_decl.find",
+        "lean_explore.find",
         "declarations.extract",
         "diagnostics.file",
     )
@@ -938,7 +938,7 @@ class WarmupPlanConfig:
             order=tuple(
                 to_list_of_str(data.get("order"))
                 or (
-                    "search.mathlib_decl.find",
+                    "lean_explore.find",
                     "declarations.extract",
                     "diagnostics.file",
                 )
@@ -976,7 +976,7 @@ class WarmupCallConfig:
 
 def _default_warmup_calls() -> dict[str, WarmupCallConfig]:
     return {
-        "search.mathlib_decl.find": WarmupCallConfig(
+        "lean_explore.find": WarmupCallConfig(
             enabled=True,
             use_probe_file=False,
             request={

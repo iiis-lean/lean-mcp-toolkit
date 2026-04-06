@@ -7,6 +7,7 @@ from lean_mcp_toolkit.contracts.search_nav import (
     LocalRefsFindRequest,
     LocalScopeFindRequest,
     LocalTextFindRequest,
+    RepoNavGrepRequest,
     RepoNavFileOutlineRequest,
     RepoNavReadRequest,
     RepoNavTreeRequest,
@@ -180,3 +181,18 @@ def test_search_nav_service_local_find_tools(tmp_path: Path) -> None:
     assert refs.count >= 1
     assert all(item.is_definition_site is False for item in refs.items)
     assert any(item.file_path == "Foo/Baz.lean" for item in refs.items)
+
+    grep = svc.run_repo_nav_grep(
+        RepoNavGrepRequest.from_dict(
+            {
+                "repo_root": str(repo),
+                "query": "Foo.foo",
+                "match_mode": "word",
+                "path_filter": "Foo",
+            }
+        )
+    )
+    assert grep.success is True
+    assert grep.match_mode == "word"
+    assert grep.path_filter == "Foo"
+    assert any(item.file_path == "Foo/Baz.lean" for item in grep.items)

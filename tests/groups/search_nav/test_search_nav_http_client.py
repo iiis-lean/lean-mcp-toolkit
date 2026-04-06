@@ -6,6 +6,7 @@ from lean_mcp_toolkit.contracts.search_nav import (
     LocalRefsFindRequest,
     LocalScopeFindRequest,
     LocalTextFindRequest,
+    RepoNavGrepRequest,
     RepoNavFileOutlineRequest,
     RepoNavReadRequest,
     RepoNavTreeRequest,
@@ -28,6 +29,15 @@ class _FakeHttpJsonClient:
                 "declarations": [],
                 "scope_cmds": [],
                 "summary": {"total_lines": 1, "decl_count": 0},
+            }
+        if path == "/search/repo_nav/grep":
+            return {
+                "success": True,
+                "query": "x",
+                "match_mode": "word",
+                "path_filter": "A",
+                "count": 1,
+                "items": [{"scope": "body"}],
             }
         if path == "/search/repo_nav/read":
             return {
@@ -63,6 +73,11 @@ def test_search_nav_http_client_roundtrip() -> None:
     assert outline.success is True
     assert outline.target is not None
     assert outline.target.module_path == "A"
+
+    grep = client.run_repo_nav_grep(RepoNavGrepRequest.from_dict({"query": "x"}))
+    assert grep.success is True
+    assert grep.match_mode == "word"
+    assert grep.count == 1
 
     read = client.run_repo_nav_read(RepoNavReadRequest.from_dict({"target": "A.lean"}))
     assert read.success is True

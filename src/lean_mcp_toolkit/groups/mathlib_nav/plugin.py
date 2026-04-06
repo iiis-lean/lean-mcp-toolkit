@@ -13,6 +13,7 @@ except Exception:  # pragma: no cover
 
 from ...adapters.http import (
     handle_search_mathlib_nav_file_outline,
+    handle_search_mathlib_nav_grep,
     handle_search_mathlib_nav_read,
     handle_search_mathlib_nav_tree,
 )
@@ -70,10 +71,22 @@ _READ_PARAMS: tuple[ToolParamSpec, ...] = (
     ToolParamSpec("with_line_numbers", "bool | null", "Attach line numbers in output content.", False, "search_nav.read_with_line_numbers_default"),
 )
 
+_GREP_PARAMS: tuple[ToolParamSpec, ...] = (
+    ToolParamSpec("project_root", "str | null", "Lean project root directory.", False, "server default project root"),
+    ToolParamSpec("mathlib_root", "str | null", "Optional explicit Mathlib root or repo root containing Mathlib/.", False, "null"),
+    ToolParamSpec("query", "str", "Text or regex query.", True),
+    ToolParamSpec("match_mode", "phrase | word | regex", "Text match strategy.", False, "phrase"),
+    ToolParamSpec("base", "str | null", "Optional Mathlib subdirectory/module prefix to search under.", False, "null"),
+    ToolParamSpec("target", "str | null", "Optional Mathlib file/module target to search within.", False, "null"),
+    ToolParamSpec("context_lines", "int | null", "Snippet context lines.", False, "1"),
+    ToolParamSpec("limit", "int | null", "Max results.", False, "search_nav.default_limit"),
+    ToolParamSpec("scopes", "list[str] | str | null", "Scopes to scan.", False, "[decl_header, decl_sig, body, comment]"),
+)
+
 _TOOL_SPECS: tuple[GroupToolSpec, ...] = (
     GroupToolSpec(
         group_name="mathlib_nav",
-        canonical_name="search.mathlib_nav.tree",
+        canonical_name="mathlib_nav.tree",
         raw_name="mathlib_nav.tree",
         api_path="/search/mathlib_nav/tree",
         description="List Mathlib tree entries from a base path/module.",
@@ -88,7 +101,7 @@ _TOOL_SPECS: tuple[GroupToolSpec, ...] = (
     ),
     GroupToolSpec(
         group_name="mathlib_nav",
-        canonical_name="search.mathlib_nav.file_outline",
+        canonical_name="mathlib_nav.file_outline",
         raw_name="mathlib_nav.file_outline",
         api_path="/search/mathlib_nav/file_outline",
         description="Read structured Mathlib file outline (imports/docs/declarations/scope commands).",
@@ -107,7 +120,7 @@ _TOOL_SPECS: tuple[GroupToolSpec, ...] = (
     ),
     GroupToolSpec(
         group_name="mathlib_nav",
-        canonical_name="search.mathlib_nav.read",
+        canonical_name="mathlib_nav.read",
         raw_name="mathlib_nav.read",
         api_path="/search/mathlib_nav/read",
         description="Read Mathlib file content window with optional line numbers.",
@@ -118,6 +131,22 @@ _TOOL_SPECS: tuple[GroupToolSpec, ...] = (
             ToolReturnSpec("target", "RepoNavTarget | null", "Resolved target info."),
             ToolReturnSpec("window", "RepoNavReadWindow | null", "Returned window info."),
             ToolReturnSpec("content", "str", "Window content text."),
+        ),
+    ),
+    GroupToolSpec(
+        group_name="mathlib_nav",
+        canonical_name="mathlib_nav.grep",
+        raw_name="mathlib_nav.grep",
+        api_path="/search/mathlib_nav/grep",
+        description="Grep Mathlib source text with grep-like defaults.",
+        params=_GREP_PARAMS,
+        returns=(
+            ToolReturnSpec("success", "bool", "Whether execution succeeded."),
+            ToolReturnSpec("error_message", "str | null", "Error details when failed."),
+            ToolReturnSpec("query", "str", "Resolved query string."),
+            ToolReturnSpec("match_mode", "str", "Resolved text match mode."),
+            ToolReturnSpec("count", "int", "Returned item count."),
+            ToolReturnSpec("items", "list[LocalTextFindItem]", "Text matches."),
         ),
     ),
 )
@@ -150,11 +179,12 @@ class MathlibNavGroupPlugin(GroupPlugin):
 
     def tool_handlers(self, service: Any) -> Mapping[str, ToolHandler]:
         return {
-            "search.mathlib_nav.tree": lambda payload: handle_search_mathlib_nav_tree(service, payload),
-            "search.mathlib_nav.file_outline": (
+            "mathlib_nav.tree": lambda payload: handle_search_mathlib_nav_tree(service, payload),
+            "mathlib_nav.file_outline": (
                 lambda payload: handle_search_mathlib_nav_file_outline(service, payload)
             ),
-            "search.mathlib_nav.read": lambda payload: handle_search_mathlib_nav_read(service, payload),
+            "mathlib_nav.read": lambda payload: handle_search_mathlib_nav_read(service, payload),
+            "mathlib_nav.grep": lambda payload: handle_search_mathlib_nav_grep(service, payload),
         }
 
     def register_mcp_tools(
@@ -168,8 +198,8 @@ class MathlibNavGroupPlugin(GroupPlugin):
     ) -> None:
         _ = normalize_str_list
 
-        for alias in aliases_by_canonical.get("search.mathlib_nav.tree", ()):
-            spec = _TOOL_SPEC_MAP["search.mathlib_nav.tree"]
+        for alias in aliases_by_canonical.get("mathlib_nav.tree", ()):
+            spec = _TOOL_SPEC_MAP["mathlib_nav.tree"]
 
             @mcp.tool(name=alias, description=spec.render_mcp_description())
             async def _mathlib_nav_tree(
@@ -207,8 +237,8 @@ class MathlibNavGroupPlugin(GroupPlugin):
                     payload,
                 )
 
-        for alias in aliases_by_canonical.get("search.mathlib_nav.file_outline", ()):
-            spec = _TOOL_SPEC_MAP["search.mathlib_nav.file_outline"]
+        for alias in aliases_by_canonical.get("mathlib_nav.file_outline", ()):
+            spec = _TOOL_SPEC_MAP["mathlib_nav.file_outline"]
 
             @mcp.tool(name=alias, description=spec.render_mcp_description())
             async def _mathlib_nav_file_outline(
@@ -265,8 +295,8 @@ class MathlibNavGroupPlugin(GroupPlugin):
                     payload,
                 )
 
-        for alias in aliases_by_canonical.get("search.mathlib_nav.read", ()):
-            spec = _TOOL_SPEC_MAP["search.mathlib_nav.read"]
+        for alias in aliases_by_canonical.get("mathlib_nav.read", ()):
+            spec = _TOOL_SPEC_MAP["mathlib_nav.read"]
 
             @mcp.tool(name=alias, description=spec.render_mcp_description())
             async def _mathlib_nav_read(
@@ -309,6 +339,55 @@ class MathlibNavGroupPlugin(GroupPlugin):
                 )
                 return await run_sync_mcp_service_handler(
                     handle_search_mathlib_nav_read,
+                    service,
+                    payload,
+                )
+
+        for alias in aliases_by_canonical.get("mathlib_nav.grep", ()):
+            spec = _TOOL_SPEC_MAP["mathlib_nav.grep"]
+
+            @mcp.tool(name=alias, description=spec.render_mcp_description())
+            async def _mathlib_nav_grep(
+                query: Annotated[str, Field(description=_param_desc(spec, "query"))],
+                project_root: Annotated[
+                    str | None,
+                    Field(description=_param_desc(spec, "project_root")),
+                ] = None,
+                mathlib_root: Annotated[
+                    str | None,
+                    Field(description=_param_desc(spec, "mathlib_root")),
+                ] = None,
+                match_mode: Annotated[
+                    str,
+                    Field(description=_param_desc(spec, "match_mode")),
+                ] = "phrase",
+                base: Annotated[str | None, Field(description=_param_desc(spec, "base"))] = None,
+                target: Annotated[str | None, Field(description=_param_desc(spec, "target"))] = None,
+                context_lines: Annotated[
+                    int | None,
+                    Field(description=_param_desc(spec, "context_lines")),
+                ] = None,
+                limit: Annotated[int | None, Field(description=_param_desc(spec, "limit"))] = None,
+                scopes: Annotated[
+                    list[str] | str | None,
+                    Field(description=_param_desc(spec, "scopes")),
+                ] = None,
+            ) -> JsonDict:
+                payload = prune_none(
+                    {
+                        "project_root": project_root,
+                        "mathlib_root": mathlib_root,
+                        "query": query,
+                        "match_mode": match_mode,
+                        "base": base,
+                        "target": target,
+                        "context_lines": context_lines,
+                        "limit": limit,
+                        "scopes": scopes,
+                    }
+                )
+                return await run_sync_mcp_service_handler(
+                    handle_search_mathlib_nav_grep,
                     service,
                     payload,
                 )

@@ -10,6 +10,7 @@ from ...contracts.search_nav import (
     LocalScopeFindRequest,
     LocalTextFindRequest,
     RepoNavFileOutlineRequest,
+    RepoNavGrepRequest,
     RepoNavReadRequest,
     RepoNavTreeRequest,
 )
@@ -24,6 +25,11 @@ def handle_search_repo_nav_tree(service: SearchNavService, payload: JsonDict) ->
 def handle_search_repo_nav_file_outline(service: SearchNavService, payload: JsonDict) -> JsonDict:
     req = RepoNavFileOutlineRequest.from_dict(payload)
     return service.run_repo_nav_file_outline(req).to_dict()
+
+
+def handle_search_repo_nav_grep(service: SearchNavService, payload: JsonDict) -> JsonDict:
+    req = RepoNavGrepRequest.from_dict(payload)
+    return service.run_repo_nav_grep(req).to_dict()
 
 
 def handle_search_repo_nav_read(service: SearchNavService, payload: JsonDict) -> JsonDict:
@@ -59,6 +65,7 @@ def handle_search_local_refs_find(service: SearchNavService, payload: JsonDict) 
 __all__ = [
     "handle_search_repo_nav_tree",
     "handle_search_repo_nav_file_outline",
+    "handle_search_repo_nav_grep",
     "handle_search_repo_nav_read",
     "handle_search_local_decl_find",
     "handle_search_local_import_find",
