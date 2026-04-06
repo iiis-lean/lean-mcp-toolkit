@@ -16,7 +16,7 @@ This section documents the tool surface exposed by `lean-mcp-toolkit`.
 | `build_base` | direct workspace build entrypoint | `build.workspace` |
 | `diagnostics` | build/file diagnostics and lint checks | `diagnostics.build`, `diagnostics.lint`, `diagnostics.lint.no_sorry` |
 | `declarations` | declaration extraction and symbol location | `declarations.extract`, `declarations.locate` |
-| `lsp_core` | core Lean LSP inspection | `lsp.hover`, `lsp.goal`, `lsp.file_outline` |
+| `lsp_core` | core Lean LSP inspection | `lsp.hover`, `lsp.goal`, `lsp.file_outline`, `lsp.run_snippet` |
 | `lsp_assist` | higher-level LSP proof assistance | `lsp.completions`, `lsp.multi_attempt`, `lsp.theorem_soundness` |
 | `lsp_heavy` | heavier widget/profile inspection | `lsp.widgets`, `lsp.widget_source`, `lsp.proof_profile` |
 | `search_core` | LeanExplore-backed declaration search | `lean_explore.find`, `lean_explore.get` |

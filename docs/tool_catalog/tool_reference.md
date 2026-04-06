@@ -59,7 +59,7 @@ The `Source` and `Original name / upstream reference` columns follow these rules
 | `lsp.term_goal` | Return expected type / term goal at a position. | `lean-lsp-mcp` / upstream | `lean_term_goal` | LSP client based. |
 | `lsp.hover` | Return hover/type/doc information at a position. | `lean-lsp-mcp` / upstream | `lean_hover_info` | LSP client based. |
 | `lsp.code_actions` | Return code actions / resolved edits at a line. | `lean-lsp-mcp` / upstream | `lean_code_actions` | LSP client based. |
-| `lsp.run_snippet` | Run a self-contained Lean snippet and report diagnostics. | Local implementation inspired by LSP tool workflows |  | Toolkit-owned core LSP utility. |
+| `lsp.run_snippet` | Run a self-contained Lean snippet and report diagnostics. | Local implementation inspired by LSP tool workflows |  | Toolkit-owned core LSP utility with `lsp_core` timeout/size controls and backend recycle on timeout/failure. |
 
 ### Assistive LSP tools
 

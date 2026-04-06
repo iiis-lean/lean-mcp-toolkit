@@ -113,7 +113,22 @@ backend layers, including:
 
 These are configured under the corresponding sections in the toolkit config.
 
-## 5. CLI Defaults
+## 5. `lsp.run_snippet` Runtime Controls
+
+The toolkit-owned `lsp.run_snippet` tool is configured under `lsp_core`:
+
+- `lsp_core.run_snippet_default_timeout_seconds`
+- `lsp_core.run_snippet_max_timeout_seconds`
+- `lsp_core.run_snippet_max_code_chars`
+
+These settings control the default snippet timeout, the hard upper bound for a
+user-supplied timeout, and the maximum snippet size accepted by the server.
+
+`run_snippet` also applies a toolkit-side hard timeout around diagnostics
+collection so that cleanup and client recycle still happen if the underlying LSP
+call does not return promptly.
+
+## 6. CLI Defaults
 
 The remote CLI (`lean-cli-toolkit`) also has a user-scoped config file:
 
@@ -130,11 +145,10 @@ This stores client-side defaults such as:
 
 These defaults are separate from the toolkit server configuration.
 
-## 6. Suggested Reading Order
+## 7. Suggested Reading Order
 
 For practical use:
 
 1. Start with [../usage/README.md](../usage/README.md)
 2. Then read [../tool_catalog/README.md](../tool_catalog/README.md)
 3. Use [tool_reference.md](../tool_catalog/tool_reference.md) when selecting tool/backend combinations
-

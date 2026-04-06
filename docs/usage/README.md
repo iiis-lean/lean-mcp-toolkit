@@ -74,6 +74,26 @@ curl -X POST http://127.0.0.1:18080/api/v1/diagnostics/lint \
   }'
 ```
 
+### Debug backend recycle endpoints
+
+For runtime recovery and backend cleanup, the HTTP API also exposes debug-only
+recycle endpoints:
+
+```text
+POST /api/v1/debug/backends/recycle/lsp
+POST /api/v1/debug/backends/recycle/lean_interact
+```
+
+Each endpoint accepts an optional JSON body:
+
+```json
+{
+  "project_root": "/path/to/project"
+}
+```
+
+If `project_root` is omitted, the server default project root is used.
+
 ## 3. Remote CLI: `lean-cli-toolkit`
 
 `lean-cli-toolkit` is the remote-first command-line client. It does not embed
@@ -178,4 +198,3 @@ running server. This means:
 
 The reference documentation uses canonical tool names. The remote CLI always
 reflects the actual aliases exposed by the target server.
-
