@@ -85,7 +85,9 @@ class _FakeLspClient:
             self.diag_timeouts.append(inactivity_timeout)
         if self.diag_delay_seconds > 0:
             time.sleep(self.diag_delay_seconds)
-        if self.diag_error is not None and rel_path.startswith("_mcp_snippet_"):
+        if self.diag_error is not None and (
+            rel_path.startswith("_mcp_snippet_") or rel_path.startswith("_mcp_verify_")
+        ):
             raise self.diag_error
         if rel_path.startswith("_mcp_snippet_"):
             return [
@@ -264,6 +266,94 @@ def test_lsp_assist_run_snippet_clamps_timeout_and_recycles_on_failure(tmp_path:
     assert fake_client.closed_paths == []
     assert manager.recycled_roots == [tmp_path.resolve()]
     assert list(tmp_path.glob("_mcp_snippet_*.lean")) == []
+
+
+def test_lsp_assist_theorem_soundness_recycles_on_failure(tmp_path: Path) -> None:
+    (tmp_path / "lean-toolchain").write_text("leanprover/lean4:v4.28.0\n", encoding="utf-8")
+    target_file = tmp_path / "A" / "B.lean"
+    target_file.parent.mkdir(parents=True, exist_ok=True)
+    target_file.write_text("theorem t : True := by trivial\n", encoding="utf-8")
+
+    cfg = ToolkitConfig.from_dict(
+        {
+            "server": {"default_project_root": str(tmp_path)},
+            "groups": {"enabled_groups": ["lsp_assist"]},
+            "lsp_assist": {"enabled": True},
+        }
+    )
+    fake_client = _FakeLspClient(
+        file_content="",
+        target_uri=target_file.resolve().as_uri(),
+        diag_error=TimeoutError("timed out"),
+        diag_timeouts=[],
+        closed_paths=[],
+    )
+    manager = _FakeLspClientManager(client=fake_client, recycled_roots=[])
+    service = LspAssistServiceImpl(config=cfg, lsp_client_manager=manager)
+
+    response = service.run_theorem_soundness(
+        LspTheoremSoundnessRequest.from_dict(
+            {
+                "file_path": "A/B.lean",
+                "theorem_name": "A.B.t",
+                "scan_source": False,
+            }
+        )
+    )
+
+    assert response.success is False
+    assert "timed out" in (response.error_message or "")
+    assert fake_client.diag_timeouts == [15.0]
+    assert fake_client.closed_paths == []
+    assert manager.recycled_roots == [tmp_path.resolve()]
+    assert list(tmp_path.glob("_mcp_verify_*.lean")) == []
+
+
+def test_lsp_assist_theorem_soundness_hard_timeout_recycles_when_diagnostics_blocks(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "lean-toolchain").write_text("leanprover/lean4:v4.28.0\n", encoding="utf-8")
+    target_file = tmp_path / "A" / "B.lean"
+    target_file.parent.mkdir(parents=True, exist_ok=True)
+    target_file.write_text("theorem t : True := by trivial\n", encoding="utf-8")
+
+    cfg = ToolkitConfig.from_dict(
+        {
+            "server": {"default_project_root": str(tmp_path)},
+            "groups": {"enabled_groups": ["lsp_assist"]},
+            "backends": {"lsp": {"diagnostics_timeout_seconds": 1}},
+            "lsp_assist": {"enabled": True},
+        }
+    )
+    fake_client = _FakeLspClient(
+        file_content="",
+        target_uri=target_file.resolve().as_uri(),
+        diag_delay_seconds=5.0,
+        diag_timeouts=[],
+        closed_paths=[],
+    )
+    manager = _FakeLspClientManager(client=fake_client, recycled_roots=[])
+    service = LspAssistServiceImpl(config=cfg, lsp_client_manager=manager)
+
+    started = time.monotonic()
+    response = service.run_theorem_soundness(
+        LspTheoremSoundnessRequest.from_dict(
+            {
+                "file_path": "A/B.lean",
+                "theorem_name": "A.B.t",
+                "scan_source": False,
+            }
+        )
+    )
+    elapsed = time.monotonic() - started
+
+    assert response.success is False
+    assert "timed out" in (response.error_message or "").lower()
+    assert elapsed < 4.0
+    assert fake_client.diag_timeouts == [1.0]
+    assert fake_client.closed_paths == []
+    assert manager.recycled_roots == [tmp_path.resolve()]
+    assert list(tmp_path.glob("_mcp_verify_*.lean")) == []
 
 
 def test_lsp_assist_run_snippet_hard_timeout_recycles_when_diagnostics_blocks(tmp_path: Path) -> None:

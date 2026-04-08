@@ -11,7 +11,11 @@ import pytest
 from lean_mcp_toolkit.app import ToolkitServer
 from lean_mcp_toolkit.backends import BackendKey
 from lean_mcp_toolkit.config import ToolkitConfig
-from lean_mcp_toolkit.contracts.lsp_assist import LspRunSnippetRequest
+from lean_mcp_toolkit.contracts.lsp_assist import (
+    LspRunSnippetRequest,
+    LspTheoremSoundnessRequest,
+)
+from lean_mcp_toolkit.groups.lsp_assist.service_impl import LspAssistServiceImpl
 from lean_mcp_toolkit.groups.lsp_core.service_impl import LspCoreServiceImpl
 
 
@@ -129,6 +133,59 @@ def test_run_snippet_timeout_recycles_real_lsp_process_tree(tmp_path: Path) -> N
 
     assert response.success is False
     _wait_for_pids_to_exit(tracked_pids)
+    assert list(project_root.glob("_mcp_snippet_*.lean")) == []
+
+
+@pytest.mark.skipif(
+    not _has_real_lsp_runtime(),
+    reason="real LSP cleanup test requires leanclient and lean/lake toolchain",
+)
+def test_theorem_soundness_timeout_recycles_real_lsp_process_tree(tmp_path: Path) -> None:
+    project_root, package_dir = _init_lake_project(tmp_path / "theorem_soundness_timeout", "CleanupCase")
+    package_dir.mkdir(parents=True, exist_ok=True)
+    basic_source = package_dir / "Basic.lean"
+    basic_source.write_text("theorem t : True := by\n  trivial\n", encoding="utf-8")
+
+    cfg = ToolkitConfig.from_dict(
+        {
+            "server": {"default_project_root": str(project_root)},
+            "groups": {"enabled_groups": ["lsp_assist"]},
+            "backends": {"lsp": {"diagnostics_timeout_seconds": 1}},
+            "lsp_assist": {"enabled": True},
+        }
+    )
+    service = LspAssistServiceImpl(config=cfg)
+    manager = service.lsp_client_manager
+    client = manager.get_client(project_root)
+    client.open_file("CleanupCase/Basic.lean")
+    client.get_diagnostics("CleanupCase/Basic.lean", inactivity_timeout=5.0)
+
+    handle = _extract_client_process_handle(client)
+    if handle is None:
+        pytest.skip("unable to discover LeanLSPClient process handle")
+    tracked_pids = _capture_process_tree(handle.pid)
+
+    def _raise_timeout(*, client, rel_path, timeout_seconds):
+        _ = client, rel_path, timeout_seconds
+        raise TimeoutError("timed out")
+
+    service._get_diagnostics_with_hard_timeout = _raise_timeout  # type: ignore[method-assign]
+
+    response = service.run_theorem_soundness(
+        LspTheoremSoundnessRequest.from_dict(
+            {
+                "project_root": str(project_root),
+                "file_path": "CleanupCase/Basic.lean",
+                "theorem_name": "CleanupCase.Basic.t",
+                "scan_source": False,
+            }
+        )
+    )
+
+    assert response.success is False
+    assert "timed out" in (response.error_message or "").lower()
+    _wait_for_pids_to_exit(tracked_pids)
+    assert list(project_root.glob("_mcp_verify_*.lean")) == []
 
 
 @pytest.mark.skipif(

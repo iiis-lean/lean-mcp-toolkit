@@ -441,9 +441,11 @@ class LspAssistServiceImpl(LspAssistService):
         req: LspTheoremSoundnessRequest,
     ) -> LspTheoremSoundnessResponse:
         """Check theorem soundness via a temporary ``#print axioms`` file."""
+        project_root: Path | None = None
         verify_path: Path | None = None
         rel_path: str | None = None
         client: Any | None = None
+        recycle_client = False
         try:
             project_root = self._resolve_project_root(req.project_root)
             rel_file = self._normalize_file_path(project_root=project_root, file_path=req.file_path)
@@ -461,9 +463,10 @@ class LspAssistServiceImpl(LspAssistService):
 
             client = self.lsp_client_manager.get_client(project_root)
             client.open_file(rel_path)
-            raw_diag = client.get_diagnostics(
-                rel_path,
-                inactivity_timeout=float(self.config.backends.lsp.diagnostics_timeout_seconds),
+            raw_diag = self._get_diagnostics_with_hard_timeout(
+                client=client,
+                rel_path=rel_path,
+                timeout_seconds=float(self.config.backends.lsp.diagnostics_timeout_seconds),
             )
             diagnostics = self._extract_diagnostics_list(raw_diag)
             error_messages = [
@@ -501,6 +504,7 @@ class LspAssistServiceImpl(LspAssistService):
                 warning_count=len(warnings),
             )
         except Exception as exc:
+            recycle_client = client is not None and project_root is not None
             return LspTheoremSoundnessResponse(
                 success=False,
                 error_message=str(exc),
@@ -510,7 +514,12 @@ class LspAssistServiceImpl(LspAssistService):
                 warning_count=0,
             )
         finally:
-            if client is not None and rel_path is not None:
+            if recycle_client and project_root is not None:
+                try:
+                    self.lsp_client_manager.recycle_client(project_root)
+                except Exception:
+                    pass
+            elif client is not None and rel_path is not None:
                 try:
                     client.close_files([rel_path])
                 except Exception:
