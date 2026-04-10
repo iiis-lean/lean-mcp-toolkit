@@ -122,6 +122,75 @@ class GroupActivationConfig:
 
 
 @dataclass(slots=True, frozen=True)
+class ToolMetadataOverrideConfig:
+    replace_tags: tuple[str, ...] | None = None
+    add_tags: tuple[str, ...] = field(default_factory=tuple)
+    remove_tags: tuple[str, ...] = field(default_factory=tuple)
+
+    @classmethod
+    def from_dict(cls, data: JsonDict) -> "ToolMetadataOverrideConfig":
+        replace_raw = data.get("replace_tags")
+        return cls(
+            replace_tags=(
+                tuple(to_list_of_str(replace_raw) or ())
+                if replace_raw is not None
+                else None
+            ),
+            add_tags=tuple(to_list_of_str(data.get("add_tags")) or ()),
+            remove_tags=tuple(to_list_of_str(data.get("remove_tags")) or ()),
+        )
+
+    def to_dict(self) -> JsonDict:
+        payload: JsonDict = {
+            "add_tags": list(self.add_tags),
+            "remove_tags": list(self.remove_tags),
+        }
+        if self.replace_tags is not None:
+            payload["replace_tags"] = list(self.replace_tags)
+        return payload
+
+
+@dataclass(slots=True, frozen=True)
+class ToolViewConfig:
+    include_groups: tuple[str, ...] = field(default_factory=tuple)
+    exclude_groups: tuple[str, ...] = field(default_factory=tuple)
+    include_tools: tuple[str, ...] = field(default_factory=tuple)
+    exclude_tools: tuple[str, ...] = field(default_factory=tuple)
+    include_tags: tuple[str, ...] = field(default_factory=tuple)
+    exclude_tags: tuple[str, ...] = field(default_factory=tuple)
+    tool_naming_mode: ToolNamingMode | None = None
+
+    @classmethod
+    def from_dict(cls, data: JsonDict) -> "ToolViewConfig":
+        mode_raw = data.get("tool_naming_mode")
+        mode: ToolNamingMode | None = None
+        if mode_raw is not None and str(mode_raw) in {"raw", "prefixed", "both"}:
+            mode = str(mode_raw)  # type: ignore[assignment]
+        return cls(
+            include_groups=tuple(to_list_of_str(data.get("include_groups")) or ()),
+            exclude_groups=tuple(to_list_of_str(data.get("exclude_groups")) or ()),
+            include_tools=tuple(to_list_of_str(data.get("include_tools")) or ()),
+            exclude_tools=tuple(to_list_of_str(data.get("exclude_tools")) or ()),
+            include_tags=tuple(to_list_of_str(data.get("include_tags")) or ()),
+            exclude_tags=tuple(to_list_of_str(data.get("exclude_tags")) or ()),
+            tool_naming_mode=mode,
+        )
+
+    def to_dict(self) -> JsonDict:
+        payload: JsonDict = {
+            "include_groups": list(self.include_groups),
+            "exclude_groups": list(self.exclude_groups),
+            "include_tools": list(self.include_tools),
+            "exclude_tools": list(self.exclude_tools),
+            "include_tags": list(self.include_tags),
+            "exclude_tags": list(self.exclude_tags),
+        }
+        if self.tool_naming_mode is not None:
+            payload["tool_naming_mode"] = self.tool_naming_mode
+        return payload
+
+
+@dataclass(slots=True, frozen=True)
 class BuildBaseConfig:
     enabled: bool = False
     default_timeout_seconds: int | None = None
@@ -1362,6 +1431,9 @@ class ToolkitAuditConfig:
 class ToolkitConfig:
     server: ServerConfig = field(default_factory=ServerConfig)
     groups: GroupActivationConfig = field(default_factory=GroupActivationConfig)
+    tool_view_files: tuple[str, ...] = field(default_factory=tuple)
+    tool_views: dict[str, ToolViewConfig] = field(default_factory=dict)
+    tool_metadata: dict[str, ToolMetadataOverrideConfig] = field(default_factory=dict)
     build_base: BuildBaseConfig = field(default_factory=BuildBaseConfig)
     diagnostics: DiagnosticsConfig = field(default_factory=DiagnosticsConfig)
     declarations: DeclarationsConfig = field(default_factory=DeclarationsConfig)
@@ -1383,6 +1455,9 @@ class ToolkitConfig:
     def from_dict(cls, data: JsonDict) -> "ToolkitConfig":
         raw_server = data.get("server")
         raw_groups = data.get("groups")
+        raw_tool_view_files = data.get("tool_view_files")
+        raw_tool_views = data.get("tool_views")
+        raw_tool_metadata = data.get("tool_metadata")
         raw_build_base = data.get("build_base")
         raw_diag = data.get("diagnostics")
         raw_declarations = data.get("declarations")
@@ -1399,6 +1474,21 @@ class ToolkitConfig:
         raw_toolchain = data.get("toolchain")
         raw_audit = data.get("audit")
         raw_overrides = data.get("raw_group_overrides")
+        tool_views: dict[str, ToolViewConfig] = {}
+        if isinstance(raw_tool_views, dict):
+            for key, value in raw_tool_views.items():
+                if isinstance(value, dict):
+                    name = str(key).strip()
+                    if name:
+                        tool_views[name] = ToolViewConfig.from_dict(value)
+
+        tool_metadata: dict[str, ToolMetadataOverrideConfig] = {}
+        if isinstance(raw_tool_metadata, dict):
+            for key, value in raw_tool_metadata.items():
+                if isinstance(value, dict):
+                    name = str(key).strip()
+                    if name:
+                        tool_metadata[name] = ToolMetadataOverrideConfig.from_dict(value)
 
         build_base = (
             BuildBaseConfig.from_dict(raw_build_base)
@@ -1473,6 +1563,9 @@ class ToolkitConfig:
                 if isinstance(raw_groups, dict)
                 else GroupActivationConfig()
             ),
+            tool_view_files=tuple(to_list_of_str(raw_tool_view_files) or ()),
+            tool_views=tool_views,
+            tool_metadata=tool_metadata,
             build_base=build_base,
             diagnostics=diagnostics,
             declarations=declarations,
@@ -1503,6 +1596,15 @@ class ToolkitConfig:
         return {
             "server": self.server.to_dict(),
             "groups": self.groups.to_dict(),
+            "tool_view_files": list(self.tool_view_files),
+            "tool_views": {
+                name: self.tool_views[name].to_dict()
+                for name in sorted(self.tool_views.keys())
+            },
+            "tool_metadata": {
+                name: self.tool_metadata[name].to_dict()
+                for name in sorted(self.tool_metadata.keys())
+            },
             "build_base": self.build_base.to_dict(),
             "diagnostics": self.diagnostics.to_dict(),
             "declarations": self.declarations.to_dict(),

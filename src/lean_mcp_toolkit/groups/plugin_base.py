@@ -122,6 +122,7 @@ class GroupToolSpec:
     description: str
     params: tuple[ToolParamSpec, ...] = tuple()
     returns: tuple[ToolReturnSpec, ...] = tuple()
+    tags: tuple[str, ...] = tuple()
 
     def match_tokens(self) -> set[str]:
         tokens = {
@@ -154,6 +155,7 @@ class GroupToolSpec:
             "aliases": list(aliases),
             "api_path": self.api_path,
             "description": self.description,
+            "tags": list(self.tags),
             "params": [item.to_dict() for item in self.params],
             "returns": [item.to_dict() for item in self.returns],
             "mcp_description": self.render_mcp_description(),

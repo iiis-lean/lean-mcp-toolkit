@@ -68,6 +68,53 @@ def test_default_nav_group_activation() -> None:
     assert cfg.proof_search_alt.enabled is False
 
 
+def test_tool_view_config_and_external_yaml_load(tmp_path) -> None:
+    view_file = tmp_path / "tool_views.yaml"
+    view_file.write_text(
+        """
+proof:
+  include_groups:
+    - lsp_core
+  include_tags:
+    - proof
+  exclude_tags:
+    - expensive
+  tool_naming_mode: prefixed
+search:
+  include_tags:
+    - search
+""",
+        encoding="utf-8",
+    )
+    cfg = load_toolkit_config(
+        cli_overrides={
+            "tool_view_files": [str(view_file)],
+            "tool_views": {
+                "inline": {
+                    "include_tools": ["lsp.goal"],
+                    "tool_naming_mode": "raw",
+                }
+            },
+            "tool_metadata": {
+                "lsp.run_snippet": {
+                    "add_tags": ["code_exec", "expensive"],
+                    "remove_tags": ["read_only"],
+                }
+            },
+        }
+    )
+
+    assert cfg.tool_view_files == (str(view_file),)
+    assert cfg.tool_views["inline"].include_tools == ("lsp.goal",)
+    assert cfg.tool_views["inline"].tool_naming_mode == "raw"
+    assert cfg.tool_views["proof"].include_groups == ("lsp_core",)
+    assert cfg.tool_views["proof"].include_tags == ("proof",)
+    assert cfg.tool_views["proof"].exclude_tags == ("expensive",)
+    assert cfg.tool_views["search"].include_tags == ("search",)
+    assert cfg.tool_metadata["lsp.run_snippet"].add_tags == ("code_exec", "expensive")
+    assert cfg.tool_metadata["lsp.run_snippet"].remove_tags == ("read_only",)
+
+
 def test_declarations_config_override() -> None:
     cfg = load_toolkit_config(
         cli_overrides={
