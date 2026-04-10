@@ -25,11 +25,28 @@ from ..core.services import (
 )
 from ..groups import GroupPlugin, ToolHandler, builtin_group_plugins
 from ..groups.plugin_base import GroupToolSpec
-from ..groups.plugin_base import resolve_active_group_names, resolve_aliases_by_canonical
-from ..tool_audit import AuditedServiceProxy, ToolkitAuditLogger
+from ..groups.plugin_base import resolve_active_group_names
+from ..tool_audit import AuditedServiceProxy, ToolkitAuditLogger, audit_view
+from ..tool_views import (
+    ResolvedToolView,
+    apply_tool_metadata,
+    default_view_config_from_groups,
+    normalize_view_name,
+    resolve_tool_view,
+)
 from .warmup import ToolkitWarmupRunner
 
 _LOG = logging.getLogger(__name__)
+
+
+@dataclass(slots=True)
+class _ToolViewRuntime:
+    resolved: ResolvedToolView
+    tool_alias_handlers: dict[str, ToolHandler] = field(default_factory=dict)
+    api_route_handlers: dict[str, ToolHandler] = field(default_factory=dict)
+    specs_by_alias: dict[str, GroupToolSpec] = field(default_factory=dict)
+    specs_by_api_path: dict[str, GroupToolSpec] = field(default_factory=dict)
+
 
 @dataclass(slots=True)
 class ToolkitServer:
@@ -63,6 +80,7 @@ class ToolkitServer:
     _aliases_by_group: dict[str, dict[str, tuple[str, ...]]] = field(
         default_factory=dict, repr=False
     )
+    _tool_view_runtimes: dict[str, _ToolViewRuntime] = field(default_factory=dict, repr=False)
     _backend_context: BackendContext | None = field(default=None, repr=False)
     _last_warmup_report: dict[str, Any] | None = field(default=None, repr=False)
     _audit_logger: ToolkitAuditLogger | None = field(default=None, repr=False)
@@ -92,38 +110,49 @@ class ToolkitServer:
         config = load_toolkit_config(config_path=config_path)
         return cls.from_config(config, plugins=plugins)
 
-    def dispatch_api(self, route_path: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def dispatch_api(
+        self,
+        route_path: str,
+        payload: dict[str, Any],
+        *,
+        view_name: str | None = None,
+    ) -> dict[str, Any]:
+        view = self._get_tool_view_runtime(view_name)
         route = route_path.strip()
-        if route in self._tool_alias_handlers:
-            return self._tool_alias_handlers[route](payload)
+        if route in view.tool_alias_handlers:
+            with audit_view(view.resolved.name):
+                return view.tool_alias_handlers[route](payload)
 
         if route.startswith(self.api_prefix + "/"):
             route = route[len(self.api_prefix) :]
             if not route.startswith("/"):
                 route = "/" + route
-        if route in self._api_route_handlers:
-            return self._api_route_handlers[route](payload)
+        if route in view.api_route_handlers:
+            with audit_view(view.resolved.name):
+                return view.api_route_handlers[route](payload)
 
         if not route.startswith("/"):
             slash_route = "/" + route
-            if slash_route in self._api_route_handlers:
-                return self._api_route_handlers[slash_route](payload)
+            if slash_route in view.api_route_handlers:
+                with audit_view(view.resolved.name):
+                    return view.api_route_handlers[slash_route](payload)
         raise KeyError(f"unsupported route/tool: {route_path}")
 
-    def available_tool_aliases(self) -> tuple[str, ...]:
-        return tuple(sorted(self._tool_alias_handlers.keys()))
+    def available_tool_aliases(self, *, view_name: str | None = None) -> tuple[str, ...]:
+        return tuple(sorted(self._get_tool_view_runtime(view_name).tool_alias_handlers.keys()))
 
-    def available_http_routes(self) -> tuple[str, ...]:
-        return tuple(sorted(self._api_route_handlers.keys()))
+    def available_http_routes(self, *, view_name: str | None = None) -> tuple[str, ...]:
+        return tuple(sorted(self._get_tool_view_runtime(view_name).api_route_handlers.keys()))
 
-    def describe_tools(self) -> tuple[dict[str, Any], ...]:
+    def describe_tools(self, *, view_name: str | None = None) -> tuple[dict[str, Any], ...]:
+        view = self._get_tool_view_runtime(view_name)
         rows: list[dict[str, Any]] = []
-        for canonical_name in sorted(self._tool_specs_by_canonical.keys()):
-            spec = self._tool_specs_by_canonical[canonical_name]
+        for canonical_name in sorted(view.resolved.specs_by_canonical.keys()):
+            spec = view.resolved.specs_by_canonical[canonical_name]
             aliases = tuple(
                 sorted(
                     alias
-                    for alias, alias_spec in self._tool_specs_by_alias.items()
+                    for alias, alias_spec in view.specs_by_alias.items()
                     if alias_spec.canonical_name == canonical_name
                 )
             )
@@ -156,6 +185,14 @@ class ToolkitServer:
             return {"tools": list(self.describe_tools())}
 
         @app.get(
+            f"{self.api_prefix}/views/{{view_name}}/meta/tools",
+            summary="List active tools metadata for a tool view",
+            description="Return active tool contracts for one named tool view.",
+        )
+        def _view_meta_tools(view_name: str):
+            return {"tools": list(self.describe_tools(view_name=view_name))}
+
+        @app.get(
             f"{self.api_prefix}/meta/warmup",
             summary="Get last startup warmup report",
             description="Return startup warmup execution report for backend/tool pre-heating.",
@@ -174,33 +211,45 @@ class ToolkitServer:
             summary="Tail toolkit audit calls",
             description="Return recent toolkit call audit summaries.",
         )
-        def _debug_calls_tail(project_root: str | None = None, limit: int = 20):
+        def _debug_calls_tail(
+            project_root: str | None = None,
+            view: str | None = None,
+            limit: int = 20,
+        ):
             logger = self._audit_logger
             if logger is None:
                 return {"calls": []}
-            return {"calls": logger.tail_calls(project_root=project_root, limit=limit)}
+            return {"calls": logger.tail_calls(project_root=project_root, view=view, limit=limit)}
 
         @app.get(
             f"{self.api_prefix}/debug/calls/{{call_id}}",
             summary="Get toolkit audit call metadata",
             description="Return metadata for a toolkit audit call.",
         )
-        def _debug_call_detail(call_id: str, project_root: str | None = None):
+        def _debug_call_detail(
+            call_id: str,
+            project_root: str | None = None,
+            view: str | None = None,
+        ):
             logger = self._audit_logger
             if logger is None:
                 return {"meta": None}
-            return {"meta": logger.load_call_meta(project_root=project_root, call_id=call_id)}
+            return {"meta": logger.load_call_meta(project_root=project_root, call_id=call_id, view=view)}
 
         @app.get(
             f"{self.api_prefix}/debug/calls/{{call_id}}/timing",
             summary="Get toolkit audit call timing",
             description="Return timing payload for a toolkit audit call.",
         )
-        def _debug_call_timing(call_id: str, project_root: str | None = None):
+        def _debug_call_timing(
+            call_id: str,
+            project_root: str | None = None,
+            view: str | None = None,
+        ):
             logger = self._audit_logger
             if logger is None:
                 return {"timing": None}
-            return {"timing": logger.load_call_timing(project_root=project_root, call_id=call_id)}
+            return {"timing": logger.load_call_timing(project_root=project_root, call_id=call_id, view=view)}
 
         @app.post(
             f"{self.api_prefix}/debug/backends/recycle/lsp",
@@ -240,6 +289,14 @@ class ToolkitServer:
                     else "See `Returns` section in description."
                 ),
             )
+
+        @app.post(
+            f"{self.api_prefix}/views/{{view_name}}/{{tool_path:path}}",
+            summary="Invoke a tool through one named tool view",
+            description="Invoke a tool API endpoint if it is visible in the selected view.",
+        )
+        def _view_tool_endpoint(view_name: str, tool_path: str, payload: dict[str, Any]):
+            return self.dispatch_api("/" + tool_path, payload, view_name=view_name)
 
         return app
 
@@ -563,32 +620,21 @@ class ToolkitServer:
                 self.proof_search_alt = service
 
             specs = plugin.tool_specs()
-            spec_by_canonical = {spec.canonical_name: spec for spec in specs}
+            spec_by_canonical = {
+                spec.canonical_name: apply_tool_metadata(spec, self.config.tool_metadata)
+                for spec in specs
+            }
             handler_by_canonical = dict(plugin.tool_handlers(service))
-            aliases_by_canonical = resolve_aliases_by_canonical(
-                specs=specs,
-                naming_mode=self.config.groups.tool_naming_mode,
-                include_tools=self.config.groups.include_tools,
-                exclude_tools=self.config.groups.exclude_tools,
-            )
-            self._aliases_by_group[plugin.group_name] = aliases_by_canonical
 
-            for canonical_name, aliases in aliases_by_canonical.items():
+            for canonical_name, spec in spec_by_canonical.items():
                 handler = handler_by_canonical.get(canonical_name)
                 if handler is None:
                     raise KeyError(
                         f"missing handler for canonical tool `{canonical_name}` in group `{plugin.group_name}`"
                     )
-                spec = spec_by_canonical.get(canonical_name)
-                if spec is None:
-                    raise KeyError(
-                        f"missing tool spec for canonical tool `{canonical_name}` in group `{plugin.group_name}`"
-                    )
-
                 self._register_canonical_handler(canonical_name, handler, spec=spec)
-                self._register_api_route_handler(spec.api_path, handler, spec=spec)
-                for alias in aliases:
-                    self._register_alias_handler(alias, handler, spec=spec)
+
+        self._build_tool_views()
 
     def _register_canonical_handler(
         self,
@@ -602,6 +648,63 @@ class ToolkitServer:
             raise ValueError(f"duplicate canonical handler: {canonical_name}")
         self._canonical_handlers[canonical_name] = handler
         self._tool_specs_by_canonical[canonical_name] = spec
+
+    def _build_tool_views(self) -> None:
+        self._tool_view_runtimes.clear()
+        self._aliases_by_group.clear()
+        specs = tuple(self._tool_specs_by_canonical.values())
+        default_config = default_view_config_from_groups(
+            include_tools=self.config.groups.include_tools,
+            exclude_tools=self.config.groups.exclude_tools,
+            tool_naming_mode=self.config.groups.tool_naming_mode,
+        )
+        configs = {"default": default_config, **dict(self.config.tool_views)}
+        for view_name, view_config in configs.items():
+            resolved = resolve_tool_view(
+                name=view_name,
+                specs=specs,
+                view_config=view_config,
+                default_tool_naming_mode=self.config.groups.tool_naming_mode,
+            )
+            runtime = self._build_tool_view_runtime(resolved)
+            self._tool_view_runtimes[resolved.name] = runtime
+
+        default_runtime = self._get_tool_view_runtime("default")
+        self._tool_alias_handlers = dict(default_runtime.tool_alias_handlers)
+        self._api_route_handlers = dict(default_runtime.api_route_handlers)
+        self._tool_specs_by_alias = dict(default_runtime.specs_by_alias)
+        self._tool_specs_by_api_path = dict(default_runtime.specs_by_api_path)
+
+    def _build_tool_view_runtime(self, resolved: ResolvedToolView) -> _ToolViewRuntime:
+        runtime = _ToolViewRuntime(resolved=resolved)
+        aliases_by_group: dict[str, dict[str, tuple[str, ...]]] = {}
+        for canonical_name, aliases in resolved.aliases_by_canonical.items():
+            spec = resolved.specs_by_canonical[canonical_name]
+            handler = self._canonical_handlers.get(canonical_name)
+            if handler is None:
+                raise KeyError(f"missing handler for canonical tool `{canonical_name}`")
+            existing_route = runtime.api_route_handlers.get(spec.api_path)
+            if existing_route is not None and existing_route is not handler:
+                raise ValueError(f"http route collision in view `{resolved.name}`: {spec.api_path}")
+            runtime.api_route_handlers[spec.api_path] = handler
+            runtime.specs_by_api_path[spec.api_path] = spec
+            for alias in aliases:
+                existing = runtime.tool_alias_handlers.get(alias)
+                if existing is not None and existing is not handler:
+                    raise ValueError(f"tool alias collision in view `{resolved.name}`: {alias}")
+                runtime.tool_alias_handlers[alias] = handler
+                runtime.specs_by_alias[alias] = spec
+            aliases_by_group.setdefault(spec.group_name, {})[canonical_name] = aliases
+        if resolved.name == "default":
+            self._aliases_by_group = aliases_by_group
+        return runtime
+
+    def _get_tool_view_runtime(self, view_name: str | None = None) -> _ToolViewRuntime:
+        normalized = normalize_view_name(view_name)
+        runtime = self._tool_view_runtimes.get(normalized)
+        if runtime is None:
+            raise KeyError(f"unknown tool view: {normalized}")
+        return runtime
 
     def _register_alias_handler(
         self,
@@ -634,7 +737,8 @@ class ToolkitServer:
         from fastapi.responses import JSONResponse
 
         def _endpoint(payload: dict[str, Any]):
-            return JSONResponse(handler(payload))
+            with audit_view("default"):
+                return JSONResponse(handler(payload))
 
         endpoint_name = "tool_" + route_path.strip("/").replace("/", "_").replace(".", "_")
         _endpoint.__name__ = endpoint_name or "tool_root"

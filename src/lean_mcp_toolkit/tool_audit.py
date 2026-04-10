@@ -18,6 +18,10 @@ _CURRENT_AUDIT_RECORDER: ContextVar["CallTimingRecorder | None"] = ContextVar(
     "toolkit_current_audit_recorder",
     default=None,
 )
+_CURRENT_TOOL_VIEW: ContextVar[str] = ContextVar(
+    "toolkit_current_tool_view",
+    default="default",
+)
 
 
 def _utc_now_iso() -> str:
@@ -123,6 +127,19 @@ def get_current_audit_recorder() -> CallTimingRecorder | None:
     return _CURRENT_AUDIT_RECORDER.get()
 
 
+def get_current_tool_view() -> str:
+    return _normalize_view_name(_CURRENT_TOOL_VIEW.get())
+
+
+@contextmanager
+def audit_view(view_name: str | None) -> Iterator[None]:
+    token = _CURRENT_TOOL_VIEW.set(_normalize_view_name(view_name))
+    try:
+        yield
+    finally:
+        _CURRENT_TOOL_VIEW.reset(token)
+
+
 @contextmanager
 def audit_stage(name: str, *, attrs: dict[str, Any] | None = None) -> Iterator[None]:
     recorder = get_current_audit_recorder()
@@ -178,7 +195,9 @@ class ToolkitAuditLogger:
         if not self.enabled():
             return
         root = self.resolve_root(project_root)
-        call_dir = root / "calls" / call_id
+        view_name = get_current_tool_view()
+        view_root = root / "views" / view_name
+        call_dir = view_root / "calls" / call_id
         call_dir.mkdir(parents=True, exist_ok=True)
         meta = {
             "call_id": call_id,
@@ -186,6 +205,7 @@ class ToolkitAuditLogger:
             "group_name": group_name,
             "method_name": method_name,
             "project_root": project_root,
+            "view": view_name,
             "status": status,
             "error_message": error_message,
             "started_at": timing_payload.get("started_at"),
@@ -215,9 +235,18 @@ class ToolkitAuditLogger:
             root.mkdir(parents=True, exist_ok=True)
             with (root / "calls.jsonl").open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps(_jsonify(summary), ensure_ascii=False) + "\n")
+            view_root.mkdir(parents=True, exist_ok=True)
+            with (view_root / "calls.jsonl").open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(_jsonify(summary), ensure_ascii=False) + "\n")
 
-    def load_call_meta(self, *, project_root: str | None, call_id: str) -> dict[str, Any] | None:
-        path = self.resolve_root(project_root) / "calls" / call_id / "meta.json"
+    def load_call_meta(
+        self,
+        *,
+        project_root: str | None,
+        call_id: str,
+        view: str | None = None,
+    ) -> dict[str, Any] | None:
+        path = self._call_file_path(project_root=project_root, call_id=call_id, view=view, filename="meta.json")
         if not path.exists():
             return None
         return json.loads(path.read_text(encoding="utf-8"))
@@ -227,8 +256,9 @@ class ToolkitAuditLogger:
         *,
         project_root: str | None,
         call_id: str,
+        view: str | None = None,
     ) -> dict[str, Any] | None:
-        path = self.resolve_root(project_root) / "calls" / call_id / "timing.json"
+        path = self._call_file_path(project_root=project_root, call_id=call_id, view=view, filename="timing.json")
         if not path.exists():
             return None
         return json.loads(path.read_text(encoding="utf-8"))
@@ -237,9 +267,15 @@ class ToolkitAuditLogger:
         self,
         *,
         project_root: str | None,
+        view: str | None = None,
         limit: int = 20,
     ) -> list[dict[str, Any]]:
-        path = self.resolve_root(project_root) / "calls.jsonl"
+        root = self.resolve_root(project_root)
+        path = (
+            root / "views" / _normalize_view_name(view) / "calls.jsonl"
+            if view
+            else root / "calls.jsonl"
+        )
         if not path.exists():
             return []
         lines = path.read_text(encoding="utf-8").splitlines()
@@ -252,6 +288,36 @@ class ToolkitAuditLogger:
             if isinstance(decoded, dict):
                 rows.append(decoded)
         return rows
+
+    def _call_file_path(
+        self,
+        *,
+        project_root: str | None,
+        call_id: str,
+        view: str | None,
+        filename: str,
+    ) -> Path:
+        root = self.resolve_root(project_root)
+        view_name = _normalize_view_name(view) if view else self._find_call_view(root, call_id)
+        if view_name:
+            path = root / "views" / view_name / "calls" / call_id / filename
+            if path.exists():
+                return path
+        return root / "calls" / call_id / filename
+
+    def _find_call_view(self, root: Path, call_id: str) -> str | None:
+        path = root / "calls.jsonl"
+        if not path.exists():
+            return None
+        for line in reversed(path.read_text(encoding="utf-8").splitlines()):
+            try:
+                decoded = json.loads(line)
+            except Exception:
+                continue
+            if isinstance(decoded, dict) and decoded.get("call_id") == call_id:
+                view = decoded.get("view")
+                return _normalize_view_name(str(view)) if view else "default"
+        return None
 
 
 class AuditedServiceProxy:
@@ -334,3 +400,8 @@ def _extract_project_root(args: tuple[Any, ...], kwargs: dict[str, Any], *, serv
     server_cfg = getattr(config, "server", None)
     default_project_root = getattr(server_cfg, "default_project_root", None)
     return str(default_project_root) if default_project_root else None
+
+
+def _normalize_view_name(value: str | None) -> str:
+    text = (value or "default").strip()
+    return text or "default"

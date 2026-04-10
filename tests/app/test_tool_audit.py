@@ -105,8 +105,9 @@ def test_audited_service_proxy_persists_call_request_response_and_timing(
     ]
     assert len(calls_rows) == 1
     call_id = calls_rows[0]["call_id"]
+    assert calls_rows[0]["view"] == "default"
 
-    call_dir = audit_root / "calls" / call_id
+    call_dir = audit_root / "views" / "default" / "calls" / call_id
     meta = json.loads((call_dir / "meta.json").read_text(encoding="utf-8"))
     timing = json.loads((call_dir / "timing.json").read_text(encoding="utf-8"))
     request = json.loads((call_dir / "request.json").read_text(encoding="utf-8"))
@@ -115,6 +116,7 @@ def test_audited_service_proxy_persists_call_request_response_and_timing(
     assert meta["tool_name"] == "fake.run_alpha"
     assert meta["project_root"] == str(project_root)
     assert meta["status"] == "completed"
+    assert meta["view"] == "default"
     assert request["args"] == [{"value": 1, "name": "demo"}]
     assert response["ok"] is True
     assert [stage["name"] for stage in timing["stages"]] == ["stage_one", "stage_two"]
@@ -147,6 +149,7 @@ def test_fastapi_debug_routes_expose_audit_call_metadata_and_timing(
     audit_root = _audit_root(project_root)
     call_row = json.loads((audit_root / "calls.jsonl").read_text(encoding="utf-8").splitlines()[0])
     call_id = call_row["call_id"]
+    assert call_row["view"] == "default"
 
     app = server.create_fastapi_app()
     client = TestClient(app)
@@ -159,6 +162,7 @@ def test_fastapi_debug_routes_expose_audit_call_metadata_and_timing(
     tail_payload = tail.json()["calls"]
     assert len(tail_payload) == 1
     assert tail_payload[0]["call_id"] == call_id
+    assert tail_payload[0]["view"] == "default"
 
     meta = client.get(
         f"/api/v1/debug/calls/{call_id}",
@@ -175,3 +179,52 @@ def test_fastapi_debug_routes_expose_audit_call_metadata_and_timing(
     timing_payload = timing.json()["timing"]
     assert timing_payload["tool_name"] == "fake.run_alpha"
     assert timing_payload["stages"][0]["name"] == "stage_one"
+
+
+def test_fastapi_view_route_records_named_audit_view(tmp_path: Path) -> None:
+    project_root = (tmp_path / "project").resolve()
+    project_root.mkdir(parents=True, exist_ok=True)
+    cfg = ToolkitConfig.from_dict(
+        {
+            "server": {
+                "default_project_root": str(project_root),
+                "api_prefix": "/api/v1",
+            },
+            "groups": {
+                "enabled_groups": ["fake"],
+                "tool_naming_mode": "prefixed",
+            },
+            "tool_views": {
+                "proof": {
+                    "include_tools": ["fake.alpha"],
+                }
+            },
+            "audit": {
+                "enabled": True,
+            },
+        }
+    )
+    server = ToolkitServer.from_config(cfg, plugins=(_FakeAuditPlugin(),))
+    app = server.create_fastapi_app()
+    client = TestClient(app)
+
+    meta = client.get("/api/v1/views/proof/meta/tools")
+    assert meta.status_code == 200
+    assert [item["canonical_name"] for item in meta.json()["tools"]] == ["fake.alpha"]
+
+    response = client.post("/api/v1/views/proof/fake/alpha", json={"value": 1})
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+
+    audit_root = _audit_root(project_root)
+    view_rows = [
+        json.loads(line)
+        for line in (audit_root / "views" / "proof" / "calls.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    assert len(view_rows) == 1
+    assert view_rows[0]["view"] == "proof"
+    call_id = view_rows[0]["call_id"]
+    meta_payload = json.loads(
+        (audit_root / "views" / "proof" / "calls" / call_id / "meta.json").read_text(encoding="utf-8")
+    )
+    assert meta_payload["view"] == "proof"
