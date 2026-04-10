@@ -187,6 +187,51 @@ def test_named_tool_view_registers_mcp_alias_subset() -> None:
     assert set(mcp.handlers) == {"fake.beta"}
 
 
+def test_runtime_tool_view_management_and_yaml_roundtrip(tmp_path) -> None:
+    cfg = ToolkitConfig.from_dict(
+        {
+            "groups": {
+                "enabled_groups": ["fake"],
+                "tool_naming_mode": "prefixed",
+            },
+        }
+    )
+    server = ToolkitServer.from_config(cfg, plugins=(_FakePlugin(),))
+
+    created = server.upsert_tool_view(
+        "search",
+        {
+            "include_tags": ["search"],
+            "tool_naming_mode": "raw",
+        },
+    )
+    assert created["ok"] is True
+    assert server.available_tool_aliases(view_name="search") == ("beta",)
+
+    lease = server.acquire_tool_view("search", owner="test", reason="session")
+    assert lease["active_count"] == 1
+    blocked = server.delete_tool_view("search")
+    assert blocked["ok"] is False
+    assert blocked["active_count"] == 1
+
+    released = server.release_tool_view("search", lease_id=str(lease["lease_id"]))
+    assert released["active_count"] == 0
+
+    view_file = tmp_path / "tool_views.yaml"
+    saved = server.save_tool_views(str(view_file))
+    assert saved["view_names"] == ["search"]
+    assert "search:" in view_file.read_text(encoding="utf-8")
+
+    deleted = server.delete_tool_view("search")
+    assert deleted["ok"] is True
+    with pytest.raises(KeyError):
+        server.available_tool_aliases(view_name="search")
+
+    loaded = server.load_tool_views(str(view_file))
+    assert loaded["view_names"] == ["search"]
+    assert server.available_tool_aliases(view_name="search") == ("beta",)
+
+
 class _CaptureMCP:
     def __init__(self) -> None:
         self.handlers: dict[str, object] = {}

@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from datetime import UTC, datetime
 import re
+import threading
 from typing import Mapping
+import uuid
 
 from .config import ToolMetadataOverrideConfig, ToolViewConfig
 from .groups.plugin_base import GroupToolSpec
@@ -25,6 +28,102 @@ class ResolvedToolView:
             "tool_count": len(self.specs_by_canonical),
             "config": self.config.to_dict(),
         }
+
+
+@dataclass(slots=True, frozen=True)
+class ToolViewLease:
+    lease_id: str
+    view: str
+    owner: str | None
+    reason: str | None
+    client: str | None
+    created_at: str
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "lease_id": self.lease_id,
+            "view": self.view,
+            "owner": self.owner,
+            "reason": self.reason,
+            "client": self.client,
+            "created_at": self.created_at,
+        }
+
+
+class ToolViewLeaseManager:
+    def __init__(self) -> None:
+        self._lock = threading.RLock()
+        self._leases_by_view: dict[str, dict[str, ToolViewLease]] = {}
+
+    def acquire(
+        self,
+        *,
+        view: str,
+        owner: str | None = None,
+        reason: str | None = None,
+        client: str | None = None,
+    ) -> dict[str, object]:
+        view_name = normalize_view_name(view)
+        lease = ToolViewLease(
+            lease_id=f"tvlease_{uuid.uuid4().hex}",
+            view=view_name,
+            owner=_clean_opt(owner),
+            reason=_clean_opt(reason),
+            client=_clean_opt(client),
+            created_at=_utc_now_iso(),
+        )
+        with self._lock:
+            leases = self._leases_by_view.setdefault(view_name, {})
+            leases[lease.lease_id] = lease
+            active_count = len(leases)
+        return {
+            "ok": True,
+            "view": view_name,
+            "lease_id": lease.lease_id,
+            "active_count": active_count,
+        }
+
+    def release(self, *, view: str, lease_id: str | None) -> dict[str, object]:
+        view_name = normalize_view_name(view)
+        text = (lease_id or "").strip()
+        with self._lock:
+            leases = self._leases_by_view.setdefault(view_name, {})
+            removed = leases.pop(text, None)
+            active_count = len(leases)
+        return {
+            "ok": removed is not None,
+            "view": view_name,
+            "lease_id": text or None,
+            "active_count": active_count,
+        }
+
+    def release_all(self, *, view: str) -> dict[str, object]:
+        view_name = normalize_view_name(view)
+        with self._lock:
+            leases = self._leases_by_view.setdefault(view_name, {})
+            released = len(leases)
+            leases.clear()
+        return {
+            "ok": True,
+            "view": view_name,
+            "released_count": released,
+            "active_count": 0,
+        }
+
+    def usage(self, *, view: str) -> dict[str, object]:
+        view_name = normalize_view_name(view)
+        with self._lock:
+            leases = tuple(self._leases_by_view.setdefault(view_name, {}).values())
+        return {
+            "view": view_name,
+            "active_count": len(leases),
+            "leases": [lease.to_dict() for lease in leases],
+        }
+
+    def active_count(self, *, view: str) -> int:
+        view_name = normalize_view_name(view)
+        with self._lock:
+            return len(self._leases_by_view.setdefault(view_name, {}))
 
 
 def normalize_view_name(name: str | None, *, default: str = "default") -> str:
@@ -148,3 +247,12 @@ def _normalize_ordered(values: tuple[str, ...]) -> tuple[str, ...]:
 
 def _norm_set(values: tuple[str, ...]) -> set[str]:
     return {str(value).strip() for value in values if str(value).strip()}
+
+
+def _clean_opt(value: str | None) -> str | None:
+    text = (value or "").strip()
+    return text or None
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")

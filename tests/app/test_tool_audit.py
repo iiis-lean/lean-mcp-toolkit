@@ -228,3 +228,63 @@ def test_fastapi_view_route_records_named_audit_view(tmp_path: Path) -> None:
         (audit_root / "views" / "proof" / "calls" / call_id / "meta.json").read_text(encoding="utf-8")
     )
     assert meta_payload["view"] == "proof"
+
+
+def test_fastapi_tool_view_management_endpoints(tmp_path: Path) -> None:
+    project_root = (tmp_path / "project").resolve()
+    project_root.mkdir(parents=True, exist_ok=True)
+    view_file = tmp_path / "tool_views.yaml"
+    cfg = ToolkitConfig.from_dict(
+        {
+            "server": {
+                "default_project_root": str(project_root),
+                "api_prefix": "/api/v1",
+            },
+            "groups": {
+                "enabled_groups": ["fake"],
+                "tool_naming_mode": "prefixed",
+            },
+            "audit": {
+                "enabled": True,
+            },
+        }
+    )
+    server = ToolkitServer.from_config(cfg, plugins=(_FakeAuditPlugin(),))
+    client = TestClient(server.create_fastapi_app())
+
+    create = client.put(
+        "/api/v1/debug/tool-views/proof",
+        json={"include_tools": ["fake.alpha"]},
+    )
+    assert create.status_code == 200
+    assert create.json()["name"] == "proof"
+
+    lease = client.post(
+        "/api/v1/debug/tool-views/proof/acquire",
+        json={"owner": "test", "reason": "session"},
+    )
+    assert lease.status_code == 200
+    lease_id = lease.json()["lease_id"]
+
+    blocked = client.delete("/api/v1/debug/tool-views/proof")
+    assert blocked.status_code == 409
+    assert blocked.json()["active_count"] == 1
+
+    release = client.post(
+        "/api/v1/debug/tool-views/proof/release",
+        json={"lease_id": lease_id},
+    )
+    assert release.status_code == 200
+    assert release.json()["active_count"] == 0
+
+    save = client.post("/api/v1/debug/tool-views/save", json={"path": str(view_file)})
+    assert save.status_code == 200
+    assert save.json()["view_names"] == ["proof"]
+
+    delete = client.delete("/api/v1/debug/tool-views/proof")
+    assert delete.status_code == 200
+    assert delete.json()["deleted"] is True
+
+    load = client.post("/api/v1/debug/tool-views/load", json={"path": str(view_file)})
+    assert load.status_code == 200
+    assert load.json()["view_names"] == ["proof"]

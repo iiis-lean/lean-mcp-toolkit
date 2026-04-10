@@ -5,11 +5,12 @@ from __future__ import annotations
 import contextlib
 from dataclasses import dataclass, field
 import logging
+from pathlib import Path
 from typing import Any
 
 from ..backends import BackendContext, BackendKey, build_backend_context
 from ..backends.lean.path import resolve_project_root
-from ..config import ToolkitConfig, load_toolkit_config
+from ..config import ToolkitConfig, ToolViewConfig, load_toolkit_config
 from ..core.services import (
     BuildBaseService,
     DeclarationsService,
@@ -29,6 +30,7 @@ from ..groups.plugin_base import resolve_active_group_names
 from ..tool_audit import AuditedServiceProxy, ToolkitAuditLogger, audit_view
 from ..tool_views import (
     ResolvedToolView,
+    ToolViewLeaseManager,
     apply_tool_metadata,
     default_view_config_from_groups,
     normalize_view_name,
@@ -99,6 +101,8 @@ class ToolkitServer:
         default_factory=dict, repr=False
     )
     _tool_view_runtimes: dict[str, _ToolViewRuntime] = field(default_factory=dict, repr=False)
+    _tool_view_configs: dict[str, ToolViewConfig] = field(default_factory=dict, repr=False)
+    _tool_view_leases: ToolViewLeaseManager = field(default_factory=ToolViewLeaseManager, repr=False)
     _backend_context: BackendContext | None = field(default=None, repr=False)
     _last_warmup_report: dict[str, Any] | None = field(default=None, repr=False)
     _audit_logger: ToolkitAuditLogger | None = field(default=None, repr=False)
@@ -286,6 +290,104 @@ class ToolkitServer:
         def _debug_recycle_lean_interact(payload: dict[str, Any] | None = None):
             body = payload or {}
             return self.recycle_lean_interact_backend(project_root=body.get("project_root"))
+
+        @app.get(
+            f"{self.api_prefix}/debug/tool-views",
+            summary="List runtime tool views",
+            description="Return configured tool view summaries.",
+        )
+        def _debug_tool_views():
+            return {"views": self.list_tool_views()}
+
+        @app.get(
+            f"{self.api_prefix}/debug/tool-views/{{view_name}}",
+            summary="Get runtime tool view",
+            description="Return one tool view summary and usage state.",
+        )
+        def _debug_tool_view(view_name: str):
+            return self.get_tool_view(view_name)
+
+        @app.put(
+            f"{self.api_prefix}/debug/tool-views/{{view_name}}",
+            summary="Create or update a runtime tool view",
+            description="Create or update a tool view when it has no active leases.",
+        )
+        def _debug_put_tool_view(view_name: str, payload: dict[str, Any] | None = None):
+            from fastapi.responses import JSONResponse
+
+            result = self.upsert_tool_view(view_name, payload or {})
+            return JSONResponse(result, status_code=409 if not result.get("ok", False) else 200)
+
+        @app.delete(
+            f"{self.api_prefix}/debug/tool-views/{{view_name}}",
+            summary="Delete a runtime tool view",
+            description="Delete a non-default tool view when it has no active leases.",
+        )
+        def _debug_delete_tool_view(view_name: str):
+            from fastapi.responses import JSONResponse
+
+            result = self.delete_tool_view(view_name)
+            return JSONResponse(result, status_code=409 if not result.get("ok", False) else 200)
+
+        @app.post(
+            f"{self.api_prefix}/debug/tool-views/save",
+            summary="Save runtime tool views to YAML",
+            description="Persist non-default runtime tool views to a YAML file.",
+        )
+        def _debug_save_tool_views(payload: dict[str, Any] | None = None):
+            body = payload or {}
+            return self.save_tool_views(str(body.get("path") or "configs/tool_views.yaml"))
+
+        @app.post(
+            f"{self.api_prefix}/debug/tool-views/load",
+            summary="Load runtime tool views from YAML",
+            description="Load runtime tool views from a YAML file.",
+        )
+        def _debug_load_tool_views(payload: dict[str, Any] | None = None):
+            body = payload or {}
+            return self.load_tool_views(
+                str(body.get("path") or "configs/tool_views.yaml"),
+                replace=bool(body.get("replace", False)),
+            )
+
+        @app.post(
+            f"{self.api_prefix}/debug/tool-views/{{view_name}}/acquire",
+            summary="Acquire a tool view lease",
+            description="Mark a tool view as in use by an external session or hook.",
+        )
+        def _debug_acquire_tool_view(view_name: str, payload: dict[str, Any] | None = None):
+            body = payload or {}
+            return self.acquire_tool_view(
+                view_name,
+                owner=body.get("owner"),
+                reason=body.get("reason"),
+                client=body.get("client"),
+            )
+
+        @app.post(
+            f"{self.api_prefix}/debug/tool-views/{{view_name}}/release",
+            summary="Release a tool view lease",
+            description="Release a previously acquired tool view lease.",
+        )
+        def _debug_release_tool_view(view_name: str, payload: dict[str, Any] | None = None):
+            body = payload or {}
+            return self.release_tool_view(view_name, lease_id=body.get("lease_id"))
+
+        @app.get(
+            f"{self.api_prefix}/debug/tool-views/{{view_name}}/usage",
+            summary="Get tool view usage state",
+            description="Return active leases for one tool view.",
+        )
+        def _debug_tool_view_usage(view_name: str):
+            return self.tool_view_usage(view_name)
+
+        @app.post(
+            f"{self.api_prefix}/debug/tool-views/{{view_name}}/release-all",
+            summary="Release all tool view leases",
+            description="Clear all active leases for one tool view.",
+        )
+        def _debug_release_all_tool_view(view_name: str):
+            return self.release_all_tool_view(view_name)
 
         for route_path, handler in sorted(self._api_route_handlers.items()):
             endpoint = self._make_fastapi_endpoint(handler=handler, route_path=route_path)
@@ -532,6 +634,173 @@ class ToolkitServer:
             "message": "recycled lean_interact backend for project",
         }
 
+    def list_tool_views(self) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        for name in sorted(self._tool_view_runtimes.keys()):
+            runtime = self._tool_view_runtimes[name]
+            usage = self._tool_view_leases.usage(view=name)
+            rows.append(
+                {
+                    "name": name,
+                    "builtin": name == "default",
+                    "tool_count": len(runtime.resolved.specs_by_canonical),
+                    "active_count": usage["active_count"],
+                    "http_meta_endpoint": (
+                        f"{self.api_prefix}/meta/tools"
+                        if name == "default"
+                        else f"{self.api_prefix}/views/{name}/meta/tools"
+                    ),
+                    "mcp_endpoint": (
+                        self._normalize_path(self.config.server.mcp_mount_path, default="/mcp")
+                        if name == "default"
+                        else f"{self._normalize_path(self.config.server.mcp_mount_path, default='/mcp')}/{name}"
+                    ),
+                }
+            )
+        return rows
+
+    def get_tool_view(self, view_name: str) -> dict[str, Any]:
+        name = normalize_view_name(view_name)
+        runtime = self._get_tool_view_runtime(name)
+        usage = self._tool_view_leases.usage(view=name)
+        return {
+            "ok": True,
+            "name": name,
+            "builtin": name == "default",
+            "tool_count": len(runtime.resolved.specs_by_canonical),
+            "config": runtime.resolved.config.to_dict(),
+            "usage": usage,
+        }
+
+    def upsert_tool_view(self, view_name: str, payload: dict[str, Any]) -> dict[str, Any]:
+        name = normalize_view_name(view_name)
+        if name == "default":
+            return {"ok": False, "error": "default view cannot be overwritten", "view": name}
+        active_count = self._tool_view_leases.active_count(view=name)
+        if active_count > 0:
+            return {
+                "ok": False,
+                "error": "view is in use",
+                "view": name,
+                "active_count": active_count,
+            }
+        self._tool_view_configs[name] = ToolViewConfig.from_dict(payload)
+        self._build_tool_views()
+        runtime = self._get_tool_view_runtime(name)
+        return {
+            "ok": True,
+            "name": name,
+            "tool_count": len(runtime.resolved.specs_by_canonical),
+            "http_meta_endpoint": f"{self.api_prefix}/views/{name}/meta/tools",
+            "mcp_endpoint": f"{self._normalize_path(self.config.server.mcp_mount_path, default='/mcp')}/{name}",
+        }
+
+    def delete_tool_view(self, view_name: str) -> dict[str, Any]:
+        name = normalize_view_name(view_name)
+        if name == "default":
+            return {"ok": False, "error": "default view cannot be deleted", "view": name}
+        active_count = self._tool_view_leases.active_count(view=name)
+        if active_count > 0:
+            return {
+                "ok": False,
+                "error": "view is in use",
+                "view": name,
+                "active_count": active_count,
+            }
+        existed = name in self._tool_view_configs
+        self._tool_view_configs.pop(name, None)
+        self._tool_view_runtimes.pop(name, None)
+        self._build_tool_views()
+        return {"ok": True, "name": name, "deleted": existed}
+
+    def save_tool_views(self, path: str) -> dict[str, Any]:
+        import yaml
+
+        target = Path(path).expanduser()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            name: self._tool_view_configs[name].to_dict()
+            for name in sorted(self._tool_view_configs.keys())
+            if name != "default"
+        }
+        target.write_text(
+            yaml.safe_dump(payload, allow_unicode=True, sort_keys=True),
+            encoding="utf-8",
+        )
+        return {
+            "ok": True,
+            "path": str(target),
+            "saved_count": len(payload),
+            "view_names": sorted(payload.keys()),
+        }
+
+    def load_tool_views(self, path: str, *, replace: bool = False) -> dict[str, Any]:
+        import yaml
+
+        source = Path(path).expanduser()
+        data = yaml.safe_load(source.read_text(encoding="utf-8"))
+        if data is None:
+            raw_views: dict[str, Any] = {}
+        elif isinstance(data, dict) and isinstance(data.get("tool_views"), dict):
+            raw_views = dict(data["tool_views"])
+        elif isinstance(data, dict):
+            raw_views = dict(data)
+        else:
+            raise ValueError("tool view yaml root must be a mapping")
+        if replace:
+            self._tool_view_configs.clear()
+        loaded: list[str] = []
+        for raw_name, raw_config in raw_views.items():
+            if not isinstance(raw_config, dict):
+                continue
+            name = normalize_view_name(str(raw_name))
+            if name == "default":
+                continue
+            active_count = self._tool_view_leases.active_count(view=name)
+            if active_count > 0:
+                continue
+            self._tool_view_configs[name] = ToolViewConfig.from_dict(raw_config)
+            loaded.append(name)
+        self._build_tool_views()
+        return {
+            "ok": True,
+            "path": str(source),
+            "loaded_count": len(loaded),
+            "view_names": sorted(loaded),
+        }
+
+    def acquire_tool_view(
+        self,
+        view_name: str,
+        *,
+        owner: str | None = None,
+        reason: str | None = None,
+        client: str | None = None,
+    ) -> dict[str, Any]:
+        name = normalize_view_name(view_name)
+        self._get_tool_view_runtime(name)
+        return self._tool_view_leases.acquire(
+            view=name,
+            owner=owner,
+            reason=reason,
+            client=client,
+        )
+
+    def release_tool_view(self, view_name: str, *, lease_id: str | None) -> dict[str, Any]:
+        name = normalize_view_name(view_name)
+        self._get_tool_view_runtime(name)
+        return self._tool_view_leases.release(view=name, lease_id=lease_id)
+
+    def release_all_tool_view(self, view_name: str) -> dict[str, Any]:
+        name = normalize_view_name(view_name)
+        self._get_tool_view_runtime(name)
+        return self._tool_view_leases.release_all(view=name)
+
+    def tool_view_usage(self, view_name: str) -> dict[str, Any]:
+        name = normalize_view_name(view_name)
+        self._get_tool_view_runtime(name)
+        return self._tool_view_leases.usage(view=name)
+
     def run(self) -> None:
         self.run_startup_warmup()
         mode = self.config.server.mode
@@ -700,7 +969,13 @@ class ToolkitServer:
             exclude_tools=self.config.groups.exclude_tools,
             tool_naming_mode=self.config.groups.tool_naming_mode,
         )
-        configs = {"default": default_config, **dict(self.config.tool_views)}
+        if not self._tool_view_configs:
+            self._tool_view_configs = {
+                name: view_config
+                for name, view_config in self.config.tool_views.items()
+                if normalize_view_name(name) != "default"
+            }
+        configs = {"default": default_config, **dict(self._tool_view_configs)}
         for view_name, view_config in configs.items():
             resolved = resolve_tool_view(
                 name=view_name,
