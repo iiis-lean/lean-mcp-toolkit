@@ -31,9 +31,11 @@ def main(argv: list[str] | None = None) -> NoReturn:
         or cfg.default_api_prefix
         or DEFAULT_API_PREFIX
     )
+    tool_view = args.tool_view or os.environ.get("LEAN_CLI_TOOLKIT_TOOL_VIEW")
     http_config = HttpConfig(
         base_url=base_url,
         api_prefix=api_prefix,
+        tool_view=tool_view,
         timeout_seconds=cfg.default_timeout_seconds,
     )
     catalog = RemoteToolCatalog.from_http_config(http_config)
@@ -57,6 +59,7 @@ def _parse_global_args(argv: list[str] | None = None) -> tuple[argparse.Namespac
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--base-url")
     parser.add_argument("--api-prefix")
+    parser.add_argument("--tool-view")
     parser.add_argument("-h", "--help", action="store_true")
     ns, rest = parser.parse_known_args(argv)
     if ns.help and not rest:

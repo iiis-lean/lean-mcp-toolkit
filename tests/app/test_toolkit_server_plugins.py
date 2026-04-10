@@ -51,11 +51,14 @@ class _FakePlugin:
         }
 
     def register_mcp_tools(self, mcp, *, service, aliases_by_canonical, normalize_str_list, prune_none):
-        _ = mcp
         _ = service
-        _ = aliases_by_canonical
         _ = normalize_str_list
         _ = prune_none
+        for canonical_name, aliases in aliases_by_canonical.items():
+            for alias in aliases:
+                @mcp.tool(name=alias, description=canonical_name)
+                async def _fake_tool():
+                    return {"tool": canonical_name}
 
 
 def test_plugin_group_disabled_removes_all_tools() -> None:
@@ -160,6 +163,28 @@ def test_plugin_named_tool_view_filters_tools_by_tags() -> None:
     assert server.dispatch_api("alpha", {}, view_name="proof")["tool"] == "fake.alpha"
     with pytest.raises(KeyError):
         server.dispatch_api("beta", {}, view_name="proof")
+
+
+def test_named_tool_view_registers_mcp_alias_subset() -> None:
+    cfg = ToolkitConfig.from_dict(
+        {
+            "groups": {
+                "enabled_groups": ["fake"],
+                "tool_naming_mode": "prefixed",
+            },
+            "tool_views": {
+                "search": {
+                    "include_tags": ["search"],
+                }
+            },
+        }
+    )
+    server = ToolkitServer.from_config(cfg, plugins=(_FakePlugin(),))
+    mcp = _CaptureMCP()
+
+    server._register_mcp_tools(mcp, view_name="search")
+
+    assert set(mcp.handlers) == {"fake.beta"}
 
 
 class _CaptureMCP:

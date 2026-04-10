@@ -12,6 +12,7 @@ from ...contracts.base import JsonDict, to_bool, to_int
 class HttpConfig:
     base_url: str
     api_prefix: str = "/api/v1"
+    tool_view: str | None = None
     timeout_seconds: float = 30.0
     headers: dict[str, str] = field(default_factory=dict)
     verify_ssl: bool = True
@@ -36,6 +37,7 @@ class HttpConfig:
         return cls(
             base_url=str(data.get("base_url") or "").rstrip("/"),
             api_prefix=str(data.get("api_prefix") or "/api/v1"),
+            tool_view=(str(data["tool_view"]).strip() if data.get("tool_view") is not None else None),
             timeout_seconds=timeout,
             headers=headers,
             verify_ssl=to_bool(data.get("verify_ssl"), default=True),
@@ -47,6 +49,7 @@ class HttpConfig:
         return {
             "base_url": self.base_url,
             "api_prefix": self.api_prefix,
+            "tool_view": self.tool_view,
             "timeout_seconds": self.timeout_seconds,
             "headers": dict(self.headers),
             "verify_ssl": self.verify_ssl,
@@ -76,6 +79,7 @@ class HttpConfig:
         return cls(
             base_url=(get("BASE_URL") or "").rstrip("/"),
             api_prefix=get("API_PREFIX") or "/api/v1",
+            tool_view=get("TOOL_VIEW"),
             timeout_seconds=float(get("TIMEOUT_SECONDS") or "30"),
             headers=headers,
             verify_ssl=to_bool(get("VERIFY_SSL"), default=True),

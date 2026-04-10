@@ -46,6 +46,24 @@ class _ToolViewRuntime:
     api_route_handlers: dict[str, ToolHandler] = field(default_factory=dict)
     specs_by_alias: dict[str, GroupToolSpec] = field(default_factory=dict)
     specs_by_api_path: dict[str, GroupToolSpec] = field(default_factory=dict)
+    aliases_by_group: dict[str, dict[str, tuple[str, ...]]] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class _ViewBoundServiceProxy:
+    service: Any
+    view_name: str
+
+    def __getattr__(self, name: str) -> Any:
+        target = getattr(self.service, name)
+        if not callable(target) or name == "close" or name.startswith("_"):
+            return target
+
+        def _wrapped(*args: Any, **kwargs: Any) -> Any:
+            with audit_view(self.view_name):
+                return target(*args, **kwargs)
+
+        return _wrapped
 
 
 @dataclass(slots=True)
@@ -300,33 +318,39 @@ class ToolkitServer:
 
         return app
 
-    def create_mcp_server(self):
+    def create_mcp_server(self, *, view_name: str | None = None):
         """Create FastMCP server and register toolkit tools."""
         try:
             from mcp.server.fastmcp import FastMCP
         except Exception as exc:  # pragma: no cover - optional dependency
             raise RuntimeError("mcp sdk is required to create MCP server") from exc
 
+        view = self._get_tool_view_runtime(view_name)
         mcp = FastMCP(
-            name="lean-mcp-toolkit",
+            name="lean-mcp-toolkit" if view.resolved.name == "default" else f"lean-mcp-toolkit:{view.resolved.name}",
             stateless_http=self.config.server.mcp_stateless_http,
             json_response=self.config.server.mcp_json_response,
         )
 
-        self._register_mcp_tools(mcp)
+        self._register_mcp_tools(mcp, view_name=view.resolved.name)
         return mcp
 
-    def _register_mcp_tools(self, mcp: Any) -> None:
+    def _register_mcp_tools(self, mcp: Any, *, view_name: str | None = None) -> None:
+        view = self._get_tool_view_runtime(view_name)
         for plugin in self._group_plugins:
-            aliases_by_canonical = self._aliases_by_group.get(plugin.group_name, {})
+            aliases_by_canonical = view.aliases_by_group.get(plugin.group_name, {})
             if not aliases_by_canonical:
                 continue
             service = self._group_services.get(plugin.group_name)
             if service is None:
                 continue
+            view_service = _ViewBoundServiceProxy(
+                service=service,
+                view_name=view.resolved.name,
+            )
             plugin.register_mcp_tools(
                 mcp,
-                service=service,
+                service=view_service,
                 aliases_by_canonical=aliases_by_canonical,
                 normalize_str_list=self._normalize_str_list,
                 prune_none=self._prune_none,
@@ -341,10 +365,13 @@ class ToolkitServer:
             raise RuntimeError("starlette is required to create unified app") from exc
 
         api_app = self.create_fastapi_app()
-        mcp = self.create_mcp_server()
-
-        # Mount MCP app at configured mount path without extra /mcp suffix.
-        mcp.settings.streamable_http_path = "/"
+        mcp_by_view = {
+            view_name: self.create_mcp_server(view_name=view_name)
+            for view_name in sorted(self._tool_view_runtimes.keys())
+        }
+        for mcp in mcp_by_view.values():
+            # Mount each MCP app without an extra /mcp suffix.
+            mcp.settings.streamable_http_path = "/"
 
         mcp_mount_path = self._normalize_path(self.config.server.mcp_mount_path, default="/mcp")
 
@@ -352,16 +379,31 @@ class ToolkitServer:
         async def lifespan(app: Any):
             _ = app
             try:
-                async with mcp.session_manager.run():
+                async with contextlib.AsyncExitStack() as stack:
+                    for mcp in mcp_by_view.values():
+                        await stack.enter_async_context(mcp.session_manager.run())
                     yield
             finally:
                 self.close()
 
-        app = Starlette(
-            routes=[
-                Mount(mcp_mount_path, app=mcp.streamable_http_app()),
+        routes = []
+        for view_name, mcp in sorted(mcp_by_view.items()):
+            if view_name == "default":
+                continue
+            routes.append(
+                Mount(
+                    f"{mcp_mount_path}/{view_name}",
+                    app=mcp.streamable_http_app(),
+                )
+            )
+        routes.extend(
+            [
+                Mount(mcp_mount_path, app=mcp_by_view["default"].streamable_http_app()),
                 Mount("/", app=api_app),
-            ],
+            ]
+        )
+        app = Starlette(
+            routes=routes,
             lifespan=lifespan,
         )
         return app
@@ -695,6 +737,7 @@ class ToolkitServer:
                 runtime.tool_alias_handlers[alias] = handler
                 runtime.specs_by_alias[alias] = spec
             aliases_by_group.setdefault(spec.group_name, {})[canonical_name] = aliases
+        runtime.aliases_by_group = aliases_by_group
         if resolved.name == "default":
             self._aliases_by_group = aliases_by_group
         return runtime

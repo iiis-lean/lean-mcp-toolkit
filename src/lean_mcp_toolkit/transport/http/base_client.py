@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import ssl
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from .config import HttpConfig
@@ -87,6 +88,9 @@ class HttpJsonClient:
             prefix = "/" + prefix
         if prefix.endswith("/"):
             prefix = prefix[:-1]
+        tool_view = (self.config.tool_view or "").strip()
+        if tool_view:
+            prefix = f"{prefix}/views/{urllib.parse.quote(tool_view, safe='')}"
 
         p = path.strip()
         if not p.startswith("/"):
