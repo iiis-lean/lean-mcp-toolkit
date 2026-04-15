@@ -9,7 +9,7 @@ from .common import parse_context_lines, parse_limit, parse_scopes, parse_text_m
 from .local_text_find import LocalTextFindItem
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class RepoNavGrepRequest(DictModel):
     repo_root: str | None = None
     query: str = ""
@@ -53,7 +53,7 @@ class RepoNavGrepRequest(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class RepoNavGrepResponse(DictModel):
     success: bool
     error_message: str | None = None

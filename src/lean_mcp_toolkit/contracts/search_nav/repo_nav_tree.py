@@ -8,7 +8,7 @@ from ..base import DictModel, JsonDict, to_bool
 from .common import parse_int_or_none, parse_limit, to_opt_str
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class RepoNavTreeRequest(DictModel):
     repo_root: str | None = None
     base: str | None = None
@@ -39,7 +39,7 @@ class RepoNavTreeRequest(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class RepoNavResolution(DictModel):
     repo_root: str
     source_root: str
@@ -56,7 +56,7 @@ class RepoNavResolution(DictModel):
         )
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class RepoNavTreeEntry(DictModel):
     kind: str
     name: str
@@ -77,7 +77,7 @@ class RepoNavTreeEntry(DictModel):
         )
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class RepoNavTreePage(DictModel):
     offset: int
     limit: int
@@ -94,7 +94,7 @@ class RepoNavTreePage(DictModel):
         )
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class RepoNavTreeResponse(DictModel):
     success: bool
     error_message: str | None = None

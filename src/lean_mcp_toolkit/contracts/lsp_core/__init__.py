@@ -1,15 +1,14 @@
 """lsp_core contracts."""
 
 from .code_actions import CodeAction, CodeActionEdit, LspCodeActionsRequest, LspCodeActionsResponse
-from .common import DiagnosticMessage, MarkdownResponse, OutlineEntry, normalize_response_format
+from .common import DiagnosticMessage, OutlineEntry
 from .file_outline import LspFileOutlineRequest, LspFileOutlineResponse
 from .goal import LspGoalRequest, LspGoalResponse
 from .hover import LspHoverRequest, LspHoverResponse
+from .run_snippet import LspRunSnippetRequest, LspRunSnippetResponse
 from .term_goal import LspTermGoalRequest, LspTermGoalResponse
 
 __all__ = [
-    "normalize_response_format",
-    "MarkdownResponse",
     "DiagnosticMessage",
     "OutlineEntry",
     "LspFileOutlineRequest",
@@ -22,6 +21,8 @@ __all__ = [
     "LspHoverResponse",
     "LspCodeActionsRequest",
     "LspCodeActionsResponse",
+    "LspRunSnippetRequest",
+    "LspRunSnippetResponse",
     "CodeAction",
     "CodeActionEdit",
 ]

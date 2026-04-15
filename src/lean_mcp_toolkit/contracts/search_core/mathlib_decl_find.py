@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from ..base import DictModel, JsonDict, to_bool, to_int, to_list_of_str
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class MathlibDeclFindRequest(DictModel):
     query: str = ""
     limit: int | None = None
@@ -57,7 +57,7 @@ class MathlibDeclFindRequest(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class MathlibDeclSummaryItem(DictModel):
     id: int
     name: str
@@ -112,7 +112,7 @@ class MathlibDeclSummaryItem(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class MathlibDeclFindResponse(DictModel):
     query: str
     count: int

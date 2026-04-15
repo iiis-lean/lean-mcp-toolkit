@@ -12,7 +12,7 @@ from ..config import ToolkitConfig
 from ..contracts.base import JsonDict
 from ..transport.http import HttpConfig
 
-ToolHandler = Callable[[JsonDict], JsonDict]
+ToolHandler = Callable[[JsonDict], Any]
 
 DEFAULT_MCP_BLOCKING_TOOL_MAX_CONCURRENCY = 8
 _MCP_BLOCKING_TOOL_SEMAPHORES: WeakKeyDictionary[
@@ -33,11 +33,11 @@ def _get_mcp_blocking_tool_semaphore(limit: int) -> asyncio.Semaphore:
 
 
 async def run_sync_mcp_handler(
-    handler: Callable[[JsonDict], JsonDict],
+    handler: Callable[[JsonDict], Any],
     payload: JsonDict,
     *,
     max_concurrency: int = DEFAULT_MCP_BLOCKING_TOOL_MAX_CONCURRENCY,
-) -> JsonDict:
+) -> Any:
     """Run a synchronous MCP handler off the event loop."""
     sem = _get_mcp_blocking_tool_semaphore(max_concurrency)
     async with sem:
@@ -45,12 +45,12 @@ async def run_sync_mcp_handler(
 
 
 async def run_sync_mcp_service_handler(
-    handler: Callable[[Any, JsonDict], JsonDict],
+    handler: Callable[[Any, JsonDict], Any],
     service: Any,
     payload: JsonDict,
     *,
     max_concurrency: int = DEFAULT_MCP_BLOCKING_TOOL_MAX_CONCURRENCY,
-) -> JsonDict:
+) -> Any:
     """Run a synchronous service-bound MCP handler off the event loop."""
     sem = _get_mcp_blocking_tool_semaphore(max_concurrency)
     async with sem:

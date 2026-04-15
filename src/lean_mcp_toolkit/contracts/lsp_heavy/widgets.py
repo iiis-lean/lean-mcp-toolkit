@@ -8,7 +8,7 @@ from ..base import DictModel, JsonDict, JsonValue, to_int
 from ..lsp_assist.common import Range
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class LspWidgetsRequest(DictModel):
     project_root: str | None = None
     file_path: str = ""
@@ -35,7 +35,7 @@ class LspWidgetsRequest(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class WidgetInstance(DictModel):
     widget_id: str
     javascript_hash: str | None = None
@@ -69,7 +69,7 @@ class WidgetInstance(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class LspWidgetsResponse(DictModel):
     success: bool
     error_message: str | None = None

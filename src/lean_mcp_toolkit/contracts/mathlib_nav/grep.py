@@ -9,7 +9,7 @@ from ..search_nav import LocalTextFindItem, RepoNavGrepResponse
 from ..search_nav.common import parse_context_lines, parse_limit, parse_scopes, parse_text_match, to_opt_str
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class MathlibNavGrepRequest(DictModel):
     project_root: str | None = None
     mathlib_root: str | None = None

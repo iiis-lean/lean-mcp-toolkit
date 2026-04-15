@@ -325,7 +325,6 @@ class DeclarationsConfig:
 @dataclass(slots=True, frozen=True)
 class LspCoreConfig:
     enabled: bool = True
-    default_response_format: str = "structured"
     default_max_declarations: int | None = None
     hover_include_diagnostics_default: bool = True
     code_actions_max_actions: int | None = None
@@ -335,12 +334,8 @@ class LspCoreConfig:
 
     @classmethod
     def from_dict(cls, data: JsonDict) -> "LspCoreConfig":
-        response_format = str(data.get("default_response_format") or "structured").strip()
-        if response_format not in {"structured", "markdown"}:
-            response_format = "structured"
         return cls(
             enabled=to_bool(data.get("enabled"), default=True),
-            default_response_format=response_format,
             default_max_declarations=to_int(data.get("default_max_declarations"), default=None),
             hover_include_diagnostics_default=to_bool(
                 data.get("hover_include_diagnostics_default"),
@@ -361,7 +356,6 @@ class LspCoreConfig:
     def to_dict(self) -> JsonDict:
         return {
             "enabled": self.enabled,
-            "default_response_format": self.default_response_format,
             "default_max_declarations": self.default_max_declarations,
             "hover_include_diagnostics_default": self.hover_include_diagnostics_default,
             "code_actions_max_actions": self.code_actions_max_actions,

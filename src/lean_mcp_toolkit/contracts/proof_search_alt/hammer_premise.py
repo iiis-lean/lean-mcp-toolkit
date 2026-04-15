@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from ..base import DictModel, JsonDict, to_int
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class ProofSearchAltHammerPremiseRequest(DictModel):
     project_root: str | None = None
     file_path: str = ""
@@ -37,7 +37,7 @@ class ProofSearchAltHammerPremiseRequest(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class HammerPremiseItem(DictModel):
     name: str
     raw_payload: JsonDict | None = None
@@ -51,7 +51,7 @@ class HammerPremiseItem(DictModel):
         )
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class ProofSearchAltHammerPremiseResponse(DictModel):
     success: bool
     error_message: str | None

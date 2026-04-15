@@ -8,7 +8,7 @@ from ..base import DictModel, JsonDict, to_bool, to_int
 from .common import DiagnosticItem
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class FileRequest(DictModel):
     project_root: str | None = None
     file_path: str = ""
@@ -53,7 +53,7 @@ class FileRequest(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class FileResponse(DictModel):
     success: bool
     error_message: str | None = None

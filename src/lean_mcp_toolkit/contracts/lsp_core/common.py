@@ -7,16 +7,7 @@ from dataclasses import dataclass, field
 from ..base import DictModel, JsonDict
 
 
-def normalize_response_format(value: str | None, *, default: str = "structured") -> str:
-    text = (value or "").strip().lower()
-    if not text:
-        return default
-    if text in {"structured", "markdown"}:
-        return text
-    return default
-
-
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class DiagnosticMessage(DictModel):
     severity: str
     message: str
@@ -41,19 +32,7 @@ class DiagnosticMessage(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
-class MarkdownResponse(DictModel):
-    markdown: str
-
-    @classmethod
-    def from_dict(cls, data: JsonDict) -> "MarkdownResponse":
-        return cls(markdown=str(data.get("markdown") or ""))
-
-    def to_dict(self) -> JsonDict:
-        return {"markdown": self.markdown}
-
-
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class LspErrorResponse(DictModel):
     success: bool
     error_message: str | None = None
@@ -87,7 +66,7 @@ def parse_diagnostics(raw: object) -> tuple[DiagnosticMessage, ...]:
     return tuple(parsed)
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class OutlineEntry(DictModel):
     name: str
     kind: str

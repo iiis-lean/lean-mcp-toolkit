@@ -38,7 +38,6 @@ class TextAstNoSorryInterfaceBackend:
     def run(self, req: LintRequest) -> NoSorryResult:
         if not req.targets:
             return NoSorryResult(
-                check_id="no_sorry",
                 success=False,
                 message="diagnostics.lint.no_sorry requires explicit targets; directory-only invocation is not supported",
                 sorries=tuple(),
@@ -61,7 +60,6 @@ class TextAstNoSorryInterfaceBackend:
             )
         except Exception as exc:
             return NoSorryResult(
-                check_id="no_sorry",
                 success=False,
                 message=str(exc),
                 sorries=tuple(),
@@ -74,7 +72,6 @@ class TextAstNoSorryInterfaceBackend:
                 text = abs_file.read_text(encoding="utf-8")
             except Exception as exc:
                 return NoSorryResult(
-                    check_id="no_sorry",
                     success=False,
                     message=str(exc),
                     sorries=tuple(),
@@ -113,7 +110,6 @@ class TextAstNoSorryInterfaceBackend:
 
         success = len(findings) == 0
         return NoSorryResult(
-            check_id="no_sorry",
             success=success,
             message=("no sorry found" if success else f"found {len(findings)} sorry diagnostics"),
             sorries=tuple(findings),

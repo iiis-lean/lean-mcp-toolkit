@@ -10,7 +10,7 @@ from .common import SearchAltRequest
 SearchAltLoogleRequest = SearchAltRequest
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class LoogleItem(DictModel):
     name: str
     type: str
@@ -28,7 +28,7 @@ class LoogleItem(DictModel):
         )
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class SearchAltLoogleResponse(DictModel):
     success: bool
     error_message: str | None

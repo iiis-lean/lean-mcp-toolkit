@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from ..base import DictModel, JsonDict
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class Position(DictModel):
     line: int
     column: int
@@ -26,7 +26,7 @@ class Position(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class Range(DictModel):
     start: Position
     end: Position
@@ -49,7 +49,7 @@ class Range(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class DiagnosticMessage(DictModel):
     severity: str
     message: str

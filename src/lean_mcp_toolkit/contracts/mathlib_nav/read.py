@@ -9,7 +9,7 @@ from ..search_nav import RepoNavReadResponse, RepoNavReadWindow, RepoNavTarget
 from ..search_nav.common import parse_int_or_none, to_opt_str
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class MathlibNavReadRequest(DictModel):
     project_root: str | None = None
     mathlib_root: str | None = None

@@ -8,7 +8,7 @@ from ..base import DictModel, JsonDict, to_bool
 from .common import parse_import_direction, parse_limit, parse_match_mode, to_opt_str
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class LocalImportFindRequest(DictModel):
     repo_root: str | None = None
     query: str = ""
@@ -46,7 +46,7 @@ class LocalImportFindRequest(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class LocalImportEdgeItem(DictModel):
     importer_module: str | None
     importer_file: str
@@ -65,7 +65,7 @@ class LocalImportEdgeItem(DictModel):
         )
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class LocalImportFindResponse(DictModel):
     success: bool
     error_message: str | None = None

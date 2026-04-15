@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from ..base import DictModel, JsonDict, to_int
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class LspCompletionsRequest(DictModel):
     project_root: str | None = None
     file_path: str = ""
@@ -37,7 +37,7 @@ class LspCompletionsRequest(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class CompletionItem(DictModel):
     label: str
     kind: str | None = None
@@ -59,7 +59,7 @@ class CompletionItem(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class LspCompletionsResponse(DictModel):
     success: bool
     error_message: str | None = None

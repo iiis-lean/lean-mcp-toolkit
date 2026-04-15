@@ -10,7 +10,7 @@ from .common import SearchAltRequest
 SearchAltLeanFinderRequest = SearchAltRequest
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class LeanFinderItem(DictModel):
     full_name: str
     formal_statement: str
@@ -28,7 +28,7 @@ class LeanFinderItem(DictModel):
         )
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class SearchAltLeanFinderResponse(DictModel):
     success: bool
     error_message: str | None

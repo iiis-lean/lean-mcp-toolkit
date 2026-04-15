@@ -9,7 +9,7 @@ from .common import parse_int_or_none, to_opt_str
 from .repo_nav_file_outline import RepoNavTarget
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class RepoNavReadRequest(DictModel):
     repo_root: str | None = None
     target: str = ""
@@ -44,7 +44,7 @@ class RepoNavReadRequest(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class RepoNavReadWindow(DictModel):
     start_line: int
     end_line: int
@@ -63,7 +63,7 @@ class RepoNavReadWindow(DictModel):
         )
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class RepoNavReadResponse(DictModel):
     success: bool
     error_message: str | None = None

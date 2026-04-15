@@ -14,7 +14,7 @@ def handle_proof_search_alt_state_search(
     service: ProofSearchAltService,
     payload: JsonDict,
 ) -> JsonDict:
-    return service.run_state_search(ProofSearchAltStateSearchRequest.from_dict(payload)).to_dict()
+    return service.run_state_search(ProofSearchAltStateSearchRequest.from_dict(payload))
 
 
 def handle_proof_search_alt_hammer_premise(
@@ -23,4 +23,4 @@ def handle_proof_search_alt_hammer_premise(
 ) -> JsonDict:
     return service.run_hammer_premise(
         ProofSearchAltHammerPremiseRequest.from_dict(payload)
-    ).to_dict()
+    )

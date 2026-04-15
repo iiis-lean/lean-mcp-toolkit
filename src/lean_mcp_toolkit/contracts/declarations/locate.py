@@ -8,7 +8,7 @@ from ..base import DictModel, JsonDict
 from .extract import DeclarationItem, DeclarationPosition
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class DeclarationLocateRequest(DictModel):
     project_root: str | None = None
     source_file: str = ""
@@ -36,7 +36,7 @@ class DeclarationLocateRequest(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class DeclarationLocateRange(DictModel):
     start: DeclarationPosition
     end: DeclarationPosition
@@ -59,7 +59,7 @@ class DeclarationLocateRange(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class DeclarationLocateResponse(DictModel):
     success: bool
     error_message: str | None = None

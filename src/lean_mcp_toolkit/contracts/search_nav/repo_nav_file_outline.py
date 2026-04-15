@@ -8,7 +8,7 @@ from ..base import DictModel, JsonDict, to_bool
 from .common import parse_limit, to_opt_str
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class RepoNavFileOutlineRequest(DictModel):
     repo_root: str | None = None
     target: str = ""
@@ -65,7 +65,7 @@ class RepoNavFileOutlineRequest(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class RepoNavTarget(DictModel):
     file_path: str
     module_path: str | None = None
@@ -78,7 +78,7 @@ class RepoNavTarget(DictModel):
         )
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class RepoNavSectionItem(DictModel):
     title: str
     line_start: int
@@ -93,7 +93,7 @@ class RepoNavSectionItem(DictModel):
         )
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class RepoNavDeclarationItem(DictModel):
     decl_kind: str
     full_name: str | None
@@ -112,7 +112,7 @@ class RepoNavDeclarationItem(DictModel):
         )
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class RepoNavScopeCmdItem(DictModel):
     kind: str
     target: str | None
@@ -129,7 +129,7 @@ class RepoNavScopeCmdItem(DictModel):
         )
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class RepoNavOutlineSummary(DictModel):
     total_lines: int
     decl_count: int
@@ -142,7 +142,7 @@ class RepoNavOutlineSummary(DictModel):
         )
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class RepoNavFileOutlineResponse(DictModel):
     success: bool
     error_message: str | None = None

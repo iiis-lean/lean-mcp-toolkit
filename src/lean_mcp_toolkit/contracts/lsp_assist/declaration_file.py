@@ -8,7 +8,7 @@ from ..base import DictModel, JsonDict, to_bool, to_int
 from .common import Position, Range
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class LspDeclarationFileRequest(DictModel):
     project_root: str | None = None
     file_path: str = ""
@@ -46,7 +46,7 @@ class LspDeclarationFileRequest(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class LspDeclarationFileResponse(DictModel):
     success: bool
     error_message: str | None = None

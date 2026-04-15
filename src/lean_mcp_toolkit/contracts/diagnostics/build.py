@@ -11,7 +11,7 @@ from .common import FileDiagnostics
 BuildFailedStage = Literal["build_deps", "diagnostics", "emit_artifacts"] | None
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class BuildRequest(DictModel):
     project_root: str | None = None
     targets: tuple[str, ...] | None = None
@@ -68,7 +68,7 @@ class BuildRequest(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class BuildResponse(DictModel):
     success: bool
     files: tuple[FileDiagnostics, ...] = field(default_factory=tuple)

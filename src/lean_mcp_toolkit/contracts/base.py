@@ -32,6 +32,19 @@ class DictModel:
         return asdict(self)  # type: ignore[return-value]
 
 
+def serialize_payload(value: Any) -> Any:
+    """Convert contract/model objects into JSON-serializable payloads."""
+    if hasattr(value, "model_dump") and callable(value.model_dump):
+        return serialize_payload(value.model_dump(mode="python"))
+    if hasattr(value, "to_dict") and callable(value.to_dict):
+        return serialize_payload(value.to_dict())
+    if isinstance(value, dict):
+        return {str(k): serialize_payload(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [serialize_payload(item) for item in value]
+    return value
+
+
 
 def to_bool(value: Any, *, default: bool = False) -> bool:
     if isinstance(value, bool):

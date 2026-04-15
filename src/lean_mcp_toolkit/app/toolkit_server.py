@@ -11,6 +11,7 @@ from typing import Any
 from ..backends import BackendContext, BackendKey, build_backend_context
 from ..backends.lean.path import resolve_project_root
 from ..config import ToolkitConfig, ToolViewConfig, load_toolkit_config
+from ..contracts.base import serialize_payload
 from ..core.services import (
     BuildBaseService,
     DeclarationsService,
@@ -138,12 +139,12 @@ class ToolkitServer:
         payload: dict[str, Any],
         *,
         view_name: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> Any:
         view = self._get_tool_view_runtime(view_name)
         route = route_path.strip()
         if route in view.tool_alias_handlers:
             with audit_view(view.resolved.name):
-                return view.tool_alias_handlers[route](payload)
+                return serialize_payload(view.tool_alias_handlers[route](payload))
 
         if route.startswith(self.api_prefix + "/"):
             route = route[len(self.api_prefix) :]
@@ -151,13 +152,13 @@ class ToolkitServer:
                 route = "/" + route
         if route in view.api_route_handlers:
             with audit_view(view.resolved.name):
-                return view.api_route_handlers[route](payload)
+                return serialize_payload(view.api_route_handlers[route](payload))
 
         if not route.startswith("/"):
             slash_route = "/" + route
             if slash_route in view.api_route_handlers:
                 with audit_view(view.resolved.name):
-                    return view.api_route_handlers[slash_route](payload)
+                    return serialize_payload(view.api_route_handlers[slash_route](payload))
         raise KeyError(f"unsupported route/tool: {route_path}")
 
     def available_tool_aliases(self, *, view_name: str | None = None) -> tuple[str, ...]:
@@ -1056,7 +1057,7 @@ class ToolkitServer:
 
         def _endpoint(payload: dict[str, Any]):
             with audit_view("default"):
-                return JSONResponse(handler(payload))
+                return JSONResponse(serialize_payload(handler(payload)))
 
         endpoint_name = "tool_" + route_path.strip("/").replace("/", "_").replace(".", "_")
         _endpoint.__name__ = endpoint_name or "tool_root"

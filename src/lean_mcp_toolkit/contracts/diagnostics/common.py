@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from ..base import DictModel, JsonDict
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class Position(DictModel):
     line: int
     column: int
@@ -23,7 +23,7 @@ class Position(DictModel):
         return {"line": self.line, "column": self.column}
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class DiagnosticItem(DictModel):
     severity: str
     pos: Position | None
@@ -89,7 +89,7 @@ def _display_file_name(file_name: str | None) -> str | None:
     return name
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class FileDiagnostics(DictModel):
     file: str
     success: bool

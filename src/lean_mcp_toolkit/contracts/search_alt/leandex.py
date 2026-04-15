@@ -10,7 +10,7 @@ from .common import SearchAltRequest
 SearchAltLeanDexRequest = SearchAltRequest
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class LeanDexItem(DictModel):
     primary_declaration: str
     source_file: str | None = None
@@ -44,7 +44,7 @@ class LeanDexItem(DictModel):
         )
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class SearchAltLeanDexResponse(DictModel):
     success: bool
     error_message: str | None

@@ -8,7 +8,7 @@ from ..base import DictModel, JsonDict, to_int, to_list_of_str
 from .common import DiagnosticMessage
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class LspMultiAttemptRequest(DictModel):
     project_root: str | None = None
     file_path: str = ""
@@ -39,7 +39,7 @@ class LspMultiAttemptRequest(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class AttemptResult(DictModel):
     snippet: str
     goals: tuple[str, ...] = field(default_factory=tuple)
@@ -79,7 +79,7 @@ class AttemptResult(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class LspMultiAttemptResponse(DictModel):
     success: bool
     error_message: str | None = None

@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Literal
 
 from ..base import DictModel, JsonDict, to_bool, to_int, to_list_of_str
 from .common import DiagnosticItem, Position
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class LintRequest(DictModel):
     project_root: str | None = None
     targets: tuple[str, ...] | None = None
@@ -57,7 +58,7 @@ class LintRequest(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class CheckResult(DictModel):
     check_id: str
     success: bool
@@ -87,7 +88,7 @@ class CheckResult(DictModel):
         )
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class AxiomDeclaredItem(DictModel):
     fileName: str | None
     declaration: str | None
@@ -124,7 +125,7 @@ class AxiomDeclaredItem(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class AxiomUsageIssue(DictModel):
     fileName: str | None
     declaration: str | None
@@ -147,7 +148,7 @@ class AxiomUsageIssue(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class AxiomUsageUnresolved(DictModel):
     fileName: str | None
     declaration: str | None
@@ -169,8 +170,9 @@ class AxiomUsageUnresolved(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class AxiomAuditResult(CheckResult):
+    check_id: Literal["axiom_audit"] = field(default="axiom_audit", init=False)
     declared_axioms: tuple[AxiomDeclaredItem, ...] = field(default_factory=tuple)
     usage_issues: tuple[AxiomUsageIssue, ...] = field(default_factory=tuple)
     unresolved: tuple[AxiomUsageUnresolved, ...] = field(default_factory=tuple)
@@ -199,7 +201,6 @@ class AxiomAuditResult(CheckResult):
                     parsed_unresolved.append(AxiomUsageUnresolved.from_dict(item))
 
         return cls(
-            check_id=str(data.get("check_id") or "axiom_audit"),
             success=bool(data.get("success", False)),
             message=str(data.get("message") or ""),
             declared_axioms=tuple(parsed_declared),
@@ -312,8 +313,9 @@ def _format_location(file_name: str | None, pos: Position | None) -> str | None:
     return location
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class NoSorryResult(CheckResult):
+    check_id: Literal["no_sorry"] = field(default="no_sorry", init=False)
     sorries: tuple[DiagnosticItem, ...] = field(default_factory=tuple)
 
     @classmethod
@@ -325,7 +327,6 @@ class NoSorryResult(CheckResult):
                 if isinstance(item, dict):
                     sorries.append(DiagnosticItem.from_dict(item))
         return cls(
-            check_id=str(data.get("check_id") or "no_sorry"),
             success=bool(data.get("success", False)),
             message=str(data.get("message") or ""),
             sorries=tuple(sorries),
@@ -351,14 +352,17 @@ class NoSorryResult(CheckResult):
         return "\n".join(lines)
 
 
-@dataclass(slots=True, frozen=True)
+LintCheckResult = CheckResult | NoSorryResult | AxiomAuditResult
+
+
+@dataclass(frozen=True)
 class LintResponse(DictModel):
     success: bool
-    checks: tuple[CheckResult, ...] = field(default_factory=tuple)
+    checks: tuple[LintCheckResult, ...] = field(default_factory=tuple)
 
     @classmethod
     def from_dict(cls, data: JsonDict) -> "LintResponse":
-        parsed: list[CheckResult] = []
+        parsed: list[LintCheckResult] = []
         raw = data.get("checks")
         if isinstance(raw, list):
             for item in raw:

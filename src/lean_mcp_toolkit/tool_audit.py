@@ -13,6 +13,7 @@ import uuid
 from typing import Any, Iterator
 
 from .config import ToolkitAuditConfig, ToolkitConfig
+from .contracts.base import serialize_payload
 
 _CURRENT_AUDIT_RECORDER: ContextVar["CallTimingRecorder | None"] = ContextVar(
     "toolkit_current_audit_recorder",
@@ -31,8 +32,10 @@ def _utc_now_iso() -> str:
 
 
 def _jsonify(value: Any) -> Any:
+    if hasattr(value, "model_dump") and callable(value.model_dump):
+        return _jsonify(serialize_payload(value))
     if hasattr(value, "to_dict") and callable(value.to_dict):
-        return _jsonify(value.to_dict())
+        return _jsonify(serialize_payload(value))
     if isinstance(value, dict):
         return {str(k): _jsonify(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):

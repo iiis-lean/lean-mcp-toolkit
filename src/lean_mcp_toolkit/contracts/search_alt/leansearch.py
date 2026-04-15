@@ -10,7 +10,7 @@ from .common import SearchAltRequest
 SearchAltLeanSearchRequest = SearchAltRequest
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class LeanSearchItem(DictModel):
     name: str
     module_name: str
@@ -46,7 +46,7 @@ class LeanSearchItem(DictModel):
         )
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class SearchAltLeanSearchResponse(DictModel):
     success: bool
     error_message: str | None

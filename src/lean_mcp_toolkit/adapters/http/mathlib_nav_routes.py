@@ -14,7 +14,7 @@ from ...core.services import MathlibNavService
 
 def handle_search_mathlib_nav_tree(service: MathlibNavService, payload: JsonDict) -> JsonDict:
     req = MathlibNavTreeRequest.from_dict(payload)
-    return service.run_mathlib_nav_tree(req).to_dict()
+    return service.run_mathlib_nav_tree(req)
 
 
 def handle_search_mathlib_nav_file_outline(
@@ -22,17 +22,17 @@ def handle_search_mathlib_nav_file_outline(
     payload: JsonDict,
 ) -> JsonDict:
     req = MathlibNavFileOutlineRequest.from_dict(payload)
-    return service.run_mathlib_nav_file_outline(req).to_dict()
+    return service.run_mathlib_nav_file_outline(req)
 
 
 def handle_search_mathlib_nav_grep(service: MathlibNavService, payload: JsonDict) -> JsonDict:
     req = MathlibNavGrepRequest.from_dict(payload)
-    return service.run_mathlib_nav_grep(req).to_dict()
+    return service.run_mathlib_nav_grep(req)
 
 
 def handle_search_mathlib_nav_read(service: MathlibNavService, payload: JsonDict) -> JsonDict:
     req = MathlibNavReadRequest.from_dict(payload)
-    return service.run_mathlib_nav_read(req).to_dict()
+    return service.run_mathlib_nav_read(req)
 
 
 __all__ = [

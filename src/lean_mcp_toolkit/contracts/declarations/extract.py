@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from ..base import DictModel, JsonDict
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class DeclarationExtractRequest(DictModel):
     project_root: str | None = None
     target: str = ""
@@ -26,7 +26,7 @@ class DeclarationExtractRequest(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class DeclarationPosition(DictModel):
     line: int
     column: int
@@ -45,7 +45,7 @@ class DeclarationPosition(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class DeclarationItem(DictModel):
     name: str
     kind: str | None = None
@@ -145,7 +145,7 @@ class DeclarationItem(DictModel):
         return "\n".join(lines)
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class DeclarationExtractResponse(DictModel):
     success: bool
     error_message: str | None = None

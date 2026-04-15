@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from ..base import DictModel, JsonDict, to_bool, to_int, to_list_of_str
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class BuildWorkspaceRequest(DictModel):
     project_root: str | None = None
     targets: tuple[str, ...] | None = None
@@ -50,7 +50,7 @@ class BuildWorkspaceRequest(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class BuildWorkspaceResponse(DictModel):
     success: bool
     error_message: str | None = None

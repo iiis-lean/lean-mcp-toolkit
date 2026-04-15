@@ -9,7 +9,7 @@ from ..search_nav import RepoNavResolution, RepoNavTreeEntry, RepoNavTreePage, R
 from ..search_nav.common import parse_int_or_none, parse_limit, to_opt_str
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class MathlibNavTreeRequest(DictModel):
     project_root: str | None = None
     mathlib_root: str | None = None

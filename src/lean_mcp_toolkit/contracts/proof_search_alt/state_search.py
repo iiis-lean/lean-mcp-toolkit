@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from ..base import DictModel, JsonDict, to_int
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class ProofSearchAltStateSearchRequest(DictModel):
     project_root: str | None = None
     file_path: str = ""
@@ -37,7 +37,7 @@ class ProofSearchAltStateSearchRequest(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class StateSearchItem(DictModel):
     name: str
     formal_type: str | None = None
@@ -55,7 +55,7 @@ class StateSearchItem(DictModel):
         )
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class ProofSearchAltStateSearchResponse(DictModel):
     success: bool
     error_message: str | None

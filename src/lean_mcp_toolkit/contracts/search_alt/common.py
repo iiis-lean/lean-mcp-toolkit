@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from ..base import DictModel, JsonDict, to_int
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class SearchAltRequest(DictModel):
     query: str = ""
     num_results: int | None = None

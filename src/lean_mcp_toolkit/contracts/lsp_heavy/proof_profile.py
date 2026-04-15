@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from ..base import DictModel, JsonDict, to_int
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class LspProofProfileRequest(DictModel):
     project_root: str | None = None
     file_path: str = ""
@@ -37,7 +37,7 @@ class LspProofProfileRequest(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class ProfileLine(DictModel):
     line: int
     ms: float
@@ -52,7 +52,7 @@ class ProfileLine(DictModel):
         )
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class ProfileCategory(DictModel):
     name: str
     ms: float
@@ -65,7 +65,7 @@ class ProfileCategory(DictModel):
         )
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class LspProofProfileResponse(DictModel):
     success: bool
     error_message: str | None = None

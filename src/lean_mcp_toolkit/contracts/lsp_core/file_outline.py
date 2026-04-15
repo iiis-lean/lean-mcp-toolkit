@@ -8,12 +8,11 @@ from ..base import DictModel, JsonDict, to_int
 from .common import OutlineEntry
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class LspFileOutlineRequest(DictModel):
     project_root: str | None = None
     file_path: str = ""
     max_declarations: int | None = None
-    response_format: str | None = None
 
     @classmethod
     def from_dict(cls, data: JsonDict) -> "LspFileOutlineRequest":
@@ -23,9 +22,6 @@ class LspFileOutlineRequest(DictModel):
             ),
             file_path=str(data.get("file_path") or ""),
             max_declarations=to_int(data.get("max_declarations"), default=None),
-            response_format=(
-                str(data["response_format"]) if data.get("response_format") is not None else None
-            ),
         )
 
     def to_dict(self) -> JsonDict:
@@ -33,11 +29,10 @@ class LspFileOutlineRequest(DictModel):
             "project_root": self.project_root,
             "file_path": self.file_path,
             "max_declarations": self.max_declarations,
-            "response_format": self.response_format,
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class LspFileOutlineResponse(DictModel):
     success: bool
     error_message: str | None = None

@@ -8,7 +8,7 @@ from ..base import DictModel, JsonDict, to_bool
 from .mathlib_decl_find import MathlibDeclSummaryItem
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class MathlibDeclGetRequest(DictModel):
     declaration_id: int = 0
     include_module: bool = True
@@ -45,7 +45,7 @@ class MathlibDeclGetRequest(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class MathlibDeclGetResponse(DictModel):
     found: bool
     item: MathlibDeclSummaryItem | None = None

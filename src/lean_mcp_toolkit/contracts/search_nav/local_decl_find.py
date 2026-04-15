@@ -8,7 +8,7 @@ from ..base import DictModel, JsonDict, to_bool
 from .common import parse_limit, parse_match_mode, parse_scopes, to_opt_str
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class LocalDeclFindRequest(DictModel):
     repo_root: str | None = None
     query: str = ""
@@ -49,7 +49,7 @@ class LocalDeclFindRequest(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class LocalDeclFindItem(DictModel):
     full_name: str
     short_name: str
@@ -76,7 +76,7 @@ class LocalDeclFindItem(DictModel):
         )
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class LocalDeclFindResponse(DictModel):
     success: bool
     error_message: str | None = None

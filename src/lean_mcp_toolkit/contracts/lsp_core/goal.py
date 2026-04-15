@@ -7,13 +7,12 @@ from dataclasses import dataclass, field
 from ..base import DictModel, JsonDict, to_int
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class LspGoalRequest(DictModel):
     project_root: str | None = None
     file_path: str = ""
     line: int = 1
     column: int | None = None
-    response_format: str | None = None
 
     @classmethod
     def from_dict(cls, data: JsonDict) -> "LspGoalRequest":
@@ -24,9 +23,6 @@ class LspGoalRequest(DictModel):
             file_path=str(data.get("file_path") or ""),
             line=(to_int(data.get("line"), default=1) or 1),
             column=to_int(data.get("column"), default=None),
-            response_format=(
-                str(data["response_format"]) if data.get("response_format") is not None else None
-            ),
         )
 
     def to_dict(self) -> JsonDict:
@@ -35,11 +31,10 @@ class LspGoalRequest(DictModel):
             "file_path": self.file_path,
             "line": self.line,
             "column": self.column,
-            "response_format": self.response_format,
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class LspGoalResponse(DictModel):
     success: bool
     error_message: str | None = None

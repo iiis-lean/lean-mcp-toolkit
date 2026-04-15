@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from ..base import DictModel, JsonDict
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class LspWidgetSourceRequest(DictModel):
     project_root: str | None = None
     file_path: str = ""
@@ -31,7 +31,7 @@ class LspWidgetSourceRequest(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class LspWidgetSourceResponse(DictModel):
     success: bool
     error_message: str | None = None

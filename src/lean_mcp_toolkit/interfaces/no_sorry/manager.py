@@ -43,7 +43,6 @@ class NoSorryInterfaceManager:
         backend = self.backends.get(self.config.diagnostics.no_sorry_backend)
         if backend is None:
             return NoSorryResult(
-                check_id="no_sorry",
                 success=False,
                 message=f"unsupported no_sorry backend: {self.config.diagnostics.no_sorry_backend}",
                 sorries=tuple(),

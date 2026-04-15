@@ -7,12 +7,11 @@ from dataclasses import dataclass, field
 from ..base import DictModel, JsonDict, to_bool, to_int
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class LspCodeActionsRequest(DictModel):
     project_root: str | None = None
     file_path: str = ""
     line: int = 1
-    response_format: str | None = None
 
     @classmethod
     def from_dict(cls, data: JsonDict) -> "LspCodeActionsRequest":
@@ -22,9 +21,6 @@ class LspCodeActionsRequest(DictModel):
             ),
             file_path=str(data.get("file_path") or ""),
             line=(to_int(data.get("line"), default=1) or 1),
-            response_format=(
-                str(data["response_format"]) if data.get("response_format") is not None else None
-            ),
         )
 
     def to_dict(self) -> JsonDict:
@@ -32,11 +28,10 @@ class LspCodeActionsRequest(DictModel):
             "project_root": self.project_root,
             "file_path": self.file_path,
             "line": self.line,
-            "response_format": self.response_format,
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class CodeActionEdit(DictModel):
     new_text: str
     start_line: int
@@ -64,7 +59,7 @@ class CodeActionEdit(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class CodeAction(DictModel):
     title: str
     is_preferred: bool
@@ -92,7 +87,7 @@ class CodeAction(DictModel):
         }
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True)
 class LspCodeActionsResponse(DictModel):
     success: bool
     error_message: str | None = None
