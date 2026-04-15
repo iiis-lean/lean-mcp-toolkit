@@ -160,6 +160,7 @@ def test_plugin_named_tool_view_filters_tools_by_tags() -> None:
     assert server.available_tool_aliases(view_name="proof") == ("alpha",)
     assert server.available_http_routes(view_name="proof") == ("/fake/alpha",)
     assert server.describe_tools(view_name="proof")[0]["tags"] == ["proof", "read_only"]
+    assert "output_schema" in server.describe_tools(view_name="proof")[0]
     assert server.dispatch_api("alpha", {}, view_name="proof")["tool"] == "fake.alpha"
     with pytest.raises(KeyError):
         server.dispatch_api("beta", {}, view_name="proof")
@@ -295,3 +296,6 @@ def test_builtin_tools_expose_mcp_output_schema() -> None:
     tools = tuple(mcp._tool_manager._tools.values())
     assert tools
     assert all(tool.output_schema is not None for tool in tools)
+    described = server.describe_tools()
+    assert described
+    assert all(item["output_schema"] is not None for item in described)

@@ -65,6 +65,7 @@ class ToolMeta:
     mcp_description: str
     params: tuple[ToolParamMeta, ...]
     returns: tuple[ToolReturnMeta, ...]
+    output_schema: dict[str, Any] | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "ToolMeta":
@@ -88,6 +89,11 @@ class ToolMeta:
                 ToolReturnMeta.from_dict(item)
                 for item in list(data.get("returns") or [])
                 if isinstance(item, dict)
+            ),
+            output_schema=(
+                dict(data["output_schema"])
+                if isinstance(data.get("output_schema"), dict)
+                else None
             ),
         )
 

@@ -56,6 +56,7 @@ It returns the active tool catalog, including:
 - API paths
 - parameter metadata
 - return-field metadata
+- machine-readable `output_schema` for structured MCP/HTTP result payloads
 
 Example:
 

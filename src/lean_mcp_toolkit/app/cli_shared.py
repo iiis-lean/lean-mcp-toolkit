@@ -222,6 +222,7 @@ def _tool_to_dict(tool: ToolMeta) -> dict[str, Any]:
             for p in tool.params
         ],
         "returns": [_return_to_dict(item) for item in tool.returns],
+        "output_schema": tool.output_schema,
     }
 
 
