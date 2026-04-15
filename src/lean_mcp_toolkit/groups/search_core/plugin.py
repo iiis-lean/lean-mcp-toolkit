@@ -16,6 +16,7 @@ from ...backends.context import BackendContext
 from ...backends.keys import BackendKey
 from ...config import ToolkitConfig
 from ...contracts.base import JsonDict
+from ...contracts.search_core import MathlibDeclFindResponse, MathlibDeclGetResponse
 from ...transport.http import HttpConfig
 from .factory import create_search_core_client, create_search_core_service
 from ..plugin_base import (
@@ -287,7 +288,7 @@ class SearchCoreGroupPlugin(GroupPlugin):
         normalize_str_list,
         prune_none,
     ) -> None:
-        @mcp.tool(name=alias, description=spec.render_mcp_description())
+        @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
         async def _search_mathlib_decl_find(
             query: Annotated[str, Field(description=_param_desc(spec, "query"))],
             limit: Annotated[int | None, Field(description=_param_desc(spec, "limit"))] = None,
@@ -323,7 +324,7 @@ class SearchCoreGroupPlugin(GroupPlugin):
                 bool,
                 Field(description=_param_desc(spec, "include_informalization")),
             ] = False,
-        ) -> JsonDict:
+        ) -> MathlibDeclFindResponse:
             payload = {
                 "query": query,
                 "limit": limit,
@@ -351,7 +352,7 @@ class SearchCoreGroupPlugin(GroupPlugin):
         service: Any,
         prune_none,
     ) -> None:
-        @mcp.tool(name=alias, description=spec.render_mcp_description())
+        @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
         async def _search_mathlib_decl_get(
             declaration_id: Annotated[int, Field(description=_param_desc(spec, "declaration_id"))],
             include_module: Annotated[
@@ -378,7 +379,7 @@ class SearchCoreGroupPlugin(GroupPlugin):
                 bool,
                 Field(description=_param_desc(spec, "include_informalization")),
             ] = True,
-        ) -> JsonDict:
+        ) -> MathlibDeclGetResponse:
             payload = {
                 "declaration_id": declaration_id,
                 "include_module": include_module,

@@ -1,7 +1,5 @@
 """build_base group plugin."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import Annotated, Any, Mapping
 
@@ -18,6 +16,7 @@ from ...backends.context import BackendContext
 from ...backends.keys import BackendKey
 from ...config import ToolkitConfig
 from ...contracts.base import JsonDict
+from ...contracts.build_base import BuildWorkspaceResponse
 from ...transport.http import HttpConfig
 from ..plugin_base import (
     GroupPlugin,
@@ -141,7 +140,7 @@ class BuildBaseGroupPlugin(GroupPlugin):
     ) -> None:
         spec = _TOOL_SPEC_MAP["build.workspace"]
         for alias in aliases_by_canonical.get("build.workspace", ()):
-            @mcp.tool(name=alias, description=spec.render_mcp_description())
+            @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
             async def _build_workspace(
                 project_root: Annotated[
                     str | None,
@@ -163,7 +162,7 @@ class BuildBaseGroupPlugin(GroupPlugin):
                     bool | None,
                     Field(description=_param_desc(spec, "clean_first")),
                 ] = None,
-            ) -> JsonDict:
+            ) -> BuildWorkspaceResponse:
                 payload = prune_none(
                     {
                         "project_root": project_root,

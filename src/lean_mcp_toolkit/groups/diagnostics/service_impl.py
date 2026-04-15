@@ -431,7 +431,6 @@ class DiagnosticsServiceImpl(DiagnosticsService):
             )
         except _RequestTimeoutError as exc:
             return NoSorryResult(
-                check_id="no_sorry",
                 success=False,
                 message=str(exc),
                 sorries=tuple(),
@@ -452,7 +451,6 @@ class DiagnosticsServiceImpl(DiagnosticsService):
     ) -> NoSorryResult:
         if not req.targets:
             return NoSorryResult(
-                check_id="no_sorry",
                 success=False,
                 message=self._lint_targets_required_message(),
                 sorries=tuple(),
@@ -476,7 +474,6 @@ class DiagnosticsServiceImpl(DiagnosticsService):
         if build_resp.failed_stage in {"build_deps", "emit_artifacts"}:
             stage_msg = build_resp.stage_error_message or f"stage failure: {build_resp.failed_stage}"
             return NoSorryResult(
-                check_id="no_sorry",
                 success=False,
                 message=stage_msg,
                 sorries=tuple(),
@@ -492,7 +489,6 @@ class DiagnosticsServiceImpl(DiagnosticsService):
         success = len(sorries) == 0
         message = "no sorry found" if success else f"found {len(sorries)} sorry diagnostics"
         return NoSorryResult(
-            check_id="no_sorry",
             success=success,
             message=message,
             sorries=tuple(sorries),
@@ -596,7 +592,6 @@ class DiagnosticsServiceImpl(DiagnosticsService):
             )
         except _RequestTimeoutError as exc:
             return AxiomAuditResult(
-                check_id="axiom_audit",
                 success=False,
                 message=str(exc),
                 declared_axioms=tuple(),
@@ -607,7 +602,6 @@ class DiagnosticsServiceImpl(DiagnosticsService):
     def _run_lint_axiom_audit_impl(self, req: LintRequest, budget: _RequestBudget) -> AxiomAuditResult:
         if not req.targets:
             return AxiomAuditResult(
-                check_id="axiom_audit",
                 success=False,
                 message=self._lint_targets_required_message(),
                 declared_axioms=tuple(),
@@ -622,7 +616,6 @@ class DiagnosticsServiceImpl(DiagnosticsService):
             )
         if not resolved.modules:
             return AxiomAuditResult(
-                check_id="axiom_audit",
                 success=True,
                 message="no target files to check",
                 declared_axioms=tuple(),
@@ -647,7 +640,6 @@ class DiagnosticsServiceImpl(DiagnosticsService):
                 cmd_result=artifact_result,
             )
             return AxiomAuditResult(
-                check_id="axiom_audit",
                 success=False,
                 message=msg,
                 declared_axioms=tuple(),
@@ -768,7 +760,6 @@ class DiagnosticsServiceImpl(DiagnosticsService):
                 )
             )
             return AxiomAuditResult(
-                check_id="axiom_audit",
                 success=success,
                 message=message,
                 declared_axioms=tuple(declared_axioms),
@@ -890,7 +881,6 @@ class DiagnosticsServiceImpl(DiagnosticsService):
             )
 
         return AxiomAuditResult(
-            check_id="axiom_audit",
             success=success,
             message=message,
             declared_axioms=tuple(declared_axioms),

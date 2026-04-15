@@ -1,7 +1,5 @@
 """lsp_heavy group plugin."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import Annotated, Any, Mapping
 
@@ -22,6 +20,11 @@ from ...backends.context import BackendContext
 from ...backends.keys import BackendKey
 from ...config import ToolkitConfig
 from ...contracts.base import JsonDict
+from ...contracts.lsp_heavy import (
+    LspProofProfileResponse,
+    LspWidgetSourceResponse,
+    LspWidgetsResponse,
+)
 from ...transport.http import HttpConfig
 from ..plugin_base import (
     GroupPlugin,
@@ -186,7 +189,7 @@ class LspHeavyGroupPlugin(GroupPlugin):
         _ = normalize_str_list
         spec = _TOOL_SPEC_MAP["lsp.widgets"]
         for alias in aliases_by_canonical.get("lsp.widgets", ()):
-            @mcp.tool(name=alias, description=spec.render_mcp_description())
+            @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
             async def _lsp_widgets(
                 project_root: Annotated[
                     str | None,
@@ -198,7 +201,7 @@ class LspHeavyGroupPlugin(GroupPlugin):
                 ] = "",
                 line: Annotated[int, Field(description=_param_desc(spec, "line"))] = 1,
                 column: Annotated[int, Field(description=_param_desc(spec, "column"))] = 1,
-            ) -> JsonDict:
+            ) -> LspWidgetsResponse:
                 return await run_sync_mcp_service_handler(
                     handle_lsp_widgets,
                     service,
@@ -214,7 +217,7 @@ class LspHeavyGroupPlugin(GroupPlugin):
 
         spec = _TOOL_SPEC_MAP["lsp.widget_source"]
         for alias in aliases_by_canonical.get("lsp.widget_source", ()):
-            @mcp.tool(name=alias, description=spec.render_mcp_description())
+            @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
             async def _lsp_widget_source(
                 project_root: Annotated[
                     str | None,
@@ -228,7 +231,7 @@ class LspHeavyGroupPlugin(GroupPlugin):
                     str,
                     Field(description=_param_desc(spec, "javascript_hash")),
                 ] = "",
-            ) -> JsonDict:
+            ) -> LspWidgetSourceResponse:
                 return await run_sync_mcp_service_handler(
                     handle_lsp_widget_source,
                     service,
@@ -243,7 +246,7 @@ class LspHeavyGroupPlugin(GroupPlugin):
 
         spec = _TOOL_SPEC_MAP["lsp.proof_profile"]
         for alias in aliases_by_canonical.get("lsp.proof_profile", ()):
-            @mcp.tool(name=alias, description=spec.render_mcp_description())
+            @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
             async def _lsp_proof_profile(
                 project_root: Annotated[
                     str | None,
@@ -259,7 +262,7 @@ class LspHeavyGroupPlugin(GroupPlugin):
                     int | None,
                     Field(description=_param_desc(spec, "timeout_seconds")),
                 ] = None,
-            ) -> JsonDict:
+            ) -> LspProofProfileResponse:
                 return await run_sync_mcp_service_handler(
                     handle_lsp_proof_profile,
                     service,

@@ -1,7 +1,5 @@
 """search_alt group plugin."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import Annotated, Any, Mapping
 
@@ -23,6 +21,12 @@ from ...backends.context import BackendContext
 from ...backends.keys import BackendKey
 from ...config import ToolkitConfig
 from ...contracts.base import JsonDict
+from ...contracts.search_alt import (
+    SearchAltLeanDexResponse,
+    SearchAltLeanFinderResponse,
+    SearchAltLeanSearchResponse,
+    SearchAltLoogleResponse,
+)
 from ...transport.http import HttpConfig
 from ..plugin_base import (
     GroupPlugin,
@@ -113,23 +117,42 @@ class SearchAltGroupPlugin(GroupPlugin):
             "loogle": handle_search_alt_loogle,
             "leanfinder": handle_search_alt_leanfinder,
         }
+        response_map = {
+            "leansearch": SearchAltLeanSearchResponse,
+            "leandex": SearchAltLeanDexResponse,
+            "loogle": SearchAltLoogleResponse,
+            "leanfinder": SearchAltLeanFinderResponse,
+        }
         for canonical_name, handler in handler_map.items():
             spec = _TOOL_SPEC_MAP[canonical_name]
+            response_type = response_map[canonical_name]
             for alias in aliases_by_canonical.get(canonical_name, ()):
-                @mcp.tool(name=alias, description=spec.render_mcp_description())
-                async def _search_alt_tool(
-                    query: Annotated[str, Field(description=_param_desc(spec, "query"))] = "",
-                    num_results: Annotated[
-                        int | None,
-                        Field(description=_param_desc(spec, "num_results")),
-                    ] = None,
-                    _handler=handler,
-                ) -> JsonDict:
-                    return await run_sync_mcp_service_handler(
-                        _handler,
-                        service,
-                        prune_none({"query": query, "num_results": num_results}),
-                    )
+                def _make_search_alt_tool(current_handler, current_spec, current_response_type):
+                    async def _search_alt_tool(
+                        query: Annotated[
+                            str,
+                            Field(description=_param_desc(current_spec, "query")),
+                        ] = "",
+                        num_results: Annotated[
+                            int | None,
+                            Field(description=_param_desc(current_spec, "num_results")),
+                        ] = None,
+                    ) -> Any:
+                        return await run_sync_mcp_service_handler(
+                            current_handler,
+                            service,
+                            prune_none({"query": query, "num_results": num_results}),
+                        )
+
+                    _search_alt_tool.__annotations__["return"] = current_response_type
+                    return _search_alt_tool
+
+                _search_alt_tool = _make_search_alt_tool(handler, spec, response_type)
+                mcp.tool(
+                    name=alias,
+                    description=spec.render_mcp_description(),
+                    structured_output=True,
+                )(_search_alt_tool)
 
 
 __all__ = ["SearchAltGroupPlugin"]

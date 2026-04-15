@@ -30,9 +30,10 @@ from ...contracts.lsp_core import (
     LspGoalResponse,
     LspHoverRequest,
     LspHoverResponse,
+    LspRunSnippetRequest,
+    LspRunSnippetResponse,
     LspTermGoalRequest,
     LspTermGoalResponse,
-    MarkdownResponse,
 )
 from ...contracts.lsp_assist import (
     LspCompletionsRequest,
@@ -41,8 +42,6 @@ from ...contracts.lsp_assist import (
     LspDeclarationFileResponse,
     LspMultiAttemptRequest,
     LspMultiAttemptResponse,
-    LspRunSnippetRequest,
-    LspRunSnippetResponse,
     LspTheoremSoundnessRequest,
     LspTheoremSoundnessResponse,
 )
@@ -150,25 +149,25 @@ class LspCoreService(Protocol):
     def run_file_outline(
         self,
         req: LspFileOutlineRequest,
-    ) -> LspFileOutlineResponse | MarkdownResponse:
+    ) -> LspFileOutlineResponse:
         ...
 
-    def run_goal(self, req: LspGoalRequest) -> LspGoalResponse | MarkdownResponse:
+    def run_goal(self, req: LspGoalRequest) -> LspGoalResponse:
         ...
 
     def run_term_goal(
         self,
         req: LspTermGoalRequest,
-    ) -> LspTermGoalResponse | MarkdownResponse:
+    ) -> LspTermGoalResponse:
         ...
 
-    def run_hover(self, req: LspHoverRequest) -> LspHoverResponse | MarkdownResponse:
+    def run_hover(self, req: LspHoverRequest) -> LspHoverResponse:
         ...
 
     def run_code_actions(
         self,
         req: LspCodeActionsRequest,
-    ) -> LspCodeActionsResponse | MarkdownResponse:
+    ) -> LspCodeActionsResponse:
         ...
 
     def run_snippet(self, req: LspRunSnippetRequest) -> LspRunSnippetResponse:

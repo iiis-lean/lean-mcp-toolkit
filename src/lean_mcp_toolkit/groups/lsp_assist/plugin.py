@@ -21,6 +21,12 @@ from ...backends.context import BackendContext
 from ...backends.keys import BackendKey
 from ...config import ToolkitConfig
 from ...contracts.base import JsonDict
+from ...contracts.lsp_assist import (
+    LspCompletionsResponse,
+    LspDeclarationFileResponse,
+    LspMultiAttemptResponse,
+    LspTheoremSoundnessResponse,
+)
 from ...transport.http import HttpConfig
 from ..plugin_base import (
     GroupPlugin,
@@ -343,14 +349,14 @@ class LspAssistGroupPlugin(GroupPlugin):
     ) -> None:
         if spec.canonical_name == "lsp.completions":
 
-            @mcp.tool(name=alias, description=spec.render_mcp_description())
+            @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
             async def _lsp_completions(
                 project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
                 file_path: Annotated[str, Field(description=_param_desc(spec, "file_path"))] = "",
                 line: Annotated[int, Field(description=_param_desc(spec, "line"), ge=1)] = 1,
                 column: Annotated[int, Field(description=_param_desc(spec, "column"), ge=1)] = 1,
                 max_completions: Annotated[int | None, Field(description=_param_desc(spec, "max_completions"), ge=1)] = None,
-            ) -> JsonDict:
+            ) -> LspCompletionsResponse:
                 payload = {
                     "project_root": project_root,
                     "file_path": file_path,
@@ -368,7 +374,7 @@ class LspAssistGroupPlugin(GroupPlugin):
 
         if spec.canonical_name == "lsp.declaration_file":
 
-            @mcp.tool(name=alias, description=spec.render_mcp_description())
+            @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
             async def _lsp_declaration_file(
                 project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
                 file_path: Annotated[str, Field(description=_param_desc(spec, "file_path"))] = "",
@@ -376,7 +382,7 @@ class LspAssistGroupPlugin(GroupPlugin):
                 line: Annotated[int | None, Field(description=_param_desc(spec, "line"), ge=1)] = None,
                 column: Annotated[int | None, Field(description=_param_desc(spec, "column"), ge=1)] = None,
                 include_file_content: Annotated[bool | None, Field(description=_param_desc(spec, "include_file_content"))] = None,
-            ) -> JsonDict:
+            ) -> LspDeclarationFileResponse:
                 payload = {
                     "project_root": project_root,
                     "file_path": file_path,
@@ -395,14 +401,14 @@ class LspAssistGroupPlugin(GroupPlugin):
 
         if spec.canonical_name == "lsp.multi_attempt":
 
-            @mcp.tool(name=alias, description=spec.render_mcp_description())
+            @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
             async def _lsp_multi_attempt(
                 project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
                 file_path: Annotated[str, Field(description=_param_desc(spec, "file_path"))] = "",
                 line: Annotated[int, Field(description=_param_desc(spec, "line"), ge=1)] = 1,
                 snippets: Annotated[list[str] | None, Field(description=_param_desc(spec, "snippets"))] = None,
                 max_attempts: Annotated[int | None, Field(description=_param_desc(spec, "max_attempts"), ge=1)] = None,
-            ) -> JsonDict:
+            ) -> LspMultiAttemptResponse:
                 payload = {
                     "project_root": project_root,
                     "file_path": file_path,
@@ -418,13 +424,13 @@ class LspAssistGroupPlugin(GroupPlugin):
 
             return
 
-        @mcp.tool(name=alias, description=spec.render_mcp_description())
+        @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
         async def _lsp_theorem_soundness(
             project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
             file_path: Annotated[str, Field(description=_param_desc(spec, "file_path"))] = "",
             theorem_name: Annotated[str, Field(description=_param_desc(spec, "theorem_name"))] = "",
             scan_source: Annotated[bool | None, Field(description=_param_desc(spec, "scan_source"))] = None,
-        ) -> JsonDict:
+        ) -> LspTheoremSoundnessResponse:
             payload = {
                 "project_root": project_root,
                 "file_path": file_path,

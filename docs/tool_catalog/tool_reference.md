@@ -3,6 +3,10 @@
 This document provides a detailed reference for the canonical tools exposed by
 `lean-mcp-toolkit`, including provenance and backend notes where applicable.
 
+All tools documented here return structured response objects at the toolkit
+contract layer. Over MCP, these contracts are exposed as tool output schemas;
+over HTTP, the same fields are returned directly as JSON payloads.
+
 ## Provenance Conventions
 
 The `Source` and `Original name / upstream reference` columns follow these rules:
@@ -54,11 +58,11 @@ The `Source` and `Original name / upstream reference` columns follow these rules
 
 | Canonical tool | Summary | Source | Original name / upstream reference | Backend notes |
 |---|---|---|---|---|
-| `lsp.file_outline` | Return imports and declaration outline for a file. | `lean-lsp-mcp` / upstream | `lean_file_outline` | LSP client based. |
-| `lsp.goal` | Return proof goals at a line/column or before/after a line. | `lean-lsp-mcp` / upstream | `lean_goal` | LSP client based. |
-| `lsp.term_goal` | Return expected type / term goal at a position. | `lean-lsp-mcp` / upstream | `lean_term_goal` | LSP client based. |
-| `lsp.hover` | Return hover/type/doc information at a position. | `lean-lsp-mcp` / upstream | `lean_hover_info` | LSP client based. |
-| `lsp.code_actions` | Return code actions / resolved edits at a line. | `lean-lsp-mcp` / upstream | `lean_code_actions` | LSP client based. |
+| `lsp.file_outline` | Return imports and declaration outline for a file. | `lean-lsp-mcp` / upstream | `lean_file_outline` | LSP client based; structured response only. |
+| `lsp.goal` | Return proof goals at a line/column or before/after a line. | `lean-lsp-mcp` / upstream | `lean_goal` | LSP client based; structured response only. |
+| `lsp.term_goal` | Return expected type / term goal at a position. | `lean-lsp-mcp` / upstream | `lean_term_goal` | LSP client based; structured response only. |
+| `lsp.hover` | Return hover/type/doc information at a position. | `lean-lsp-mcp` / upstream | `lean_hover_info` | LSP client based; structured response only. |
+| `lsp.code_actions` | Return code actions / resolved edits at a line. | `lean-lsp-mcp` / upstream | `lean_code_actions` | LSP client based; structured response only. |
 | `lsp.run_snippet` | Run a self-contained Lean snippet and report diagnostics. | Local implementation inspired by LSP tool workflows |  | Toolkit-owned core LSP utility with `lsp_core` timeout/size controls and backend recycle on timeout/failure. |
 
 ### Assistive LSP tools

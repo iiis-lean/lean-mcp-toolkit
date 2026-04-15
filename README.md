@@ -10,7 +10,8 @@
 tool catalog through MCP, HTTP API, remote CLI, and local shell entrypoints. It
 combines LSP-based inspection tools, declaration/search utilities,
 diagnostics/lint workflows, and lightweight source-analysis backends behind
-shared contracts.
+shared contracts. MCP tools publish structured output schemas, and the HTTP API
+returns the same structured payload shapes directly.
 
 Quick links: [Usage](docs/usage/README.md) · [Tool Catalog](docs/tool_catalog/README.md) · [Architecture](docs/architecture/README.md) · [Configuration](docs/configuration/README.md)
 
@@ -23,6 +24,7 @@ This project focuses on single-agent Lean tooling:
 - Build, diagnostics, and lint checks such as `no_sorry` and `axiom_audit`
 - Configurable backend selection for selected capabilities
 - One shared tool catalog across MCP, HTTP API, remote CLI, and local shell
+- Structured MCP tool outputs backed by the same response contracts used by HTTP
 
 ## Access Modes
 

@@ -22,6 +22,13 @@ from ...backends.context import BackendContext
 from ...backends.keys import BackendKey
 from ...config import ToolkitConfig
 from ...contracts.base import JsonDict
+from ...contracts.diagnostics import (
+    AxiomAuditResult,
+    BuildResponse,
+    FileResponse,
+    LintResponse,
+    NoSorryResult,
+)
 from ...transport.http import HttpConfig
 from .factory import create_diagnostics_client, create_diagnostics_service
 from ..plugin_base import (
@@ -524,6 +531,7 @@ class DiagnosticsGroupPlugin(GroupPlugin):
         @mcp.tool(
             name=alias,
             description=spec.render_mcp_description(),
+            structured_output=True,
         )
         async def _diagnostics_build(
             project_root: Annotated[
@@ -554,7 +562,7 @@ class DiagnosticsGroupPlugin(GroupPlugin):
                 int | None,
                 Field(description=_param_desc(spec, "timeout_seconds")),
             ] = None,
-        ) -> JsonDict:
+        ) -> BuildResponse:
             payload = {
                 "project_root": project_root,
                 "targets": normalize_str_list(targets),
@@ -582,6 +590,7 @@ class DiagnosticsGroupPlugin(GroupPlugin):
         @mcp.tool(
             name=alias,
             description=spec.render_mcp_description(),
+            structured_output=True,
         )
         async def _diagnostics_file(
             project_root: Annotated[
@@ -604,7 +613,7 @@ class DiagnosticsGroupPlugin(GroupPlugin):
                 int | None,
                 Field(description=_param_desc(spec, "timeout_seconds")),
             ] = None,
-        ) -> JsonDict:
+        ) -> FileResponse:
             payload = {
                 "project_root": project_root,
                 "file_path": file_path,
@@ -631,6 +640,7 @@ class DiagnosticsGroupPlugin(GroupPlugin):
         @mcp.tool(
             name=alias,
             description=spec.render_mcp_description(),
+            structured_output=True,
         )
         async def _diagnostics_lint(
             project_root: Annotated[
@@ -657,7 +667,7 @@ class DiagnosticsGroupPlugin(GroupPlugin):
                 int | None,
                 Field(description=_param_desc(spec, "timeout_seconds")),
             ] = None,
-        ) -> JsonDict:
+        ) -> LintResponse:
             payload = {
                 "project_root": project_root,
                 "targets": normalize_str_list(targets),
@@ -685,6 +695,7 @@ class DiagnosticsGroupPlugin(GroupPlugin):
         @mcp.tool(
             name=alias,
             description=spec.render_mcp_description(),
+            structured_output=True,
         )
         async def _diagnostics_lint_no_sorry(
             project_root: Annotated[
@@ -707,7 +718,7 @@ class DiagnosticsGroupPlugin(GroupPlugin):
                 int | None,
                 Field(description=_param_desc(spec, "timeout_seconds")),
             ] = None,
-        ) -> JsonDict:
+        ) -> NoSorryResult:
             payload = {
                 "project_root": project_root,
                 "targets": normalize_str_list(targets),
@@ -734,6 +745,7 @@ class DiagnosticsGroupPlugin(GroupPlugin):
         @mcp.tool(
             name=alias,
             description=spec.render_mcp_description(),
+            structured_output=True,
         )
         async def _diagnostics_lint_axiom_audit(
             project_root: Annotated[
@@ -756,7 +768,7 @@ class DiagnosticsGroupPlugin(GroupPlugin):
                 int | None,
                 Field(description=_param_desc(spec, "timeout_seconds")),
             ] = None,
-        ) -> JsonDict:
+        ) -> AxiomAuditResult:
             payload = {
                 "project_root": project_root,
                 "targets": normalize_str_list(targets),

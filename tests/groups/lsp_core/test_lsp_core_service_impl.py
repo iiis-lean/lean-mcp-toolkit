@@ -8,9 +8,8 @@ from lean_mcp_toolkit.contracts.lsp_core import (
     LspFileOutlineRequest,
     LspGoalRequest,
     LspHoverRequest,
-    MarkdownResponse,
+    LspRunSnippetRequest,
 )
-from lean_mcp_toolkit.contracts.lsp_assist import LspRunSnippetRequest
 from lean_mcp_toolkit.groups.lsp_core.service_impl import LspCoreServiceImpl
 
 
@@ -148,7 +147,7 @@ class _FakeLspClientManager:
 
 
 
-def test_lsp_core_service_structured_and_markdown(tmp_path: Path) -> None:
+def test_lsp_core_service_returns_structured_responses(tmp_path: Path) -> None:
     content = "import Mathlib\n\n theorem foo : True := by\n  trivial\n"
     (tmp_path / "lean-toolchain").write_text("leanprover/lean4:v4.28.0\n", encoding="utf-8")
     file_path = tmp_path / "A" / "B.lean"
@@ -164,33 +163,23 @@ def test_lsp_core_service_structured_and_markdown(tmp_path: Path) -> None:
     outline = service.run_file_outline(
         LspFileOutlineRequest.from_dict({"file_path": "A/B.lean"})
     )
-    assert not isinstance(outline, MarkdownResponse)
     assert outline.success is True
     assert outline.imports == ("Mathlib",)
     assert len(outline.declarations) == 1
 
     goals = service.run_goal(LspGoalRequest.from_dict({"file_path": "A/B.lean", "line": 3}))
-    assert not isinstance(goals, MarkdownResponse)
     assert goals.success is True
     assert goals.goals_before == ("⊢ True",)
 
-    hover_md = service.run_hover(
-        LspHoverRequest.from_dict(
-            {
-                "file_path": "A/B.lean",
-                "line": 3,
-                "column": 9,
-                "response_format": "markdown",
-            }
-        )
+    hover = service.run_hover(
+        LspHoverRequest.from_dict({"file_path": "A/B.lean", "line": 3, "column": 9})
     )
-    assert isinstance(hover_md, MarkdownResponse)
-    assert "Hover" in hover_md.markdown
+    assert hover.success is True
+    assert hover.info is not None
 
     actions = service.run_code_actions(
         LspCodeActionsRequest.from_dict({"file_path": "A/B.lean", "line": 3})
     )
-    assert not isinstance(actions, MarkdownResponse)
     assert actions.success is True
     assert len(actions.actions) == 1
     assert actions.actions[0].title == "Try this"
@@ -210,7 +199,6 @@ def test_lsp_core_service_structured_and_markdown(tmp_path: Path) -> None:
             }
         )
     )
-    assert not isinstance(outline_from_nested_root, MarkdownResponse)
     assert outline_from_nested_root.success is True
 
 

@@ -20,6 +20,12 @@ from ...adapters.http import (
 from ...backends.context import BackendContext
 from ...config import ToolkitConfig
 from ...contracts.base import JsonDict
+from ...contracts.mathlib_nav import (
+    MathlibNavFileOutlineResponse,
+    MathlibNavGrepResponse,
+    MathlibNavReadResponse,
+    MathlibNavTreeResponse,
+)
 from ...transport.http import HttpConfig
 from .factory import create_mathlib_nav_client, create_mathlib_nav_service
 from ..plugin_base import (
@@ -201,7 +207,11 @@ class MathlibNavGroupPlugin(GroupPlugin):
         for alias in aliases_by_canonical.get("mathlib_nav.tree", ()):
             spec = _TOOL_SPEC_MAP["mathlib_nav.tree"]
 
-            @mcp.tool(name=alias, description=spec.render_mcp_description())
+            @mcp.tool(
+                name=alias,
+                description=spec.render_mcp_description(),
+                structured_output=True,
+            )
             async def _mathlib_nav_tree(
                 project_root: Annotated[
                     str | None,
@@ -219,7 +229,7 @@ class MathlibNavGroupPlugin(GroupPlugin):
                 ] = None,
                 limit: Annotated[int | None, Field(description=_param_desc(spec, "limit"))] = None,
                 offset: Annotated[int | None, Field(description=_param_desc(spec, "offset"))] = None,
-            ) -> JsonDict:
+            ) -> MathlibNavTreeResponse:
                 payload = prune_none(
                     {
                         "project_root": project_root,
@@ -240,7 +250,11 @@ class MathlibNavGroupPlugin(GroupPlugin):
         for alias in aliases_by_canonical.get("mathlib_nav.file_outline", ()):
             spec = _TOOL_SPEC_MAP["mathlib_nav.file_outline"]
 
-            @mcp.tool(name=alias, description=spec.render_mcp_description())
+            @mcp.tool(
+                name=alias,
+                description=spec.render_mcp_description(),
+                structured_output=True,
+            )
             async def _mathlib_nav_file_outline(
                 target: Annotated[str, Field(description=_param_desc(spec, "target"))],
                 project_root: Annotated[
@@ -275,7 +289,7 @@ class MathlibNavGroupPlugin(GroupPlugin):
                     int | None,
                     Field(description=_param_desc(spec, "limit_decls")),
                 ] = None,
-            ) -> JsonDict:
+            ) -> MathlibNavFileOutlineResponse:
                 payload = prune_none(
                     {
                         "project_root": project_root,
@@ -298,7 +312,11 @@ class MathlibNavGroupPlugin(GroupPlugin):
         for alias in aliases_by_canonical.get("mathlib_nav.read", ()):
             spec = _TOOL_SPEC_MAP["mathlib_nav.read"]
 
-            @mcp.tool(name=alias, description=spec.render_mcp_description())
+            @mcp.tool(
+                name=alias,
+                description=spec.render_mcp_description(),
+                structured_output=True,
+            )
             async def _mathlib_nav_read(
                 target: Annotated[str, Field(description=_param_desc(spec, "target"))],
                 project_root: Annotated[
@@ -325,7 +343,7 @@ class MathlibNavGroupPlugin(GroupPlugin):
                     bool | None,
                     Field(description=_param_desc(spec, "with_line_numbers")),
                 ] = None,
-            ) -> JsonDict:
+            ) -> MathlibNavReadResponse:
                 payload = prune_none(
                     {
                         "project_root": project_root,
@@ -346,7 +364,11 @@ class MathlibNavGroupPlugin(GroupPlugin):
         for alias in aliases_by_canonical.get("mathlib_nav.grep", ()):
             spec = _TOOL_SPEC_MAP["mathlib_nav.grep"]
 
-            @mcp.tool(name=alias, description=spec.render_mcp_description())
+            @mcp.tool(
+                name=alias,
+                description=spec.render_mcp_description(),
+                structured_output=True,
+            )
             async def _mathlib_nav_grep(
                 query: Annotated[str, Field(description=_param_desc(spec, "query"))],
                 project_root: Annotated[
@@ -372,7 +394,7 @@ class MathlibNavGroupPlugin(GroupPlugin):
                     list[str] | str | None,
                     Field(description=_param_desc(spec, "scopes")),
                 ] = None,
-            ) -> JsonDict:
+            ) -> MathlibNavGrepResponse:
                 payload = prune_none(
                     {
                         "project_root": project_root,

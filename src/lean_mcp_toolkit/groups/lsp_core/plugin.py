@@ -23,6 +23,14 @@ from ...backends.context import BackendContext
 from ...backends.keys import BackendKey
 from ...config import ToolkitConfig
 from ...contracts.base import JsonDict
+from ...contracts.lsp_core import (
+    LspCodeActionsResponse,
+    LspFileOutlineResponse,
+    LspGoalResponse,
+    LspHoverResponse,
+    LspRunSnippetResponse,
+    LspTermGoalResponse,
+)
 from ...transport.http import HttpConfig
 from ..plugin_base import (
     GroupPlugin,
@@ -54,14 +62,6 @@ _COMMON_FILE_PARAMS: tuple[ToolParamSpec, ...] = (
     ),
 )
 
-_RESPONSE_FORMAT_PARAM = ToolParamSpec(
-    name="response_format",
-    type_hint='"structured" | "markdown" | null',
-    required=False,
-    default_value="lsp_core.default_response_format",
-    description="Output format for this request.",
-)
-
 _FILE_OUTLINE_PARAMS: tuple[ToolParamSpec, ...] = (
     *_COMMON_FILE_PARAMS,
     ToolParamSpec(
@@ -71,7 +71,6 @@ _FILE_OUTLINE_PARAMS: tuple[ToolParamSpec, ...] = (
         default_value="lsp_core.default_max_declarations",
         description="Maximum declarations to return.",
     ),
-    _RESPONSE_FORMAT_PARAM,
 )
 
 _GOAL_PARAMS: tuple[ToolParamSpec, ...] = (
@@ -84,7 +83,6 @@ _GOAL_PARAMS: tuple[ToolParamSpec, ...] = (
         default_value="null",
         description="Column number (1-based). Omit to get goals_before/goals_after.",
     ),
-    _RESPONSE_FORMAT_PARAM,
 )
 
 _TERM_GOAL_PARAMS: tuple[ToolParamSpec, ...] = (
@@ -97,7 +95,6 @@ _TERM_GOAL_PARAMS: tuple[ToolParamSpec, ...] = (
         default_value="null",
         description="Column number (1-based). Omit to use line end.",
     ),
-    _RESPONSE_FORMAT_PARAM,
 )
 
 _HOVER_PARAMS: tuple[ToolParamSpec, ...] = (
@@ -111,13 +108,11 @@ _HOVER_PARAMS: tuple[ToolParamSpec, ...] = (
         default_value="lsp_core.hover_include_diagnostics_default",
         description="Whether to include diagnostics covering this position.",
     ),
-    _RESPONSE_FORMAT_PARAM,
 )
 
 _CODE_ACTION_PARAMS: tuple[ToolParamSpec, ...] = (
     *_COMMON_FILE_PARAMS,
     ToolParamSpec(name="line", type_hint="int", required=True, description="Line number (1-based)."),
-    _RESPONSE_FORMAT_PARAM,
 )
 
 _RUN_SNIPPET_PARAMS: tuple[ToolParamSpec, ...] = (
@@ -143,10 +138,6 @@ _RUN_SNIPPET_PARAMS: tuple[ToolParamSpec, ...] = (
     ),
 )
 
-_MARKDOWN_RETURN: tuple[ToolReturnSpec, ...] = (
-    ToolReturnSpec("markdown", "str", "Rendered markdown output when response_format=markdown."),
-)
-
 _FILE_OUTLINE_RETURNS: tuple[ToolReturnSpec, ...] = (
     ToolReturnSpec("success", "bool", "Whether file outline succeeded."),
     ToolReturnSpec("error_message", "str | null", "Failure detail when success=false."),
@@ -165,7 +156,6 @@ _FILE_OUTLINE_RETURNS: tuple[ToolReturnSpec, ...] = (
         ),
     ),
     ToolReturnSpec("total_declarations", "int | null", "Original declaration count when truncated."),
-    *_MARKDOWN_RETURN,
 )
 
 _GOAL_RETURNS: tuple[ToolReturnSpec, ...] = (
@@ -175,7 +165,6 @@ _GOAL_RETURNS: tuple[ToolReturnSpec, ...] = (
     ToolReturnSpec("goals", "list[str] | null", "Goals at provided position (column mode)."),
     ToolReturnSpec("goals_before", "list[str] | null", "Goals at line start (column omitted)."),
     ToolReturnSpec("goals_after", "list[str] | null", "Goals at line end (column omitted)."),
-    *_MARKDOWN_RETURN,
 )
 
 _TERM_GOAL_RETURNS: tuple[ToolReturnSpec, ...] = (
@@ -183,7 +172,6 @@ _TERM_GOAL_RETURNS: tuple[ToolReturnSpec, ...] = (
     ToolReturnSpec("error_message", "str | null", "Failure detail when success=false."),
     ToolReturnSpec("line_context", "str | null", "Source line content at requested line."),
     ToolReturnSpec("expected_type", "str | null", "Expected type at position."),
-    *_MARKDOWN_RETURN,
 )
 
 _HOVER_RETURNS: tuple[ToolReturnSpec, ...] = (
@@ -202,7 +190,6 @@ _HOVER_RETURNS: tuple[ToolReturnSpec, ...] = (
             ToolReturnSpec("column", "int", "1-based column."),
         ),
     ),
-    *_MARKDOWN_RETURN,
 )
 
 _CODE_ACTION_RETURNS: tuple[ToolReturnSpec, ...] = (
@@ -229,7 +216,6 @@ _CODE_ACTION_RETURNS: tuple[ToolReturnSpec, ...] = (
             ),
         ),
     ),
-    *_MARKDOWN_RETURN,
 )
 
 _RUN_SNIPPET_RETURNS: tuple[ToolReturnSpec, ...] = (
@@ -382,18 +368,16 @@ class LspCoreGroupPlugin(GroupPlugin):
     ) -> None:
         if spec.canonical_name == "lsp.file_outline":
 
-            @mcp.tool(name=alias, description=spec.render_mcp_description())
+            @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
             async def _lsp_file_outline(
                 project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
                 file_path: Annotated[str, Field(description=_param_desc(spec, "file_path"))] = "",
                 max_declarations: Annotated[int | None, Field(description=_param_desc(spec, "max_declarations"))] = None,
-                response_format: Annotated[str | None, Field(description=_param_desc(spec, "response_format"))] = None,
-            ) -> JsonDict:
+            ) -> LspFileOutlineResponse:
                 payload = {
                     "project_root": project_root,
                     "file_path": file_path,
                     "max_declarations": max_declarations,
-                    "response_format": response_format,
                 }
                 return await run_sync_mcp_service_handler(
                     handle_lsp_file_outline,
@@ -405,20 +389,18 @@ class LspCoreGroupPlugin(GroupPlugin):
 
         if spec.canonical_name == "lsp.goal":
 
-            @mcp.tool(name=alias, description=spec.render_mcp_description())
+            @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
             async def _lsp_goal(
                 project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
                 file_path: Annotated[str, Field(description=_param_desc(spec, "file_path"))] = "",
                 line: Annotated[int, Field(description=_param_desc(spec, "line"), ge=1)] = 1,
                 column: Annotated[int | None, Field(description=_param_desc(spec, "column"), ge=1)] = None,
-                response_format: Annotated[str | None, Field(description=_param_desc(spec, "response_format"))] = None,
-            ) -> JsonDict:
+            ) -> LspGoalResponse:
                 payload = {
                     "project_root": project_root,
                     "file_path": file_path,
                     "line": line,
                     "column": column,
-                    "response_format": response_format,
                 }
                 return await run_sync_mcp_service_handler(
                     handle_lsp_goal,
@@ -430,20 +412,18 @@ class LspCoreGroupPlugin(GroupPlugin):
 
         if spec.canonical_name == "lsp.term_goal":
 
-            @mcp.tool(name=alias, description=spec.render_mcp_description())
+            @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
             async def _lsp_term_goal(
                 project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
                 file_path: Annotated[str, Field(description=_param_desc(spec, "file_path"))] = "",
                 line: Annotated[int, Field(description=_param_desc(spec, "line"), ge=1)] = 1,
                 column: Annotated[int | None, Field(description=_param_desc(spec, "column"), ge=1)] = None,
-                response_format: Annotated[str | None, Field(description=_param_desc(spec, "response_format"))] = None,
-            ) -> JsonDict:
+            ) -> LspTermGoalResponse:
                 payload = {
                     "project_root": project_root,
                     "file_path": file_path,
                     "line": line,
                     "column": column,
-                    "response_format": response_format,
                 }
                 return await run_sync_mcp_service_handler(
                     handle_lsp_term_goal,
@@ -455,7 +435,7 @@ class LspCoreGroupPlugin(GroupPlugin):
 
         if spec.canonical_name == "lsp.hover":
 
-            @mcp.tool(name=alias, description=spec.render_mcp_description())
+            @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
             async def _lsp_hover(
                 project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
                 file_path: Annotated[str, Field(description=_param_desc(spec, "file_path"))] = "",
@@ -465,15 +445,13 @@ class LspCoreGroupPlugin(GroupPlugin):
                     bool | None,
                     Field(description=_param_desc(spec, "include_diagnostics")),
                 ] = None,
-                response_format: Annotated[str | None, Field(description=_param_desc(spec, "response_format"))] = None,
-            ) -> JsonDict:
+            ) -> LspHoverResponse:
                 payload = {
                     "project_root": project_root,
                     "file_path": file_path,
                     "line": line,
                     "column": column,
                     "include_diagnostics": include_diagnostics,
-                    "response_format": response_format,
                 }
                 return await run_sync_mcp_service_handler(
                     handle_lsp_hover,
@@ -485,12 +463,12 @@ class LspCoreGroupPlugin(GroupPlugin):
 
         if spec.canonical_name == "lsp.run_snippet":
 
-            @mcp.tool(name=alias, description=spec.render_mcp_description())
+            @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
             async def _lsp_run_snippet(
                 project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
                 code: Annotated[str, Field(description=_param_desc(spec, "code"))] = "",
                 timeout_seconds: Annotated[int | None, Field(description=_param_desc(spec, "timeout_seconds"), ge=1)] = None,
-            ) -> JsonDict:
+            ) -> LspRunSnippetResponse:
                 payload = {
                     "project_root": project_root,
                     "code": code,
@@ -504,18 +482,16 @@ class LspCoreGroupPlugin(GroupPlugin):
 
             return
 
-        @mcp.tool(name=alias, description=spec.render_mcp_description())
+        @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
         async def _lsp_code_actions(
             project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
             file_path: Annotated[str, Field(description=_param_desc(spec, "file_path"))] = "",
             line: Annotated[int, Field(description=_param_desc(spec, "line"), ge=1)] = 1,
-            response_format: Annotated[str | None, Field(description=_param_desc(spec, "response_format"))] = None,
-        ) -> JsonDict:
+        ) -> LspCodeActionsResponse:
             payload = {
                 "project_root": project_root,
                 "file_path": file_path,
                 "line": line,
-                "response_format": response_format,
             }
             return await run_sync_mcp_service_handler(
                 handle_lsp_code_actions,

@@ -16,6 +16,7 @@ from ...backends.context import BackendContext
 from ...backends.keys import BackendKey
 from ...config import ToolkitConfig
 from ...contracts.base import JsonDict
+from ...contracts.declarations import DeclarationExtractResponse, DeclarationLocateResponse
 from ...transport.http import HttpConfig
 from .factory import create_declarations_client, create_declarations_service
 from ..plugin_base import (
@@ -357,6 +358,7 @@ class DeclarationsGroupPlugin(GroupPlugin):
         @mcp.tool(
             name=alias,
             description=spec.render_mcp_description(),
+            structured_output=True,
         )
         async def _declarations_extract(
             target: Annotated[
@@ -367,7 +369,7 @@ class DeclarationsGroupPlugin(GroupPlugin):
                 str | None,
                 Field(description=_param_desc(spec, "project_root")),
             ] = None,
-        ) -> JsonDict:
+        ) -> DeclarationExtractResponse:
             payload = {
                 "project_root": project_root,
                 "target": target,
@@ -390,6 +392,7 @@ class DeclarationsGroupPlugin(GroupPlugin):
         @mcp.tool(
             name=alias,
             description=spec.render_mcp_description(),
+            structured_output=True,
         )
         async def _declarations_locate(
             source_file: Annotated[
@@ -412,7 +415,7 @@ class DeclarationsGroupPlugin(GroupPlugin):
                 int | None,
                 Field(description=_param_desc(spec, "column")),
             ] = None,
-        ) -> JsonDict:
+        ) -> DeclarationLocateResponse:
             payload = {
                 "project_root": project_root,
                 "source_file": source_file,

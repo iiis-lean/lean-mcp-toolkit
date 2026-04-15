@@ -25,6 +25,17 @@ from ...adapters.http import (
 from ...backends.context import BackendContext
 from ...config import ToolkitConfig
 from ...contracts.base import JsonDict
+from ...contracts.search_nav import (
+    LocalDeclFindResponse,
+    LocalImportFindResponse,
+    LocalRefsFindResponse,
+    LocalScopeFindResponse,
+    LocalTextFindResponse,
+    RepoNavFileOutlineResponse,
+    RepoNavGrepResponse,
+    RepoNavReadResponse,
+    RepoNavTreeResponse,
+)
 from ...transport.http import HttpConfig
 from .factory import create_search_nav_client, create_search_nav_service
 from ..plugin_base import (
@@ -337,7 +348,11 @@ class SearchNavGroupPlugin(GroupPlugin):
         for alias in aliases_by_canonical.get("repo_nav.tree", ()):
             spec = _TOOL_SPEC_MAP["repo_nav.tree"]
 
-            @mcp.tool(name=alias, description=spec.render_mcp_description())
+            @mcp.tool(
+                name=alias,
+                description=spec.render_mcp_description(),
+                structured_output=True,
+            )
             async def _repo_nav_tree(
                 repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
                 base: Annotated[str | None, Field(description=_param_desc(spec, "base"))] = None,
@@ -348,7 +363,7 @@ class SearchNavGroupPlugin(GroupPlugin):
                 ] = None,
                 limit: Annotated[int | None, Field(description=_param_desc(spec, "limit"))] = None,
                 offset: Annotated[int | None, Field(description=_param_desc(spec, "offset"))] = None,
-            ) -> JsonDict:
+            ) -> RepoNavTreeResponse:
                 payload = {
                     "repo_root": repo_root,
                     "base": base,
@@ -366,7 +381,11 @@ class SearchNavGroupPlugin(GroupPlugin):
         for alias in aliases_by_canonical.get("repo_nav.file_outline", ()):
             spec = _TOOL_SPEC_MAP["repo_nav.file_outline"]
 
-            @mcp.tool(name=alias, description=spec.render_mcp_description())
+            @mcp.tool(
+                name=alias,
+                description=spec.render_mcp_description(),
+                structured_output=True,
+            )
             async def _repo_nav_file_outline(
                 target: Annotated[str, Field(description=_param_desc(spec, "target"))],
                 repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
@@ -394,7 +413,7 @@ class SearchNavGroupPlugin(GroupPlugin):
                     int | None,
                     Field(description=_param_desc(spec, "limit_decls")),
                 ] = None,
-            ) -> JsonDict:
+            ) -> RepoNavFileOutlineResponse:
                 payload = {
                     "repo_root": repo_root,
                     "target": target,
@@ -414,7 +433,11 @@ class SearchNavGroupPlugin(GroupPlugin):
         for alias in aliases_by_canonical.get("repo_nav.read", ()):
             spec = _TOOL_SPEC_MAP["repo_nav.read"]
 
-            @mcp.tool(name=alias, description=spec.render_mcp_description())
+            @mcp.tool(
+                name=alias,
+                description=spec.render_mcp_description(),
+                structured_output=True,
+            )
             async def _repo_nav_read(
                 target: Annotated[str, Field(description=_param_desc(spec, "target"))],
                 repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
@@ -425,7 +448,7 @@ class SearchNavGroupPlugin(GroupPlugin):
                     bool | None,
                     Field(description=_param_desc(spec, "with_line_numbers")),
                 ] = None,
-            ) -> JsonDict:
+            ) -> RepoNavReadResponse:
                 payload = {
                     "repo_root": repo_root,
                     "target": target,
@@ -443,7 +466,11 @@ class SearchNavGroupPlugin(GroupPlugin):
         for alias in aliases_by_canonical.get("repo_nav.local_decl.find", ()):
             spec = _TOOL_SPEC_MAP["repo_nav.local_decl.find"]
 
-            @mcp.tool(name=alias, description=spec.render_mcp_description())
+            @mcp.tool(
+                name=alias,
+                description=spec.render_mcp_description(),
+                structured_output=True,
+            )
             async def _local_decl_find(
                 query: Annotated[str, Field(description=_param_desc(spec, "query"))],
                 repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
@@ -465,7 +492,7 @@ class SearchNavGroupPlugin(GroupPlugin):
                     Field(description=_param_desc(spec, "include_deps")),
                 ] = None,
                 limit: Annotated[int | None, Field(description=_param_desc(spec, "limit"))] = None,
-            ) -> JsonDict:
+            ) -> LocalDeclFindResponse:
                 payload = {
                     "repo_root": repo_root,
                     "query": query,
@@ -485,7 +512,11 @@ class SearchNavGroupPlugin(GroupPlugin):
         for alias in aliases_by_canonical.get("repo_nav.local_import.find", ()):
             spec = _TOOL_SPEC_MAP["repo_nav.local_import.find"]
 
-            @mcp.tool(name=alias, description=spec.render_mcp_description())
+            @mcp.tool(
+                name=alias,
+                description=spec.render_mcp_description(),
+                structured_output=True,
+            )
             async def _local_import_find(
                 query: Annotated[str, Field(description=_param_desc(spec, "query"))],
                 repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
@@ -500,7 +531,7 @@ class SearchNavGroupPlugin(GroupPlugin):
                     Field(description=_param_desc(spec, "include_deps")),
                 ] = None,
                 limit: Annotated[int | None, Field(description=_param_desc(spec, "limit"))] = None,
-            ) -> JsonDict:
+            ) -> LocalImportFindResponse:
                 payload = {
                     "repo_root": repo_root,
                     "query": query,
@@ -519,7 +550,11 @@ class SearchNavGroupPlugin(GroupPlugin):
         for alias in aliases_by_canonical.get("repo_nav.local_scope.find", ()):
             spec = _TOOL_SPEC_MAP["repo_nav.local_scope.find"]
 
-            @mcp.tool(name=alias, description=spec.render_mcp_description())
+            @mcp.tool(
+                name=alias,
+                description=spec.render_mcp_description(),
+                structured_output=True,
+            )
             async def _local_scope_find(
                 repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
                 query: Annotated[str | None, Field(description=_param_desc(spec, "query"))] = None,
@@ -541,7 +576,7 @@ class SearchNavGroupPlugin(GroupPlugin):
                     int | None,
                     Field(description=_param_desc(spec, "context_lines")),
                 ] = None,
-            ) -> JsonDict:
+            ) -> LocalScopeFindResponse:
                 payload = {
                     "repo_root": repo_root,
                     "query": query,
@@ -561,7 +596,11 @@ class SearchNavGroupPlugin(GroupPlugin):
         for alias in aliases_by_canonical.get("repo_nav.local_text.find", ()):
             spec = _TOOL_SPEC_MAP["repo_nav.local_text.find"]
 
-            @mcp.tool(name=alias, description=spec.render_mcp_description())
+            @mcp.tool(
+                name=alias,
+                description=spec.render_mcp_description(),
+                structured_output=True,
+            )
             async def _local_text_find(
                 query: Annotated[str, Field(description=_param_desc(spec, "query"))],
                 repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
@@ -583,7 +622,7 @@ class SearchNavGroupPlugin(GroupPlugin):
                     int | None,
                     Field(description=_param_desc(spec, "context_lines")),
                 ] = None,
-            ) -> JsonDict:
+            ) -> LocalTextFindResponse:
                 payload = {
                     "repo_root": repo_root,
                     "query": query,
@@ -603,7 +642,11 @@ class SearchNavGroupPlugin(GroupPlugin):
         for alias in aliases_by_canonical.get("repo_nav.local_refs.find", ()):
             spec = _TOOL_SPEC_MAP["repo_nav.local_refs.find"]
 
-            @mcp.tool(name=alias, description=spec.render_mcp_description())
+            @mcp.tool(
+                name=alias,
+                description=spec.render_mcp_description(),
+                structured_output=True,
+            )
             async def _local_refs_find(
                 symbol: Annotated[str, Field(description=_param_desc(spec, "symbol"))],
                 repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
@@ -628,7 +671,7 @@ class SearchNavGroupPlugin(GroupPlugin):
                     int | None,
                     Field(description=_param_desc(spec, "context_lines")),
                 ] = None,
-            ) -> JsonDict:
+            ) -> LocalRefsFindResponse:
                 payload = {
                     "repo_root": repo_root,
                     "symbol": symbol,
@@ -648,7 +691,11 @@ class SearchNavGroupPlugin(GroupPlugin):
         for alias in aliases_by_canonical.get("repo_nav.grep", ()):
             spec = _TOOL_SPEC_MAP["repo_nav.grep"]
 
-            @mcp.tool(name=alias, description=spec.render_mcp_description())
+            @mcp.tool(
+                name=alias,
+                description=spec.render_mcp_description(),
+                structured_output=True,
+            )
             async def _repo_nav_grep(
                 query: Annotated[str, Field(description=_param_desc(spec, "query"))],
                 repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
@@ -674,7 +721,7 @@ class SearchNavGroupPlugin(GroupPlugin):
                     list[str] | str | None,
                     Field(description=_param_desc(spec, "scopes")),
                 ] = None,
-            ) -> JsonDict:
+            ) -> RepoNavGrepResponse:
                 payload = {
                     "repo_root": repo_root,
                     "query": query,

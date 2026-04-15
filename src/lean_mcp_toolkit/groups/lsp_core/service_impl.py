@@ -28,7 +28,6 @@ from ...backends.lean.path import LeanPath
 from ...backends.lean.path import resolve_project_root
 from ...backends.lsp import LeanLSPClientManager
 from ...config import ToolkitConfig
-from ...contracts.lsp_assist import LspRunSnippetRequest, LspRunSnippetResponse
 from ...contracts.lsp_core import (
     CodeAction,
     CodeActionEdit,
@@ -41,20 +40,13 @@ from ...contracts.lsp_core import (
     LspGoalResponse,
     LspHoverRequest,
     LspHoverResponse,
+    LspRunSnippetRequest,
+    LspRunSnippetResponse,
     LspTermGoalRequest,
     LspTermGoalResponse,
-    MarkdownResponse,
     OutlineEntry,
-    normalize_response_format,
 )
 from ...core.services import LspCoreService
-from .renderers.markdown import (
-    render_code_actions_markdown,
-    render_file_outline_markdown,
-    render_goal_markdown,
-    render_hover_markdown,
-    render_term_goal_markdown,
-)
 
 
 @dataclass(slots=True)
@@ -78,7 +70,7 @@ class LspCoreServiceImpl(LspCoreService):
     def run_file_outline(
         self,
         req: LspFileOutlineRequest,
-    ) -> LspFileOutlineResponse | MarkdownResponse:
+    ) -> LspFileOutlineResponse:
         """Adapt the upstream ``lean_file_outline`` tool."""
         try:
             project_root = self._resolve_project_root(req.project_root)
@@ -112,11 +104,7 @@ class LspCoreServiceImpl(LspCoreService):
                 declarations=declarations,
                 total_declarations=total_declarations,
             )
-            return self._project_response(
-                req.response_format,
-                render_file_outline_markdown(structured),
-                structured,
-            )
+            return structured
         except Exception as exc:
             structured = LspFileOutlineResponse(
                 success=False,
@@ -125,13 +113,9 @@ class LspCoreServiceImpl(LspCoreService):
                 declarations=tuple(),
                 total_declarations=None,
             )
-            return self._project_response(
-                req.response_format,
-                render_file_outline_markdown(structured),
-                structured,
-            )
+            return structured
 
-    def run_goal(self, req: LspGoalRequest) -> LspGoalResponse | MarkdownResponse:
+    def run_goal(self, req: LspGoalRequest) -> LspGoalResponse:
         """Adapt the upstream ``lean_goal`` tool."""
         try:
             project_root = self._resolve_project_root(req.project_root)
@@ -177,11 +161,7 @@ class LspCoreServiceImpl(LspCoreService):
                     goals_after=None,
                 )
 
-            return self._project_response(
-                req.response_format,
-                render_goal_markdown(structured),
-                structured,
-            )
+            return structured
         except Exception as exc:
             structured = LspGoalResponse(
                 success=False,
@@ -191,16 +171,12 @@ class LspCoreServiceImpl(LspCoreService):
                 goals_before=None,
                 goals_after=None,
             )
-            return self._project_response(
-                req.response_format,
-                render_goal_markdown(structured),
-                structured,
-            )
+            return structured
 
     def run_term_goal(
         self,
         req: LspTermGoalRequest,
-    ) -> LspTermGoalResponse | MarkdownResponse:
+    ) -> LspTermGoalResponse:
         """Adapt the upstream ``lean_term_goal`` tool."""
         try:
             project_root = self._resolve_project_root(req.project_root)
@@ -225,11 +201,7 @@ class LspCoreServiceImpl(LspCoreService):
                 line_context=line_context,
                 expected_type=expected_type,
             )
-            return self._project_response(
-                req.response_format,
-                render_term_goal_markdown(structured),
-                structured,
-            )
+            return structured
         except Exception as exc:
             structured = LspTermGoalResponse(
                 success=False,
@@ -237,13 +209,9 @@ class LspCoreServiceImpl(LspCoreService):
                 line_context=None,
                 expected_type=None,
             )
-            return self._project_response(
-                req.response_format,
-                render_term_goal_markdown(structured),
-                structured,
-            )
+            return structured
 
-    def run_hover(self, req: LspHoverRequest) -> LspHoverResponse | MarkdownResponse:
+    def run_hover(self, req: LspHoverRequest) -> LspHoverResponse:
         """Adapt the upstream ``lean_hover_info`` tool."""
         try:
             project_root = self._resolve_project_root(req.project_root)
@@ -288,11 +256,7 @@ class LspCoreServiceImpl(LspCoreService):
                 info=info,
                 diagnostics=diagnostics,
             )
-            return self._project_response(
-                req.response_format,
-                render_hover_markdown(structured),
-                structured,
-            )
+            return structured
         except Exception as exc:
             structured = LspHoverResponse(
                 success=False,
@@ -301,16 +265,12 @@ class LspCoreServiceImpl(LspCoreService):
                 info=None,
                 diagnostics=tuple(),
             )
-            return self._project_response(
-                req.response_format,
-                render_hover_markdown(structured),
-                structured,
-            )
+            return structured
 
     def run_code_actions(
         self,
         req: LspCodeActionsRequest,
-    ) -> LspCodeActionsResponse | MarkdownResponse:
+    ) -> LspCodeActionsResponse:
         """Adapt the upstream ``lean_code_actions`` tool."""
         try:
             project_root = self._resolve_project_root(req.project_root)
@@ -370,22 +330,14 @@ class LspCoreServiceImpl(LspCoreService):
                 error_message=None,
                 actions=tuple(parsed_actions),
             )
-            return self._project_response(
-                req.response_format,
-                render_code_actions_markdown(structured),
-                structured,
-            )
+            return structured
         except Exception as exc:
             structured = LspCodeActionsResponse(
                 success=False,
                 error_message=str(exc),
                 actions=tuple(),
             )
-            return self._project_response(
-                req.response_format,
-                render_code_actions_markdown(structured),
-                structured,
-            )
+            return structured
 
     def run_snippet(self, req: LspRunSnippetRequest) -> LspRunSnippetResponse:
         """Run a temporary Lean snippet inside the current project."""
@@ -875,21 +827,6 @@ class LspCoreServiceImpl(LspCoreService):
         elif value.startswith("```") and value.endswith("```"):
             value = value[len("```") : -len("```")]
         return value.strip("\n")
-
-    def _project_response(
-        self,
-        requested_format: str | None,
-        markdown: str,
-        structured: Any,
-    ) -> Any:
-        fmt = normalize_response_format(
-            requested_format,
-            default=self.config.lsp_core.default_response_format,
-        )
-        if fmt == "markdown":
-            return MarkdownResponse(markdown=markdown)
-        return structured
-
 
 def _parse_single_edit(raw: object) -> CodeActionEdit | None:
     if not isinstance(raw, dict):

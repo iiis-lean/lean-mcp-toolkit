@@ -236,8 +236,9 @@ class _CaptureMCP:
     def __init__(self) -> None:
         self.handlers: dict[str, object] = {}
 
-    def tool(self, *, name: str, description: str):
+    def tool(self, *, name: str, description: str, **kwargs):
         _ = description
+        _ = kwargs
 
         def _decorator(fn):
             self.handlers[name] = fn
@@ -277,3 +278,20 @@ def test_builtin_plugins_register_async_mcp_tools() -> None:
             assert "lsp.run_snippet" in mcp.handlers
         if plugin.group_name == "lsp_assist":
             assert "lsp.run_snippet" not in mcp.handlers
+
+
+def test_builtin_tools_expose_mcp_output_schema() -> None:
+    cfg = ToolkitConfig.from_dict(
+        {
+            "groups": {
+                "enabled_groups": [plugin.group_name for plugin in builtin_group_plugins()],
+                "tool_naming_mode": "prefixed",
+            }
+        }
+    )
+    server = ToolkitServer.from_config(cfg)
+    mcp = server.create_mcp_server()
+
+    tools = tuple(mcp._tool_manager._tools.values())
+    assert tools
+    assert all(tool.output_schema is not None for tool in tools)

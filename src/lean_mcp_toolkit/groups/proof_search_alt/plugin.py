@@ -1,7 +1,5 @@
 """proof_search_alt group plugin."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import Annotated, Any, Mapping
 
@@ -21,6 +19,10 @@ from ...backends.context import BackendContext
 from ...backends.keys import BackendKey
 from ...config import ToolkitConfig
 from ...contracts.base import JsonDict
+from ...contracts.proof_search_alt import (
+    ProofSearchAltHammerPremiseResponse,
+    ProofSearchAltStateSearchResponse,
+)
 from ...transport.http import HttpConfig
 from ..plugin_base import (
     GroupPlugin,
@@ -102,31 +104,60 @@ class ProofSearchAltGroupPlugin(GroupPlugin):
             "proof_search_alt.state_search": handle_proof_search_alt_state_search,
             "proof_search_alt.hammer_premise": handle_proof_search_alt_hammer_premise,
         }
+        response_map = {
+            "proof_search_alt.state_search": ProofSearchAltStateSearchResponse,
+            "proof_search_alt.hammer_premise": ProofSearchAltHammerPremiseResponse,
+        }
         for canonical_name, handler in handler_map.items():
             spec = _TOOL_SPEC_MAP[canonical_name]
+            response_type = response_map[canonical_name]
             for alias in aliases_by_canonical.get(canonical_name, ()):
-                @mcp.tool(name=alias, description=spec.render_mcp_description())
-                async def _proof_alt_tool(
-                    project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
-                    file_path: Annotated[str, Field(description=_param_desc(spec, "file_path"))] = "",
-                    line: Annotated[int, Field(description=_param_desc(spec, "line"))] = 1,
-                    column: Annotated[int, Field(description=_param_desc(spec, "column"))] = 1,
-                    num_results: Annotated[int | None, Field(description=_param_desc(spec, "num_results"))] = None,
-                    _handler=handler,
-                ) -> JsonDict:
-                    return await run_sync_mcp_service_handler(
-                        _handler,
-                        service,
-                        prune_none(
-                            {
-                                "project_root": project_root,
-                                "file_path": file_path,
-                                "line": line,
-                                "column": column,
-                                "num_results": num_results,
-                            }
-                        ),
-                    )
+                def _make_proof_alt_tool(current_handler, current_spec, current_response_type):
+                    async def _proof_alt_tool(
+                        project_root: Annotated[
+                            str | None,
+                            Field(description=_param_desc(current_spec, "project_root")),
+                        ] = None,
+                        file_path: Annotated[
+                            str,
+                            Field(description=_param_desc(current_spec, "file_path")),
+                        ] = "",
+                        line: Annotated[
+                            int,
+                            Field(description=_param_desc(current_spec, "line")),
+                        ] = 1,
+                        column: Annotated[
+                            int,
+                            Field(description=_param_desc(current_spec, "column")),
+                        ] = 1,
+                        num_results: Annotated[
+                            int | None,
+                            Field(description=_param_desc(current_spec, "num_results")),
+                        ] = None,
+                    ) -> Any:
+                        return await run_sync_mcp_service_handler(
+                            current_handler,
+                            service,
+                            prune_none(
+                                {
+                                    "project_root": project_root,
+                                    "file_path": file_path,
+                                    "line": line,
+                                    "column": column,
+                                    "num_results": num_results,
+                                }
+                            ),
+                        )
+
+                    _proof_alt_tool.__annotations__["return"] = current_response_type
+                    return _proof_alt_tool
+
+                _proof_alt_tool = _make_proof_alt_tool(handler, spec, response_type)
+                mcp.tool(
+                    name=alias,
+                    description=spec.render_mcp_description(),
+                    structured_output=True,
+                )(_proof_alt_tool)
 
 
 __all__ = ["ProofSearchAltGroupPlugin"]

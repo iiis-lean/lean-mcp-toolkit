@@ -30,7 +30,6 @@ class _FakeDiagnostics:
     def run_lint_no_sorry(self, req: LintRequest) -> NoSorryResult:
         _ = req
         return NoSorryResult(
-            check_id="no_sorry",
             success=True,
             message="ok",
             sorries=tuple(),
@@ -39,7 +38,6 @@ class _FakeDiagnostics:
     def run_lint_axiom_audit(self, req: LintRequest) -> AxiomAuditResult:
         _ = req
         return AxiomAuditResult(
-            check_id="axiom_audit",
             success=True,
             message="ok",
             declared_axioms=tuple(),

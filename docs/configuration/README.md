@@ -128,7 +128,19 @@ user-supplied timeout, and the maximum snippet size accepted by the server.
 collection so that cleanup and client recycle still happen if the underlying LSP
 call does not return promptly.
 
-## 6. CLI Defaults
+## 6. Structured Output Notes
+
+MCP tools now expose structured output schemas derived from the same toolkit
+response contracts used by the HTTP API.
+
+Practical implications:
+
+- MCP clients that consume tool `outputSchema` can type structured results more precisely.
+- HTTP routes keep returning plain JSON payloads with the same field layout.
+- Core `lsp_core` inspection tools now return structured responses only; there is no
+  `response_format=markdown` switch in the runtime config or request payloads.
+
+## 7. CLI Defaults
 
 The remote CLI (`lean-cli-toolkit`) also has a user-scoped config file:
 
@@ -145,7 +157,7 @@ This stores client-side defaults such as:
 
 These defaults are separate from the toolkit server configuration.
 
-## 7. Suggested Reading Order
+## 8. Suggested Reading Order
 
 For practical use:
 

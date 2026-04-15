@@ -9,11 +9,11 @@ from lean_mcp_toolkit.contracts.lsp_core import (
     LspGoalResponse,
     LspHoverRequest,
     LspHoverResponse,
+    LspRunSnippetRequest,
+    LspRunSnippetResponse,
     LspTermGoalRequest,
     LspTermGoalResponse,
-    MarkdownResponse,
     OutlineEntry,
-    normalize_response_format,
 )
 
 
@@ -24,7 +24,6 @@ def test_lsp_requests_roundtrip() -> None:
             "file_path": "A/B.lean",
             "line": 3,
             "column": 12,
-            "response_format": "structured",
         }
     )
     dumped = req.to_dict()
@@ -101,23 +100,13 @@ def test_lsp_code_actions_response_roundtrip() -> None:
     assert loaded.actions[0].title == "Try this"
     assert loaded.actions[0].edits[0].new_text == "exact h"
 
-
-
-def test_lsp_markdown_response_and_format_normalize() -> None:
-    md = MarkdownResponse(markdown="## test")
-    assert MarkdownResponse.from_dict(md.to_dict()).markdown == "## test"
-
-    assert normalize_response_format(None, default="structured") == "structured"
-    assert normalize_response_format("markdown", default="structured") == "markdown"
-    assert normalize_response_format("invalid", default="structured") == "structured"
-
-
-
 def test_other_lsp_request_models_roundtrip() -> None:
     assert LspFileOutlineRequest.from_dict({"file_path": "A.lean"}).file_path == "A.lean"
     assert LspTermGoalRequest.from_dict({"file_path": "A.lean", "line": 1}).line == 1
     assert LspHoverRequest.from_dict({"file_path": "A.lean", "line": 1, "column": 1}).column == 1
     assert LspCodeActionsRequest.from_dict({"file_path": "A.lean", "line": 2}).line == 2
+    assert LspRunSnippetRequest.from_dict({"code": "#check Nat"}).code == "#check Nat"
 
     assert LspGoalResponse.from_dict({"success": True}).success is True
     assert LspTermGoalResponse.from_dict({"success": False}).success is False
+    assert LspRunSnippetResponse.from_dict({"success": True}).success is True

@@ -8,6 +8,8 @@ This section documents the tool surface exposed by `lean-mcp-toolkit`.
 - Actual visible aliases in MCP, HTTP, and CLI may vary with server config.
 - Group membership is documented to explain organization and activation, not to
   define the only valid user-facing names.
+- MCP registrations use structured output schemas generated from toolkit response
+  contracts; HTTP returns the same response fields as normal JSON payloads.
 
 ## Tool Families
 
