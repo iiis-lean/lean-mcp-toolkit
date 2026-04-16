@@ -146,42 +146,60 @@ class BuildBaseGroupPlugin(GroupPlugin):
         normalize_str_list,
         prune_none,
     ) -> None:
-        spec = _TOOL_SPEC_MAP["build.workspace"]
         for alias in aliases_by_canonical.get("build.workspace", ()):
-            @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
-            async def _build_workspace(
-                project_root: Annotated[
-                    str | None,
-                    Field(description=_param_desc(spec, "project_root")),
-                ] = None,
-                targets: Annotated[
-                    list[str] | str | None,
-                    Field(description=_param_desc(spec, "targets")),
-                ] = None,
-                target_facet: Annotated[
-                    str | None,
-                    Field(description=_param_desc(spec, "target_facet")),
-                ] = None,
-                timeout_seconds: Annotated[
-                    int | None,
-                    Field(description=_param_desc(spec, "timeout_seconds")),
-                ] = None,
-                clean_first: Annotated[
-                    bool | None,
-                    Field(description=_param_desc(spec, "clean_first")),
-                ] = None,
-            ) -> BuildWorkspaceResponse:
-                payload = prune_none(
-                    {
-                        "project_root": project_root,
-                        "targets": normalize_str_list(targets),
-                        "target_facet": target_facet,
-                        "timeout_seconds": timeout_seconds,
-                        "clean_first": clean_first,
-                    }
-                )
-                return await run_sync_mcp_service_handler(
-                    handle_build_workspace,
-                    service,
-                    payload,
-                )
+            self._register_workspace(
+                mcp,
+                service=service,
+                alias=alias,
+                normalize_str_list=normalize_str_list,
+                prune_none=prune_none,
+            )
+
+    @staticmethod
+    def _register_workspace(
+        mcp: Any,
+        *,
+        service: Any,
+        alias: str,
+        normalize_str_list,
+        prune_none,
+    ) -> None:
+        spec = _TOOL_SPEC_MAP["build.workspace"]
+
+        @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
+        async def _build_workspace(
+            project_root: Annotated[
+                str | None,
+                Field(description=_param_desc(spec, "project_root")),
+            ] = None,
+            targets: Annotated[
+                list[str] | str | None,
+                Field(description=_param_desc(spec, "targets")),
+            ] = None,
+            target_facet: Annotated[
+                str | None,
+                Field(description=_param_desc(spec, "target_facet")),
+            ] = None,
+            timeout_seconds: Annotated[
+                int | None,
+                Field(description=_param_desc(spec, "timeout_seconds")),
+            ] = None,
+            clean_first: Annotated[
+                bool | None,
+                Field(description=_param_desc(spec, "clean_first")),
+            ] = None,
+        ) -> BuildWorkspaceResponse:
+            payload = prune_none(
+                {
+                    "project_root": project_root,
+                    "targets": normalize_str_list(targets),
+                    "target_facet": target_facet,
+                    "timeout_seconds": timeout_seconds,
+                    "clean_first": clean_first,
+                }
+            )
+            return await run_sync_mcp_service_handler(
+                handle_build_workspace,
+                service,
+                payload,
+            )

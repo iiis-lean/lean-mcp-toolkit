@@ -359,141 +359,127 @@ class LspCoreGroupPlugin(GroupPlugin):
         prune_none,
     ) -> None:
         _ = normalize_str_list
-        for canonical in _TOOL_SPEC_MAP:
-            spec = _TOOL_SPEC_MAP[canonical]
-            for alias in aliases_by_canonical.get(canonical, ()):  # pragma: no branch
-                self._register_one(
-                    mcp=mcp,
-                    alias=alias,
-                    spec=spec,
-                    service=service,
-                    prune_none=prune_none,
-                )
+        for alias in aliases_by_canonical.get("lsp.file_outline", ()):
+            self._register_file_outline(mcp, service=service, alias=alias, prune_none=prune_none)
+        for alias in aliases_by_canonical.get("lsp.goal", ()):
+            self._register_goal(mcp, service=service, alias=alias, prune_none=prune_none)
+        for alias in aliases_by_canonical.get("lsp.term_goal", ()):
+            self._register_term_goal(mcp, service=service, alias=alias, prune_none=prune_none)
+        for alias in aliases_by_canonical.get("lsp.hover", ()):
+            self._register_hover(mcp, service=service, alias=alias, prune_none=prune_none)
+        for alias in aliases_by_canonical.get("lsp.code_actions", ()):
+            self._register_code_actions(
+                mcp,
+                service=service,
+                alias=alias,
+                prune_none=prune_none,
+            )
+        for alias in aliases_by_canonical.get("lsp.run_snippet", ()):
+            self._register_run_snippet(
+                mcp,
+                service=service,
+                alias=alias,
+                prune_none=prune_none,
+            )
 
     @staticmethod
-    def _register_one(
-        *,
-        mcp: Any,
-        alias: str,
-        spec: GroupToolSpec,
-        service: Any,
-        prune_none,
-    ) -> None:
-        if spec.canonical_name == "lsp.file_outline":
+    def _register_file_outline(mcp: Any, *, service: Any, alias: str, prune_none) -> None:
+        spec = _TOOL_SPEC_MAP["lsp.file_outline"]
 
-            @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
-            async def _lsp_file_outline(
-                project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
-                file_path: Annotated[str, Field(description=_param_desc(spec, "file_path"))] = "",
-                max_declarations: Annotated[int | None, Field(description=_param_desc(spec, "max_declarations"))] = None,
-            ) -> LspFileOutlineResponse:
-                payload = {
-                    "project_root": project_root,
-                    "file_path": file_path,
-                    "max_declarations": max_declarations,
-                }
-                return await run_sync_mcp_service_handler(
-                    handle_lsp_file_outline,
-                    service,
-                    prune_none(payload),
-                )
+        @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
+        async def _lsp_file_outline(
+            project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
+            file_path: Annotated[str, Field(description=_param_desc(spec, "file_path"))] = "",
+            max_declarations: Annotated[int | None, Field(description=_param_desc(spec, "max_declarations"))] = None,
+        ) -> LspFileOutlineResponse:
+            payload = {
+                "project_root": project_root,
+                "file_path": file_path,
+                "max_declarations": max_declarations,
+            }
+            return await run_sync_mcp_service_handler(
+                handle_lsp_file_outline,
+                service,
+                prune_none(payload),
+            )
 
-            return
+    @staticmethod
+    def _register_goal(mcp: Any, *, service: Any, alias: str, prune_none) -> None:
+        spec = _TOOL_SPEC_MAP["lsp.goal"]
 
-        if spec.canonical_name == "lsp.goal":
+        @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
+        async def _lsp_goal(
+            project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
+            file_path: Annotated[str, Field(description=_param_desc(spec, "file_path"))] = "",
+            line: Annotated[int, Field(description=_param_desc(spec, "line"), ge=1)] = 1,
+            column: Annotated[int | None, Field(description=_param_desc(spec, "column"), ge=1)] = None,
+        ) -> LspGoalResponse:
+            payload = {
+                "project_root": project_root,
+                "file_path": file_path,
+                "line": line,
+                "column": column,
+            }
+            return await run_sync_mcp_service_handler(
+                handle_lsp_goal,
+                service,
+                prune_none(payload),
+            )
 
-            @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
-            async def _lsp_goal(
-                project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
-                file_path: Annotated[str, Field(description=_param_desc(spec, "file_path"))] = "",
-                line: Annotated[int, Field(description=_param_desc(spec, "line"), ge=1)] = 1,
-                column: Annotated[int | None, Field(description=_param_desc(spec, "column"), ge=1)] = None,
-            ) -> LspGoalResponse:
-                payload = {
-                    "project_root": project_root,
-                    "file_path": file_path,
-                    "line": line,
-                    "column": column,
-                }
-                return await run_sync_mcp_service_handler(
-                    handle_lsp_goal,
-                    service,
-                    prune_none(payload),
-                )
+    @staticmethod
+    def _register_term_goal(mcp: Any, *, service: Any, alias: str, prune_none) -> None:
+        spec = _TOOL_SPEC_MAP["lsp.term_goal"]
 
-            return
+        @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
+        async def _lsp_term_goal(
+            project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
+            file_path: Annotated[str, Field(description=_param_desc(spec, "file_path"))] = "",
+            line: Annotated[int, Field(description=_param_desc(spec, "line"), ge=1)] = 1,
+            column: Annotated[int | None, Field(description=_param_desc(spec, "column"), ge=1)] = None,
+        ) -> LspTermGoalResponse:
+            payload = {
+                "project_root": project_root,
+                "file_path": file_path,
+                "line": line,
+                "column": column,
+            }
+            return await run_sync_mcp_service_handler(
+                handle_lsp_term_goal,
+                service,
+                prune_none(payload),
+            )
 
-        if spec.canonical_name == "lsp.term_goal":
+    @staticmethod
+    def _register_hover(mcp: Any, *, service: Any, alias: str, prune_none) -> None:
+        spec = _TOOL_SPEC_MAP["lsp.hover"]
 
-            @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
-            async def _lsp_term_goal(
-                project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
-                file_path: Annotated[str, Field(description=_param_desc(spec, "file_path"))] = "",
-                line: Annotated[int, Field(description=_param_desc(spec, "line"), ge=1)] = 1,
-                column: Annotated[int | None, Field(description=_param_desc(spec, "column"), ge=1)] = None,
-            ) -> LspTermGoalResponse:
-                payload = {
-                    "project_root": project_root,
-                    "file_path": file_path,
-                    "line": line,
-                    "column": column,
-                }
-                return await run_sync_mcp_service_handler(
-                    handle_lsp_term_goal,
-                    service,
-                    prune_none(payload),
-                )
+        @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
+        async def _lsp_hover(
+            project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
+            file_path: Annotated[str, Field(description=_param_desc(spec, "file_path"))] = "",
+            line: Annotated[int, Field(description=_param_desc(spec, "line"), ge=1)] = 1,
+            column: Annotated[int, Field(description=_param_desc(spec, "column"), ge=1)] = 1,
+            include_diagnostics: Annotated[
+                bool | None,
+                Field(description=_param_desc(spec, "include_diagnostics")),
+            ] = None,
+        ) -> LspHoverResponse:
+            payload = {
+                "project_root": project_root,
+                "file_path": file_path,
+                "line": line,
+                "column": column,
+                "include_diagnostics": include_diagnostics,
+            }
+            return await run_sync_mcp_service_handler(
+                handle_lsp_hover,
+                service,
+                prune_none(payload),
+            )
 
-            return
-
-        if spec.canonical_name == "lsp.hover":
-
-            @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
-            async def _lsp_hover(
-                project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
-                file_path: Annotated[str, Field(description=_param_desc(spec, "file_path"))] = "",
-                line: Annotated[int, Field(description=_param_desc(spec, "line"), ge=1)] = 1,
-                column: Annotated[int, Field(description=_param_desc(spec, "column"), ge=1)] = 1,
-                include_diagnostics: Annotated[
-                    bool | None,
-                    Field(description=_param_desc(spec, "include_diagnostics")),
-                ] = None,
-            ) -> LspHoverResponse:
-                payload = {
-                    "project_root": project_root,
-                    "file_path": file_path,
-                    "line": line,
-                    "column": column,
-                    "include_diagnostics": include_diagnostics,
-                }
-                return await run_sync_mcp_service_handler(
-                    handle_lsp_hover,
-                    service,
-                    prune_none(payload),
-                )
-
-            return
-
-        if spec.canonical_name == "lsp.run_snippet":
-
-            @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
-            async def _lsp_run_snippet(
-                project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
-                code: Annotated[str, Field(description=_param_desc(spec, "code"))] = "",
-                timeout_seconds: Annotated[int | None, Field(description=_param_desc(spec, "timeout_seconds"), ge=1)] = None,
-            ) -> LspRunSnippetResponse:
-                payload = {
-                    "project_root": project_root,
-                    "code": code,
-                    "timeout_seconds": timeout_seconds,
-                }
-                return await run_sync_mcp_service_handler(
-                    handle_lsp_run_snippet,
-                    service,
-                    prune_none(payload),
-                )
-
-            return
+    @staticmethod
+    def _register_code_actions(mcp: Any, *, service: Any, alias: str, prune_none) -> None:
+        spec = _TOOL_SPEC_MAP["lsp.code_actions"]
 
         @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
         async def _lsp_code_actions(
@@ -508,6 +494,27 @@ class LspCoreGroupPlugin(GroupPlugin):
             }
             return await run_sync_mcp_service_handler(
                 handle_lsp_code_actions,
+                service,
+                prune_none(payload),
+            )
+
+    @staticmethod
+    def _register_run_snippet(mcp: Any, *, service: Any, alias: str, prune_none) -> None:
+        spec = _TOOL_SPEC_MAP["lsp.run_snippet"]
+
+        @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
+        async def _lsp_run_snippet(
+            project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
+            code: Annotated[str, Field(description=_param_desc(spec, "code"))] = "",
+            timeout_seconds: Annotated[int | None, Field(description=_param_desc(spec, "timeout_seconds"), ge=1)] = None,
+        ) -> LspRunSnippetResponse:
+            payload = {
+                "project_root": project_root,
+                "code": code,
+                "timeout_seconds": timeout_seconds,
+            }
+            return await run_sync_mcp_service_handler(
+                handle_lsp_run_snippet,
                 service,
                 prune_none(payload),
             )

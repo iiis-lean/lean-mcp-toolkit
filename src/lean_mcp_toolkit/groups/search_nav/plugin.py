@@ -360,400 +360,457 @@ class SearchNavGroupPlugin(GroupPlugin):
         prune_none,
     ) -> None:
         _ = normalize_str_list
-
         for alias in aliases_by_canonical.get("repo_nav.tree", ()):
-            spec = _TOOL_SPEC_MAP["repo_nav.tree"]
-
-            @mcp.tool(
-                name=alias,
-                description=spec.render_mcp_description(),
-                structured_output=True,
-            )
-            async def _repo_nav_tree(
-                repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
-                base: Annotated[str | None, Field(description=_param_desc(spec, "base"))] = None,
-                depth: Annotated[int | None, Field(description=_param_desc(spec, "depth"))] = None,
-                name_filter: Annotated[
-                    str | None,
-                    Field(description=_param_desc(spec, "name_filter")),
-                ] = None,
-                limit: Annotated[int | None, Field(description=_param_desc(spec, "limit"))] = None,
-                offset: Annotated[int | None, Field(description=_param_desc(spec, "offset"))] = None,
-            ) -> RepoNavTreeResponse:
-                payload = {
-                    "repo_root": repo_root,
-                    "base": base,
-                    "depth": depth,
-                    "name_filter": name_filter,
-                    "limit": limit,
-                    "offset": offset,
-                }
-                return await run_sync_mcp_service_handler(
-                    handle_search_repo_nav_tree,
-                    service,
-                    prune_none(payload),
-                )
-
+            self._register_tree(mcp, service=service, alias=alias, prune_none=prune_none)
         for alias in aliases_by_canonical.get("repo_nav.file_outline", ()):
-            spec = _TOOL_SPEC_MAP["repo_nav.file_outline"]
-
-            @mcp.tool(
-                name=alias,
-                description=spec.render_mcp_description(),
-                structured_output=True,
+            self._register_file_outline(
+                mcp,
+                service=service,
+                alias=alias,
+                prune_none=prune_none,
             )
-            async def _repo_nav_file_outline(
-                target: Annotated[str, Field(description=_param_desc(spec, "target"))],
-                repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
-                include_imports: Annotated[
-                    bool | None,
-                    Field(description=_param_desc(spec, "include_imports")),
-                ] = None,
-                include_module_doc: Annotated[
-                    bool | None,
-                    Field(description=_param_desc(spec, "include_module_doc")),
-                ] = None,
-                include_section_doc: Annotated[
-                    bool | None,
-                    Field(description=_param_desc(spec, "include_section_doc")),
-                ] = None,
-                include_decl_headers: Annotated[
-                    bool | None,
-                    Field(description=_param_desc(spec, "include_decl_headers")),
-                ] = None,
-                include_scope_cmds: Annotated[
-                    bool | None,
-                    Field(description=_param_desc(spec, "include_scope_cmds")),
-                ] = None,
-                limit_decls: Annotated[
-                    int | None,
-                    Field(description=_param_desc(spec, "limit_decls")),
-                ] = None,
-            ) -> RepoNavFileOutlineResponse:
-                payload = {
-                    "repo_root": repo_root,
-                    "target": target,
-                    "include_imports": include_imports,
-                    "include_module_doc": include_module_doc,
-                    "include_section_doc": include_section_doc,
-                    "include_decl_headers": include_decl_headers,
-                    "include_scope_cmds": include_scope_cmds,
-                    "limit_decls": limit_decls,
-                }
-                return await run_sync_mcp_service_handler(
-                    handle_search_repo_nav_file_outline,
-                    service,
-                    prune_none(payload),
-                )
-
         for alias in aliases_by_canonical.get("repo_nav.read", ()):
-            spec = _TOOL_SPEC_MAP["repo_nav.read"]
-
-            @mcp.tool(
-                name=alias,
-                description=spec.render_mcp_description(),
-                structured_output=True,
-            )
-            async def _repo_nav_read(
-                target: Annotated[str, Field(description=_param_desc(spec, "target"))],
-                repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
-                start_line: Annotated[int | None, Field(description=_param_desc(spec, "start_line"))] = None,
-                end_line: Annotated[int | None, Field(description=_param_desc(spec, "end_line"))] = None,
-                max_lines: Annotated[int | None, Field(description=_param_desc(spec, "max_lines"))] = None,
-                with_line_numbers: Annotated[
-                    bool | None,
-                    Field(description=_param_desc(spec, "with_line_numbers")),
-                ] = None,
-            ) -> RepoNavReadResponse:
-                payload = {
-                    "repo_root": repo_root,
-                    "target": target,
-                    "start_line": start_line,
-                    "end_line": end_line,
-                    "max_lines": max_lines,
-                    "with_line_numbers": with_line_numbers,
-                }
-                return await run_sync_mcp_service_handler(
-                    handle_search_repo_nav_read,
-                    service,
-                    prune_none(payload),
-                )
-
+            self._register_read(mcp, service=service, alias=alias, prune_none=prune_none)
         for alias in aliases_by_canonical.get("repo_nav.local_decl.find", ()):
-            spec = _TOOL_SPEC_MAP["repo_nav.local_decl.find"]
-
-            @mcp.tool(
-                name=alias,
-                description=spec.render_mcp_description(),
-                structured_output=True,
+            self._register_local_decl_find(
+                mcp,
+                service=service,
+                alias=alias,
+                prune_none=prune_none,
             )
-            async def _local_decl_find(
-                query: Annotated[str, Field(description=_param_desc(spec, "query"))],
-                repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
-                match_mode: Annotated[str, Field(description=_param_desc(spec, "match_mode"))] = "prefix",
-                decl_kinds: Annotated[
-                    list[str] | str | None,
-                    Field(description=_param_desc(spec, "decl_kinds")),
-                ] = None,
-                namespace_filter: Annotated[
-                    str | None,
-                    Field(description=_param_desc(spec, "namespace_filter")),
-                ] = None,
-                module_filter: Annotated[
-                    str | None,
-                    Field(description=_param_desc(spec, "module_filter")),
-                ] = None,
-                include_deps: Annotated[
-                    bool | None,
-                    Field(description=_param_desc(spec, "include_deps")),
-                ] = None,
-                limit: Annotated[int | None, Field(description=_param_desc(spec, "limit"))] = None,
-            ) -> LocalDeclFindResponse:
-                payload = {
-                    "repo_root": repo_root,
-                    "query": query,
-                    "match_mode": match_mode,
-                    "decl_kinds": decl_kinds,
-                    "namespace_filter": namespace_filter,
-                    "module_filter": module_filter,
-                    "include_deps": include_deps,
-                    "limit": limit,
-                }
-                return await run_sync_mcp_service_handler(
-                    handle_search_local_decl_find,
-                    service,
-                    prune_none(payload),
-                )
-
         for alias in aliases_by_canonical.get("repo_nav.local_import.find", ()):
-            spec = _TOOL_SPEC_MAP["repo_nav.local_import.find"]
-
-            @mcp.tool(
-                name=alias,
-                description=spec.render_mcp_description(),
-                structured_output=True,
+            self._register_local_import_find(
+                mcp,
+                service=service,
+                alias=alias,
+                prune_none=prune_none,
             )
-            async def _local_import_find(
-                query: Annotated[str, Field(description=_param_desc(spec, "query"))],
-                repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
-                match_mode: Annotated[str, Field(description=_param_desc(spec, "match_mode"))] = "exact",
-                direction: Annotated[str, Field(description=_param_desc(spec, "direction"))] = "imported_by",
-                module_filter: Annotated[
-                    str | None,
-                    Field(description=_param_desc(spec, "module_filter")),
-                ] = None,
-                include_deps: Annotated[
-                    bool | None,
-                    Field(description=_param_desc(spec, "include_deps")),
-                ] = None,
-                limit: Annotated[int | None, Field(description=_param_desc(spec, "limit"))] = None,
-            ) -> LocalImportFindResponse:
-                payload = {
-                    "repo_root": repo_root,
-                    "query": query,
-                    "match_mode": match_mode,
-                    "direction": direction,
-                    "module_filter": module_filter,
-                    "include_deps": include_deps,
-                    "limit": limit,
-                }
-                return await run_sync_mcp_service_handler(
-                    handle_search_local_import_find,
-                    service,
-                    prune_none(payload),
-                )
-
         for alias in aliases_by_canonical.get("repo_nav.local_scope.find", ()):
-            spec = _TOOL_SPEC_MAP["repo_nav.local_scope.find"]
-
-            @mcp.tool(
-                name=alias,
-                description=spec.render_mcp_description(),
-                structured_output=True,
+            self._register_local_scope_find(
+                mcp,
+                service=service,
+                alias=alias,
+                prune_none=prune_none,
             )
-            async def _local_scope_find(
-                repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
-                query: Annotated[str | None, Field(description=_param_desc(spec, "query"))] = None,
-                scope_kinds: Annotated[
-                    list[str] | str | None,
-                    Field(description=_param_desc(spec, "scope_kinds")),
-                ] = None,
-                match_mode: Annotated[str, Field(description=_param_desc(spec, "match_mode"))] = "prefix",
-                module_filter: Annotated[
-                    str | None,
-                    Field(description=_param_desc(spec, "module_filter")),
-                ] = None,
-                include_deps: Annotated[
-                    bool | None,
-                    Field(description=_param_desc(spec, "include_deps")),
-                ] = None,
-                limit: Annotated[int | None, Field(description=_param_desc(spec, "limit"))] = None,
-                context_lines: Annotated[
-                    int | None,
-                    Field(description=_param_desc(spec, "context_lines")),
-                ] = None,
-            ) -> LocalScopeFindResponse:
-                payload = {
-                    "repo_root": repo_root,
-                    "query": query,
-                    "scope_kinds": scope_kinds,
-                    "match_mode": match_mode,
-                    "module_filter": module_filter,
-                    "include_deps": include_deps,
-                    "limit": limit,
-                    "context_lines": context_lines,
-                }
-                return await run_sync_mcp_service_handler(
-                    handle_search_local_scope_find,
-                    service,
-                    prune_none(payload),
-                )
-
         for alias in aliases_by_canonical.get("repo_nav.local_text.find", ()):
-            spec = _TOOL_SPEC_MAP["repo_nav.local_text.find"]
-
-            @mcp.tool(
-                name=alias,
-                description=spec.render_mcp_description(),
-                structured_output=True,
+            self._register_local_text_find(
+                mcp,
+                service=service,
+                alias=alias,
+                prune_none=prune_none,
             )
-            async def _local_text_find(
-                query: Annotated[str, Field(description=_param_desc(spec, "query"))],
-                repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
-                scopes: Annotated[
-                    list[str] | str | None,
-                    Field(description=_param_desc(spec, "scopes")),
-                ] = None,
-                text_match: Annotated[str, Field(description=_param_desc(spec, "text_match"))] = "phrase",
-                module_filter: Annotated[
-                    str | None,
-                    Field(description=_param_desc(spec, "module_filter")),
-                ] = None,
-                include_deps: Annotated[
-                    bool | None,
-                    Field(description=_param_desc(spec, "include_deps")),
-                ] = None,
-                limit: Annotated[int | None, Field(description=_param_desc(spec, "limit"))] = None,
-                context_lines: Annotated[
-                    int | None,
-                    Field(description=_param_desc(spec, "context_lines")),
-                ] = None,
-            ) -> LocalTextFindResponse:
-                payload = {
-                    "repo_root": repo_root,
-                    "query": query,
-                    "scopes": scopes,
-                    "text_match": text_match,
-                    "module_filter": module_filter,
-                    "include_deps": include_deps,
-                    "limit": limit,
-                    "context_lines": context_lines,
-                }
-                return await run_sync_mcp_service_handler(
-                    handle_search_local_text_find,
-                    service,
-                    prune_none(payload),
-                )
-
         for alias in aliases_by_canonical.get("repo_nav.local_refs.find", ()):
-            spec = _TOOL_SPEC_MAP["repo_nav.local_refs.find"]
-
-            @mcp.tool(
-                name=alias,
-                description=spec.render_mcp_description(),
-                structured_output=True,
+            self._register_local_refs_find(
+                mcp,
+                service=service,
+                alias=alias,
+                prune_none=prune_none,
             )
-            async def _local_refs_find(
-                symbol: Annotated[str, Field(description=_param_desc(spec, "symbol"))],
-                repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
-                include_definition_site: Annotated[
-                    bool | None,
-                    Field(description=_param_desc(spec, "include_definition_site")),
-                ] = None,
-                scopes: Annotated[
-                    list[str] | str | None,
-                    Field(description=_param_desc(spec, "scopes")),
-                ] = None,
-                module_filter: Annotated[
-                    str | None,
-                    Field(description=_param_desc(spec, "module_filter")),
-                ] = None,
-                include_deps: Annotated[
-                    bool | None,
-                    Field(description=_param_desc(spec, "include_deps")),
-                ] = None,
-                limit: Annotated[int | None, Field(description=_param_desc(spec, "limit"))] = None,
-                context_lines: Annotated[
-                    int | None,
-                    Field(description=_param_desc(spec, "context_lines")),
-                ] = None,
-            ) -> LocalRefsFindResponse:
-                payload = {
-                    "repo_root": repo_root,
-                    "symbol": symbol,
-                    "include_definition_site": include_definition_site,
-                    "scopes": scopes,
-                    "module_filter": module_filter,
-                    "include_deps": include_deps,
-                    "limit": limit,
-                    "context_lines": context_lines,
-                }
-                return await run_sync_mcp_service_handler(
-                    handle_search_local_refs_find,
-                    service,
-                    prune_none(payload),
-                )
-
         for alias in aliases_by_canonical.get("repo_nav.grep", ()):
-            spec = _TOOL_SPEC_MAP["repo_nav.grep"]
+            self._register_grep(mcp, service=service, alias=alias, prune_none=prune_none)
 
-            @mcp.tool(
-                name=alias,
-                description=spec.render_mcp_description(),
-                structured_output=True,
+    @staticmethod
+    def _register_tree(mcp: Any, *, service: Any, alias: str, prune_none) -> None:
+        spec = _TOOL_SPEC_MAP["repo_nav.tree"]
+
+        @mcp.tool(
+            name=alias,
+            description=spec.render_mcp_description(),
+            structured_output=True,
+        )
+        async def _repo_nav_tree(
+            repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
+            base: Annotated[str | None, Field(description=_param_desc(spec, "base"))] = None,
+            depth: Annotated[int | None, Field(description=_param_desc(spec, "depth"))] = None,
+            name_filter: Annotated[
+                str | None,
+                Field(description=_param_desc(spec, "name_filter")),
+            ] = None,
+            limit: Annotated[int | None, Field(description=_param_desc(spec, "limit"))] = None,
+            offset: Annotated[int | None, Field(description=_param_desc(spec, "offset"))] = None,
+        ) -> RepoNavTreeResponse:
+            payload = {
+                "repo_root": repo_root,
+                "base": base,
+                "depth": depth,
+                "name_filter": name_filter,
+                "limit": limit,
+                "offset": offset,
+            }
+            return await run_sync_mcp_service_handler(
+                handle_search_repo_nav_tree,
+                service,
+                prune_none(payload),
             )
-            async def _repo_nav_grep(
-                query: Annotated[str, Field(description=_param_desc(spec, "query"))],
-                repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
-                match_mode: Annotated[str, Field(description=_param_desc(spec, "match_mode"))] = "phrase",
-                path_filter: Annotated[
-                    str | None,
-                    Field(description=_param_desc(spec, "path_filter")),
-                ] = None,
-                module_filter: Annotated[
-                    str | None,
-                    Field(description=_param_desc(spec, "module_filter")),
-                ] = None,
-                include_deps: Annotated[
-                    bool | None,
-                    Field(description=_param_desc(spec, "include_deps")),
-                ] = None,
-                context_lines: Annotated[
-                    int | None,
-                    Field(description=_param_desc(spec, "context_lines")),
-                ] = None,
-                limit: Annotated[int | None, Field(description=_param_desc(spec, "limit"))] = None,
-                scopes: Annotated[
-                    list[str] | str | None,
-                    Field(description=_param_desc(spec, "scopes")),
-                ] = None,
-            ) -> RepoNavGrepResponse:
-                payload = {
-                    "repo_root": repo_root,
-                    "query": query,
-                    "match_mode": match_mode,
-                    "path_filter": path_filter,
-                    "module_filter": module_filter,
-                    "include_deps": include_deps,
-                    "context_lines": context_lines,
-                    "limit": limit,
-                    "scopes": scopes,
-                }
-                return await run_sync_mcp_service_handler(
-                    handle_search_repo_nav_grep,
-                    service,
-                    prune_none(payload),
-                )
+
+    @staticmethod
+    def _register_file_outline(mcp: Any, *, service: Any, alias: str, prune_none) -> None:
+        spec = _TOOL_SPEC_MAP["repo_nav.file_outline"]
+
+        @mcp.tool(
+            name=alias,
+            description=spec.render_mcp_description(),
+            structured_output=True,
+        )
+        async def _repo_nav_file_outline(
+            target: Annotated[str, Field(description=_param_desc(spec, "target"))],
+            repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
+            include_imports: Annotated[
+                bool | None,
+                Field(description=_param_desc(spec, "include_imports")),
+            ] = None,
+            include_module_doc: Annotated[
+                bool | None,
+                Field(description=_param_desc(spec, "include_module_doc")),
+            ] = None,
+            include_section_doc: Annotated[
+                bool | None,
+                Field(description=_param_desc(spec, "include_section_doc")),
+            ] = None,
+            include_decl_headers: Annotated[
+                bool | None,
+                Field(description=_param_desc(spec, "include_decl_headers")),
+            ] = None,
+            include_scope_cmds: Annotated[
+                bool | None,
+                Field(description=_param_desc(spec, "include_scope_cmds")),
+            ] = None,
+            limit_decls: Annotated[
+                int | None,
+                Field(description=_param_desc(spec, "limit_decls")),
+            ] = None,
+        ) -> RepoNavFileOutlineResponse:
+            payload = {
+                "repo_root": repo_root,
+                "target": target,
+                "include_imports": include_imports,
+                "include_module_doc": include_module_doc,
+                "include_section_doc": include_section_doc,
+                "include_decl_headers": include_decl_headers,
+                "include_scope_cmds": include_scope_cmds,
+                "limit_decls": limit_decls,
+            }
+            return await run_sync_mcp_service_handler(
+                handle_search_repo_nav_file_outline,
+                service,
+                prune_none(payload),
+            )
+
+    @staticmethod
+    def _register_read(mcp: Any, *, service: Any, alias: str, prune_none) -> None:
+        spec = _TOOL_SPEC_MAP["repo_nav.read"]
+
+        @mcp.tool(
+            name=alias,
+            description=spec.render_mcp_description(),
+            structured_output=True,
+        )
+        async def _repo_nav_read(
+            target: Annotated[str, Field(description=_param_desc(spec, "target"))],
+            repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
+            start_line: Annotated[int | None, Field(description=_param_desc(spec, "start_line"))] = None,
+            end_line: Annotated[int | None, Field(description=_param_desc(spec, "end_line"))] = None,
+            max_lines: Annotated[int | None, Field(description=_param_desc(spec, "max_lines"))] = None,
+            with_line_numbers: Annotated[
+                bool | None,
+                Field(description=_param_desc(spec, "with_line_numbers")),
+            ] = None,
+        ) -> RepoNavReadResponse:
+            payload = {
+                "repo_root": repo_root,
+                "target": target,
+                "start_line": start_line,
+                "end_line": end_line,
+                "max_lines": max_lines,
+                "with_line_numbers": with_line_numbers,
+            }
+            return await run_sync_mcp_service_handler(
+                handle_search_repo_nav_read,
+                service,
+                prune_none(payload),
+            )
+
+    @staticmethod
+    def _register_local_decl_find(mcp: Any, *, service: Any, alias: str, prune_none) -> None:
+        spec = _TOOL_SPEC_MAP["repo_nav.local_decl.find"]
+
+        @mcp.tool(
+            name=alias,
+            description=spec.render_mcp_description(),
+            structured_output=True,
+        )
+        async def _local_decl_find(
+            query: Annotated[str, Field(description=_param_desc(spec, "query"))],
+            repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
+            match_mode: Annotated[str, Field(description=_param_desc(spec, "match_mode"))] = "prefix",
+            decl_kinds: Annotated[
+                list[str] | str | None,
+                Field(description=_param_desc(spec, "decl_kinds")),
+            ] = None,
+            namespace_filter: Annotated[
+                str | None,
+                Field(description=_param_desc(spec, "namespace_filter")),
+            ] = None,
+            module_filter: Annotated[
+                str | None,
+                Field(description=_param_desc(spec, "module_filter")),
+            ] = None,
+            include_deps: Annotated[
+                bool | None,
+                Field(description=_param_desc(spec, "include_deps")),
+            ] = None,
+            limit: Annotated[int | None, Field(description=_param_desc(spec, "limit"))] = None,
+        ) -> LocalDeclFindResponse:
+            payload = {
+                "repo_root": repo_root,
+                "query": query,
+                "match_mode": match_mode,
+                "decl_kinds": decl_kinds,
+                "namespace_filter": namespace_filter,
+                "module_filter": module_filter,
+                "include_deps": include_deps,
+                "limit": limit,
+            }
+            return await run_sync_mcp_service_handler(
+                handle_search_local_decl_find,
+                service,
+                prune_none(payload),
+            )
+
+    @staticmethod
+    def _register_local_import_find(mcp: Any, *, service: Any, alias: str, prune_none) -> None:
+        spec = _TOOL_SPEC_MAP["repo_nav.local_import.find"]
+
+        @mcp.tool(
+            name=alias,
+            description=spec.render_mcp_description(),
+            structured_output=True,
+        )
+        async def _local_import_find(
+            query: Annotated[str, Field(description=_param_desc(spec, "query"))],
+            repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
+            match_mode: Annotated[str, Field(description=_param_desc(spec, "match_mode"))] = "exact",
+            direction: Annotated[str, Field(description=_param_desc(spec, "direction"))] = "imported_by",
+            module_filter: Annotated[
+                str | None,
+                Field(description=_param_desc(spec, "module_filter")),
+            ] = None,
+            include_deps: Annotated[
+                bool | None,
+                Field(description=_param_desc(spec, "include_deps")),
+            ] = None,
+            limit: Annotated[int | None, Field(description=_param_desc(spec, "limit"))] = None,
+        ) -> LocalImportFindResponse:
+            payload = {
+                "repo_root": repo_root,
+                "query": query,
+                "match_mode": match_mode,
+                "direction": direction,
+                "module_filter": module_filter,
+                "include_deps": include_deps,
+                "limit": limit,
+            }
+            return await run_sync_mcp_service_handler(
+                handle_search_local_import_find,
+                service,
+                prune_none(payload),
+            )
+
+    @staticmethod
+    def _register_local_scope_find(mcp: Any, *, service: Any, alias: str, prune_none) -> None:
+        spec = _TOOL_SPEC_MAP["repo_nav.local_scope.find"]
+
+        @mcp.tool(
+            name=alias,
+            description=spec.render_mcp_description(),
+            structured_output=True,
+        )
+        async def _local_scope_find(
+            repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
+            query: Annotated[str | None, Field(description=_param_desc(spec, "query"))] = None,
+            scope_kinds: Annotated[
+                list[str] | str | None,
+                Field(description=_param_desc(spec, "scope_kinds")),
+            ] = None,
+            match_mode: Annotated[str, Field(description=_param_desc(spec, "match_mode"))] = "prefix",
+            module_filter: Annotated[
+                str | None,
+                Field(description=_param_desc(spec, "module_filter")),
+            ] = None,
+            include_deps: Annotated[
+                bool | None,
+                Field(description=_param_desc(spec, "include_deps")),
+            ] = None,
+            limit: Annotated[int | None, Field(description=_param_desc(spec, "limit"))] = None,
+            context_lines: Annotated[
+                int | None,
+                Field(description=_param_desc(spec, "context_lines")),
+            ] = None,
+        ) -> LocalScopeFindResponse:
+            payload = {
+                "repo_root": repo_root,
+                "query": query,
+                "scope_kinds": scope_kinds,
+                "match_mode": match_mode,
+                "module_filter": module_filter,
+                "include_deps": include_deps,
+                "limit": limit,
+                "context_lines": context_lines,
+            }
+            return await run_sync_mcp_service_handler(
+                handle_search_local_scope_find,
+                service,
+                prune_none(payload),
+            )
+
+    @staticmethod
+    def _register_local_text_find(mcp: Any, *, service: Any, alias: str, prune_none) -> None:
+        spec = _TOOL_SPEC_MAP["repo_nav.local_text.find"]
+
+        @mcp.tool(
+            name=alias,
+            description=spec.render_mcp_description(),
+            structured_output=True,
+        )
+        async def _local_text_find(
+            query: Annotated[str, Field(description=_param_desc(spec, "query"))],
+            repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
+            scopes: Annotated[
+                list[str] | str | None,
+                Field(description=_param_desc(spec, "scopes")),
+            ] = None,
+            text_match: Annotated[str, Field(description=_param_desc(spec, "text_match"))] = "phrase",
+            module_filter: Annotated[
+                str | None,
+                Field(description=_param_desc(spec, "module_filter")),
+            ] = None,
+            include_deps: Annotated[
+                bool | None,
+                Field(description=_param_desc(spec, "include_deps")),
+            ] = None,
+            limit: Annotated[int | None, Field(description=_param_desc(spec, "limit"))] = None,
+            context_lines: Annotated[
+                int | None,
+                Field(description=_param_desc(spec, "context_lines")),
+            ] = None,
+        ) -> LocalTextFindResponse:
+            payload = {
+                "repo_root": repo_root,
+                "query": query,
+                "scopes": scopes,
+                "text_match": text_match,
+                "module_filter": module_filter,
+                "include_deps": include_deps,
+                "limit": limit,
+                "context_lines": context_lines,
+            }
+            return await run_sync_mcp_service_handler(
+                handle_search_local_text_find,
+                service,
+                prune_none(payload),
+            )
+
+    @staticmethod
+    def _register_local_refs_find(mcp: Any, *, service: Any, alias: str, prune_none) -> None:
+        spec = _TOOL_SPEC_MAP["repo_nav.local_refs.find"]
+
+        @mcp.tool(
+            name=alias,
+            description=spec.render_mcp_description(),
+            structured_output=True,
+        )
+        async def _local_refs_find(
+            symbol: Annotated[str, Field(description=_param_desc(spec, "symbol"))],
+            repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
+            include_definition_site: Annotated[
+                bool | None,
+                Field(description=_param_desc(spec, "include_definition_site")),
+            ] = None,
+            scopes: Annotated[
+                list[str] | str | None,
+                Field(description=_param_desc(spec, "scopes")),
+            ] = None,
+            module_filter: Annotated[
+                str | None,
+                Field(description=_param_desc(spec, "module_filter")),
+            ] = None,
+            include_deps: Annotated[
+                bool | None,
+                Field(description=_param_desc(spec, "include_deps")),
+            ] = None,
+            limit: Annotated[int | None, Field(description=_param_desc(spec, "limit"))] = None,
+            context_lines: Annotated[
+                int | None,
+                Field(description=_param_desc(spec, "context_lines")),
+            ] = None,
+        ) -> LocalRefsFindResponse:
+            payload = {
+                "repo_root": repo_root,
+                "symbol": symbol,
+                "include_definition_site": include_definition_site,
+                "scopes": scopes,
+                "module_filter": module_filter,
+                "include_deps": include_deps,
+                "limit": limit,
+                "context_lines": context_lines,
+            }
+            return await run_sync_mcp_service_handler(
+                handle_search_local_refs_find,
+                service,
+                prune_none(payload),
+            )
+
+    @staticmethod
+    def _register_grep(mcp: Any, *, service: Any, alias: str, prune_none) -> None:
+        spec = _TOOL_SPEC_MAP["repo_nav.grep"]
+
+        @mcp.tool(
+            name=alias,
+            description=spec.render_mcp_description(),
+            structured_output=True,
+        )
+        async def _repo_nav_grep(
+            query: Annotated[str, Field(description=_param_desc(spec, "query"))],
+            repo_root: Annotated[str | None, Field(description=_param_desc(spec, "repo_root"))] = None,
+            match_mode: Annotated[str, Field(description=_param_desc(spec, "match_mode"))] = "phrase",
+            path_filter: Annotated[
+                str | None,
+                Field(description=_param_desc(spec, "path_filter")),
+            ] = None,
+            module_filter: Annotated[
+                str | None,
+                Field(description=_param_desc(spec, "module_filter")),
+            ] = None,
+            include_deps: Annotated[
+                bool | None,
+                Field(description=_param_desc(spec, "include_deps")),
+            ] = None,
+            context_lines: Annotated[
+                int | None,
+                Field(description=_param_desc(spec, "context_lines")),
+            ] = None,
+            limit: Annotated[int | None, Field(description=_param_desc(spec, "limit"))] = None,
+            scopes: Annotated[
+                list[str] | str | None,
+                Field(description=_param_desc(spec, "scopes")),
+            ] = None,
+        ) -> RepoNavGrepResponse:
+            payload = {
+                "repo_root": repo_root,
+                "query": query,
+                "match_mode": match_mode,
+                "path_filter": path_filter,
+                "module_filter": module_filter,
+                "include_deps": include_deps,
+                "context_lines": context_lines,
+                "limit": limit,
+                "scopes": scopes,
+            }
+            return await run_sync_mcp_service_handler(
+                handle_search_repo_nav_grep,
+                service,
+                prune_none(payload),
+            )
 
 
 __all__ = ["SearchNavGroupPlugin"]

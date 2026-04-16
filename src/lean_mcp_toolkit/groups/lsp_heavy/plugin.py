@@ -197,95 +197,118 @@ class LspHeavyGroupPlugin(GroupPlugin):
         prune_none,
     ) -> None:
         _ = normalize_str_list
-        spec = _TOOL_SPEC_MAP["lsp.widgets"]
         for alias in aliases_by_canonical.get("lsp.widgets", ()):
-            @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
-            async def _lsp_widgets(
-                project_root: Annotated[
-                    str | None,
-                    Field(description=_param_desc(spec, "project_root")),
-                ] = None,
-                file_path: Annotated[
-                    str,
-                    Field(description=_param_desc(spec, "file_path")),
-                ] = "",
-                line: Annotated[int, Field(description=_param_desc(spec, "line"))] = 1,
-                column: Annotated[int, Field(description=_param_desc(spec, "column"))] = 1,
-            ) -> LspWidgetsResponse:
-                return await run_sync_mcp_service_handler(
-                    handle_lsp_widgets,
-                    service,
-                    prune_none(
-                        {
-                            "project_root": project_root,
-                            "file_path": file_path,
-                            "line": line,
-                            "column": column,
-                        }
-                    ),
-                )
-
-        spec = _TOOL_SPEC_MAP["lsp.widget_source"]
+            self._register_widgets(mcp, service=service, alias=alias, prune_none=prune_none)
         for alias in aliases_by_canonical.get("lsp.widget_source", ()):
-            @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
-            async def _lsp_widget_source(
-                project_root: Annotated[
-                    str | None,
-                    Field(description=_param_desc(spec, "project_root")),
-                ] = None,
-                file_path: Annotated[
-                    str,
-                    Field(description=_param_desc(spec, "file_path")),
-                ] = "",
-                javascript_hash: Annotated[
-                    str,
-                    Field(description=_param_desc(spec, "javascript_hash")),
-                ] = "",
-            ) -> LspWidgetSourceResponse:
-                return await run_sync_mcp_service_handler(
-                    handle_lsp_widget_source,
-                    service,
-                    prune_none(
-                        {
-                            "project_root": project_root,
-                            "file_path": file_path,
-                            "javascript_hash": javascript_hash,
-                        }
-                    ),
-                )
-
-        spec = _TOOL_SPEC_MAP["lsp.proof_profile"]
+            self._register_widget_source(
+                mcp,
+                service=service,
+                alias=alias,
+                prune_none=prune_none,
+            )
         for alias in aliases_by_canonical.get("lsp.proof_profile", ()):
-            @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
-            async def _lsp_proof_profile(
-                project_root: Annotated[
-                    str | None,
-                    Field(description=_param_desc(spec, "project_root")),
-                ] = None,
-                file_path: Annotated[
-                    str,
-                    Field(description=_param_desc(spec, "file_path")),
-                ] = "",
-                line: Annotated[int, Field(description=_param_desc(spec, "line"))] = 1,
-                top_n: Annotated[int | None, Field(description=_param_desc(spec, "top_n"))] = None,
-                timeout_seconds: Annotated[
-                    int | None,
-                    Field(description=_param_desc(spec, "timeout_seconds")),
-                ] = None,
-            ) -> LspProofProfileResponse:
-                return await run_sync_mcp_service_handler(
-                    handle_lsp_proof_profile,
-                    service,
-                    prune_none(
-                        {
-                            "project_root": project_root,
-                            "file_path": file_path,
-                            "line": line,
-                            "top_n": top_n,
-                            "timeout_seconds": timeout_seconds,
-                        }
-                    ),
-                )
+            self._register_proof_profile(
+                mcp,
+                service=service,
+                alias=alias,
+                prune_none=prune_none,
+            )
+
+    @staticmethod
+    def _register_widgets(mcp: Any, *, service: Any, alias: str, prune_none) -> None:
+        spec = _TOOL_SPEC_MAP["lsp.widgets"]
+
+        @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
+        async def _lsp_widgets(
+            project_root: Annotated[
+                str | None,
+                Field(description=_param_desc(spec, "project_root")),
+            ] = None,
+            file_path: Annotated[
+                str,
+                Field(description=_param_desc(spec, "file_path")),
+            ] = "",
+            line: Annotated[int, Field(description=_param_desc(spec, "line"))] = 1,
+            column: Annotated[int, Field(description=_param_desc(spec, "column"))] = 1,
+        ) -> LspWidgetsResponse:
+            return await run_sync_mcp_service_handler(
+                handle_lsp_widgets,
+                service,
+                prune_none(
+                    {
+                        "project_root": project_root,
+                        "file_path": file_path,
+                        "line": line,
+                        "column": column,
+                    }
+                ),
+            )
+
+    @staticmethod
+    def _register_widget_source(mcp: Any, *, service: Any, alias: str, prune_none) -> None:
+        spec = _TOOL_SPEC_MAP["lsp.widget_source"]
+
+        @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
+        async def _lsp_widget_source(
+            project_root: Annotated[
+                str | None,
+                Field(description=_param_desc(spec, "project_root")),
+            ] = None,
+            file_path: Annotated[
+                str,
+                Field(description=_param_desc(spec, "file_path")),
+            ] = "",
+            javascript_hash: Annotated[
+                str,
+                Field(description=_param_desc(spec, "javascript_hash")),
+            ] = "",
+        ) -> LspWidgetSourceResponse:
+            return await run_sync_mcp_service_handler(
+                handle_lsp_widget_source,
+                service,
+                prune_none(
+                    {
+                        "project_root": project_root,
+                        "file_path": file_path,
+                        "javascript_hash": javascript_hash,
+                    }
+                ),
+            )
+
+    @staticmethod
+    def _register_proof_profile(mcp: Any, *, service: Any, alias: str, prune_none) -> None:
+        spec = _TOOL_SPEC_MAP["lsp.proof_profile"]
+
+        @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
+        async def _lsp_proof_profile(
+            project_root: Annotated[
+                str | None,
+                Field(description=_param_desc(spec, "project_root")),
+            ] = None,
+            file_path: Annotated[
+                str,
+                Field(description=_param_desc(spec, "file_path")),
+            ] = "",
+            line: Annotated[int, Field(description=_param_desc(spec, "line"))] = 1,
+            top_n: Annotated[int | None, Field(description=_param_desc(spec, "top_n"))] = None,
+            timeout_seconds: Annotated[
+                int | None,
+                Field(description=_param_desc(spec, "timeout_seconds")),
+            ] = None,
+        ) -> LspProofProfileResponse:
+            return await run_sync_mcp_service_handler(
+                handle_lsp_proof_profile,
+                service,
+                prune_none(
+                    {
+                        "project_root": project_root,
+                        "file_path": file_path,
+                        "line": line,
+                        "top_n": top_n,
+                        "timeout_seconds": timeout_seconds,
+                    }
+                ),
+            )
 
 
 __all__ = ["LspHeavyGroupPlugin"]

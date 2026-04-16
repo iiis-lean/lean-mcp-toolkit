@@ -214,216 +214,233 @@ class MathlibNavGroupPlugin(GroupPlugin):
         prune_none,
     ) -> None:
         _ = normalize_str_list
-
         for alias in aliases_by_canonical.get("mathlib_nav.tree", ()):
-            spec = _TOOL_SPEC_MAP["mathlib_nav.tree"]
-
-            @mcp.tool(
-                name=alias,
-                description=spec.render_mcp_description(),
-                structured_output=True,
-            )
-            async def _mathlib_nav_tree(
-                project_root: Annotated[
-                    str | None,
-                    Field(description=_param_desc(spec, "project_root")),
-                ] = None,
-                mathlib_root: Annotated[
-                    str | None,
-                    Field(description=_param_desc(spec, "mathlib_root")),
-                ] = None,
-                base: Annotated[str | None, Field(description=_param_desc(spec, "base"))] = None,
-                depth: Annotated[int | None, Field(description=_param_desc(spec, "depth"))] = None,
-                name_filter: Annotated[
-                    str | None,
-                    Field(description=_param_desc(spec, "name_filter")),
-                ] = None,
-                limit: Annotated[int | None, Field(description=_param_desc(spec, "limit"))] = None,
-                offset: Annotated[int | None, Field(description=_param_desc(spec, "offset"))] = None,
-            ) -> MathlibNavTreeResponse:
-                payload = prune_none(
-                    {
-                        "project_root": project_root,
-                        "mathlib_root": mathlib_root,
-                        "base": base,
-                        "depth": depth,
-                        "name_filter": name_filter,
-                        "limit": limit,
-                        "offset": offset,
-                    }
-                )
-                return await run_sync_mcp_service_handler(
-                    handle_search_mathlib_nav_tree,
-                    service,
-                    payload,
-                )
-
+            self._register_tree(mcp, service=service, alias=alias, prune_none=prune_none)
         for alias in aliases_by_canonical.get("mathlib_nav.file_outline", ()):
-            spec = _TOOL_SPEC_MAP["mathlib_nav.file_outline"]
-
-            @mcp.tool(
-                name=alias,
-                description=spec.render_mcp_description(),
-                structured_output=True,
+            self._register_file_outline(
+                mcp,
+                service=service,
+                alias=alias,
+                prune_none=prune_none,
             )
-            async def _mathlib_nav_file_outline(
-                target: Annotated[str, Field(description=_param_desc(spec, "target"))],
-                project_root: Annotated[
-                    str | None,
-                    Field(description=_param_desc(spec, "project_root")),
-                ] = None,
-                mathlib_root: Annotated[
-                    str | None,
-                    Field(description=_param_desc(spec, "mathlib_root")),
-                ] = None,
-                include_imports: Annotated[
-                    bool | None,
-                    Field(description=_param_desc(spec, "include_imports")),
-                ] = None,
-                include_module_doc: Annotated[
-                    bool | None,
-                    Field(description=_param_desc(spec, "include_module_doc")),
-                ] = None,
-                include_section_doc: Annotated[
-                    bool | None,
-                    Field(description=_param_desc(spec, "include_section_doc")),
-                ] = None,
-                include_decl_headers: Annotated[
-                    bool | None,
-                    Field(description=_param_desc(spec, "include_decl_headers")),
-                ] = None,
-                include_scope_cmds: Annotated[
-                    bool | None,
-                    Field(description=_param_desc(spec, "include_scope_cmds")),
-                ] = None,
-                limit_decls: Annotated[
-                    int | None,
-                    Field(description=_param_desc(spec, "limit_decls")),
-                ] = None,
-            ) -> MathlibNavFileOutlineResponse:
-                payload = prune_none(
-                    {
-                        "project_root": project_root,
-                        "mathlib_root": mathlib_root,
-                        "target": target,
-                        "include_imports": include_imports,
-                        "include_module_doc": include_module_doc,
-                        "include_section_doc": include_section_doc,
-                        "include_decl_headers": include_decl_headers,
-                        "include_scope_cmds": include_scope_cmds,
-                        "limit_decls": limit_decls,
-                    }
-                )
-                return await run_sync_mcp_service_handler(
-                    handle_search_mathlib_nav_file_outline,
-                    service,
-                    payload,
-                )
-
         for alias in aliases_by_canonical.get("mathlib_nav.read", ()):
-            spec = _TOOL_SPEC_MAP["mathlib_nav.read"]
-
-            @mcp.tool(
-                name=alias,
-                description=spec.render_mcp_description(),
-                structured_output=True,
-            )
-            async def _mathlib_nav_read(
-                target: Annotated[str, Field(description=_param_desc(spec, "target"))],
-                project_root: Annotated[
-                    str | None,
-                    Field(description=_param_desc(spec, "project_root")),
-                ] = None,
-                mathlib_root: Annotated[
-                    str | None,
-                    Field(description=_param_desc(spec, "mathlib_root")),
-                ] = None,
-                start_line: Annotated[
-                    int | None,
-                    Field(description=_param_desc(spec, "start_line")),
-                ] = None,
-                end_line: Annotated[
-                    int | None,
-                    Field(description=_param_desc(spec, "end_line")),
-                ] = None,
-                max_lines: Annotated[
-                    int | None,
-                    Field(description=_param_desc(spec, "max_lines")),
-                ] = None,
-                with_line_numbers: Annotated[
-                    bool | None,
-                    Field(description=_param_desc(spec, "with_line_numbers")),
-                ] = None,
-            ) -> MathlibNavReadResponse:
-                payload = prune_none(
-                    {
-                        "project_root": project_root,
-                        "mathlib_root": mathlib_root,
-                        "target": target,
-                        "start_line": start_line,
-                        "end_line": end_line,
-                        "max_lines": max_lines,
-                        "with_line_numbers": with_line_numbers,
-                    }
-                )
-                return await run_sync_mcp_service_handler(
-                    handle_search_mathlib_nav_read,
-                    service,
-                    payload,
-                )
-
+            self._register_read(mcp, service=service, alias=alias, prune_none=prune_none)
         for alias in aliases_by_canonical.get("mathlib_nav.grep", ()):
-            spec = _TOOL_SPEC_MAP["mathlib_nav.grep"]
+            self._register_grep(mcp, service=service, alias=alias, prune_none=prune_none)
 
-            @mcp.tool(
-                name=alias,
-                description=spec.render_mcp_description(),
-                structured_output=True,
+    @staticmethod
+    def _register_tree(mcp: Any, *, service: Any, alias: str, prune_none) -> None:
+        spec = _TOOL_SPEC_MAP["mathlib_nav.tree"]
+
+        @mcp.tool(
+            name=alias,
+            description=spec.render_mcp_description(),
+            structured_output=True,
+        )
+        async def _mathlib_nav_tree(
+            project_root: Annotated[
+                str | None,
+                Field(description=_param_desc(spec, "project_root")),
+            ] = None,
+            mathlib_root: Annotated[
+                str | None,
+                Field(description=_param_desc(spec, "mathlib_root")),
+            ] = None,
+            base: Annotated[str | None, Field(description=_param_desc(spec, "base"))] = None,
+            depth: Annotated[int | None, Field(description=_param_desc(spec, "depth"))] = None,
+            name_filter: Annotated[
+                str | None,
+                Field(description=_param_desc(spec, "name_filter")),
+            ] = None,
+            limit: Annotated[int | None, Field(description=_param_desc(spec, "limit"))] = None,
+            offset: Annotated[int | None, Field(description=_param_desc(spec, "offset"))] = None,
+        ) -> MathlibNavTreeResponse:
+            payload = prune_none(
+                {
+                    "project_root": project_root,
+                    "mathlib_root": mathlib_root,
+                    "base": base,
+                    "depth": depth,
+                    "name_filter": name_filter,
+                    "limit": limit,
+                    "offset": offset,
+                }
             )
-            async def _mathlib_nav_grep(
-                query: Annotated[str, Field(description=_param_desc(spec, "query"))],
-                project_root: Annotated[
-                    str | None,
-                    Field(description=_param_desc(spec, "project_root")),
-                ] = None,
-                mathlib_root: Annotated[
-                    str | None,
-                    Field(description=_param_desc(spec, "mathlib_root")),
-                ] = None,
-                match_mode: Annotated[
-                    str,
-                    Field(description=_param_desc(spec, "match_mode")),
-                ] = "phrase",
-                base: Annotated[str | None, Field(description=_param_desc(spec, "base"))] = None,
-                target: Annotated[str | None, Field(description=_param_desc(spec, "target"))] = None,
-                context_lines: Annotated[
-                    int | None,
-                    Field(description=_param_desc(spec, "context_lines")),
-                ] = None,
-                limit: Annotated[int | None, Field(description=_param_desc(spec, "limit"))] = None,
-                scopes: Annotated[
-                    list[str] | str | None,
-                    Field(description=_param_desc(spec, "scopes")),
-                ] = None,
-            ) -> MathlibNavGrepResponse:
-                payload = prune_none(
-                    {
-                        "project_root": project_root,
-                        "mathlib_root": mathlib_root,
-                        "query": query,
-                        "match_mode": match_mode,
-                        "base": base,
-                        "target": target,
-                        "context_lines": context_lines,
-                        "limit": limit,
-                        "scopes": scopes,
-                    }
-                )
-                return await run_sync_mcp_service_handler(
-                    handle_search_mathlib_nav_grep,
-                    service,
-                    payload,
-                )
+            return await run_sync_mcp_service_handler(
+                handle_search_mathlib_nav_tree,
+                service,
+                payload,
+            )
+
+    @staticmethod
+    def _register_file_outline(mcp: Any, *, service: Any, alias: str, prune_none) -> None:
+        spec = _TOOL_SPEC_MAP["mathlib_nav.file_outline"]
+
+        @mcp.tool(
+            name=alias,
+            description=spec.render_mcp_description(),
+            structured_output=True,
+        )
+        async def _mathlib_nav_file_outline(
+            target: Annotated[str, Field(description=_param_desc(spec, "target"))],
+            project_root: Annotated[
+                str | None,
+                Field(description=_param_desc(spec, "project_root")),
+            ] = None,
+            mathlib_root: Annotated[
+                str | None,
+                Field(description=_param_desc(spec, "mathlib_root")),
+            ] = None,
+            include_imports: Annotated[
+                bool | None,
+                Field(description=_param_desc(spec, "include_imports")),
+            ] = None,
+            include_module_doc: Annotated[
+                bool | None,
+                Field(description=_param_desc(spec, "include_module_doc")),
+            ] = None,
+            include_section_doc: Annotated[
+                bool | None,
+                Field(description=_param_desc(spec, "include_section_doc")),
+            ] = None,
+            include_decl_headers: Annotated[
+                bool | None,
+                Field(description=_param_desc(spec, "include_decl_headers")),
+            ] = None,
+            include_scope_cmds: Annotated[
+                bool | None,
+                Field(description=_param_desc(spec, "include_scope_cmds")),
+            ] = None,
+            limit_decls: Annotated[
+                int | None,
+                Field(description=_param_desc(spec, "limit_decls")),
+            ] = None,
+        ) -> MathlibNavFileOutlineResponse:
+            payload = prune_none(
+                {
+                    "project_root": project_root,
+                    "mathlib_root": mathlib_root,
+                    "target": target,
+                    "include_imports": include_imports,
+                    "include_module_doc": include_module_doc,
+                    "include_section_doc": include_section_doc,
+                    "include_decl_headers": include_decl_headers,
+                    "include_scope_cmds": include_scope_cmds,
+                    "limit_decls": limit_decls,
+                }
+            )
+            return await run_sync_mcp_service_handler(
+                handle_search_mathlib_nav_file_outline,
+                service,
+                payload,
+            )
+
+    @staticmethod
+    def _register_read(mcp: Any, *, service: Any, alias: str, prune_none) -> None:
+        spec = _TOOL_SPEC_MAP["mathlib_nav.read"]
+
+        @mcp.tool(
+            name=alias,
+            description=spec.render_mcp_description(),
+            structured_output=True,
+        )
+        async def _mathlib_nav_read(
+            target: Annotated[str, Field(description=_param_desc(spec, "target"))],
+            project_root: Annotated[
+                str | None,
+                Field(description=_param_desc(spec, "project_root")),
+            ] = None,
+            mathlib_root: Annotated[
+                str | None,
+                Field(description=_param_desc(spec, "mathlib_root")),
+            ] = None,
+            start_line: Annotated[
+                int | None,
+                Field(description=_param_desc(spec, "start_line")),
+            ] = None,
+            end_line: Annotated[
+                int | None,
+                Field(description=_param_desc(spec, "end_line")),
+            ] = None,
+            max_lines: Annotated[
+                int | None,
+                Field(description=_param_desc(spec, "max_lines")),
+            ] = None,
+            with_line_numbers: Annotated[
+                bool | None,
+                Field(description=_param_desc(spec, "with_line_numbers")),
+            ] = None,
+        ) -> MathlibNavReadResponse:
+            payload = prune_none(
+                {
+                    "project_root": project_root,
+                    "mathlib_root": mathlib_root,
+                    "target": target,
+                    "start_line": start_line,
+                    "end_line": end_line,
+                    "max_lines": max_lines,
+                    "with_line_numbers": with_line_numbers,
+                }
+            )
+            return await run_sync_mcp_service_handler(
+                handle_search_mathlib_nav_read,
+                service,
+                payload,
+            )
+
+    @staticmethod
+    def _register_grep(mcp: Any, *, service: Any, alias: str, prune_none) -> None:
+        spec = _TOOL_SPEC_MAP["mathlib_nav.grep"]
+
+        @mcp.tool(
+            name=alias,
+            description=spec.render_mcp_description(),
+            structured_output=True,
+        )
+        async def _mathlib_nav_grep(
+            query: Annotated[str, Field(description=_param_desc(spec, "query"))],
+            project_root: Annotated[
+                str | None,
+                Field(description=_param_desc(spec, "project_root")),
+            ] = None,
+            mathlib_root: Annotated[
+                str | None,
+                Field(description=_param_desc(spec, "mathlib_root")),
+            ] = None,
+            match_mode: Annotated[
+                str,
+                Field(description=_param_desc(spec, "match_mode")),
+            ] = "phrase",
+            base: Annotated[str | None, Field(description=_param_desc(spec, "base"))] = None,
+            target: Annotated[str | None, Field(description=_param_desc(spec, "target"))] = None,
+            context_lines: Annotated[
+                int | None,
+                Field(description=_param_desc(spec, "context_lines")),
+            ] = None,
+            limit: Annotated[int | None, Field(description=_param_desc(spec, "limit"))] = None,
+            scopes: Annotated[
+                list[str] | str | None,
+                Field(description=_param_desc(spec, "scopes")),
+            ] = None,
+        ) -> MathlibNavGrepResponse:
+            payload = prune_none(
+                {
+                    "project_root": project_root,
+                    "mathlib_root": mathlib_root,
+                    "query": query,
+                    "match_mode": match_mode,
+                    "base": base,
+                    "target": target,
+                    "context_lines": context_lines,
+                    "limit": limit,
+                    "scopes": scopes,
+                }
+            )
+            return await run_sync_mcp_service_handler(
+                handle_search_mathlib_nav_grep,
+                service,
+                payload,
+            )
 
 
 __all__ = ["MathlibNavGroupPlugin"]

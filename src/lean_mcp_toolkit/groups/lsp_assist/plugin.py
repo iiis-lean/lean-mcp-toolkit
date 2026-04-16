@@ -338,102 +338,121 @@ class LspAssistGroupPlugin(GroupPlugin):
         prune_none,
     ) -> None:
         _ = normalize_str_list
-        for canonical in _TOOL_SPEC_MAP:
-            spec = _TOOL_SPEC_MAP[canonical]
-            for alias in aliases_by_canonical.get(canonical, ()):
-                self._register_one(
-                    mcp=mcp,
-                    alias=alias,
-                    spec=spec,
-                    service=service,
-                    prune_none=prune_none,
-                )
+        for alias in aliases_by_canonical.get("lsp.completions", ()):
+            self._register_completions(
+                mcp,
+                service=service,
+                alias=alias,
+                prune_none=prune_none,
+            )
+        for alias in aliases_by_canonical.get("lsp.declaration_file", ()):
+            self._register_declaration_file(
+                mcp,
+                service=service,
+                alias=alias,
+                prune_none=prune_none,
+            )
+        for alias in aliases_by_canonical.get("lsp.multi_attempt", ()):
+            self._register_multi_attempt(
+                mcp,
+                service=service,
+                alias=alias,
+                prune_none=prune_none,
+            )
+        for alias in aliases_by_canonical.get("lsp.theorem_soundness", ()):
+            self._register_theorem_soundness(
+                mcp,
+                service=service,
+                alias=alias,
+                prune_none=prune_none,
+            )
 
     @staticmethod
-    def _register_one(
-        *,
+    def _register_completions(mcp: Any, *, service: Any, alias: str, prune_none) -> None:
+        spec = _TOOL_SPEC_MAP["lsp.completions"]
+
+        @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
+        async def _lsp_completions(
+            project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
+            file_path: Annotated[str, Field(description=_param_desc(spec, "file_path"))] = "",
+            line: Annotated[int, Field(description=_param_desc(spec, "line"), ge=1)] = 1,
+            column: Annotated[int, Field(description=_param_desc(spec, "column"), ge=1)] = 1,
+            max_completions: Annotated[int | None, Field(description=_param_desc(spec, "max_completions"), ge=1)] = None,
+        ) -> LspCompletionsResponse:
+            payload = {
+                "project_root": project_root,
+                "file_path": file_path,
+                "line": line,
+                "column": column,
+                "max_completions": max_completions,
+            }
+            return await run_sync_mcp_service_handler(
+                handle_lsp_completions,
+                service,
+                prune_none(payload),
+            )
+
+    @staticmethod
+    def _register_declaration_file(mcp: Any, *, service: Any, alias: str, prune_none) -> None:
+        spec = _TOOL_SPEC_MAP["lsp.declaration_file"]
+
+        @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
+        async def _lsp_declaration_file(
+            project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
+            file_path: Annotated[str, Field(description=_param_desc(spec, "file_path"))] = "",
+            symbol: Annotated[str, Field(description=_param_desc(spec, "symbol"))] = "",
+            line: Annotated[int | None, Field(description=_param_desc(spec, "line"), ge=1)] = None,
+            column: Annotated[int | None, Field(description=_param_desc(spec, "column"), ge=1)] = None,
+            include_file_content: Annotated[bool | None, Field(description=_param_desc(spec, "include_file_content"))] = None,
+        ) -> LspDeclarationFileResponse:
+            payload = {
+                "project_root": project_root,
+                "file_path": file_path,
+                "symbol": symbol,
+                "line": line,
+                "column": column,
+                "include_file_content": include_file_content,
+            }
+            return await run_sync_mcp_service_handler(
+                handle_lsp_declaration_file,
+                service,
+                prune_none(payload),
+            )
+
+    @staticmethod
+    def _register_multi_attempt(mcp: Any, *, service: Any, alias: str, prune_none) -> None:
+        spec = _TOOL_SPEC_MAP["lsp.multi_attempt"]
+
+        @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
+        async def _lsp_multi_attempt(
+            project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
+            file_path: Annotated[str, Field(description=_param_desc(spec, "file_path"))] = "",
+            line: Annotated[int, Field(description=_param_desc(spec, "line"), ge=1)] = 1,
+            snippets: Annotated[list[str] | None, Field(description=_param_desc(spec, "snippets"))] = None,
+            max_attempts: Annotated[int | None, Field(description=_param_desc(spec, "max_attempts"), ge=1)] = None,
+        ) -> LspMultiAttemptResponse:
+            payload = {
+                "project_root": project_root,
+                "file_path": file_path,
+                "line": line,
+                "snippets": snippets or [],
+                "max_attempts": max_attempts,
+            }
+            return await run_sync_mcp_service_handler(
+                handle_lsp_multi_attempt,
+                service,
+                prune_none(payload),
+            )
+
+    @staticmethod
+    def _register_theorem_soundness(
         mcp: Any,
-        alias: str,
-        spec: GroupToolSpec,
+        *,
         service: Any,
+        alias: str,
         prune_none,
     ) -> None:
-        if spec.canonical_name == "lsp.completions":
-
-            @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
-            async def _lsp_completions(
-                project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
-                file_path: Annotated[str, Field(description=_param_desc(spec, "file_path"))] = "",
-                line: Annotated[int, Field(description=_param_desc(spec, "line"), ge=1)] = 1,
-                column: Annotated[int, Field(description=_param_desc(spec, "column"), ge=1)] = 1,
-                max_completions: Annotated[int | None, Field(description=_param_desc(spec, "max_completions"), ge=1)] = None,
-            ) -> LspCompletionsResponse:
-                payload = {
-                    "project_root": project_root,
-                    "file_path": file_path,
-                    "line": line,
-                    "column": column,
-                    "max_completions": max_completions,
-                }
-                return await run_sync_mcp_service_handler(
-                    handle_lsp_completions,
-                    service,
-                    prune_none(payload),
-                )
-
-            return
-
-        if spec.canonical_name == "lsp.declaration_file":
-
-            @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
-            async def _lsp_declaration_file(
-                project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
-                file_path: Annotated[str, Field(description=_param_desc(spec, "file_path"))] = "",
-                symbol: Annotated[str, Field(description=_param_desc(spec, "symbol"))] = "",
-                line: Annotated[int | None, Field(description=_param_desc(spec, "line"), ge=1)] = None,
-                column: Annotated[int | None, Field(description=_param_desc(spec, "column"), ge=1)] = None,
-                include_file_content: Annotated[bool | None, Field(description=_param_desc(spec, "include_file_content"))] = None,
-            ) -> LspDeclarationFileResponse:
-                payload = {
-                    "project_root": project_root,
-                    "file_path": file_path,
-                    "symbol": symbol,
-                    "line": line,
-                    "column": column,
-                    "include_file_content": include_file_content,
-                }
-                return await run_sync_mcp_service_handler(
-                    handle_lsp_declaration_file,
-                    service,
-                    prune_none(payload),
-                )
-
-            return
-
-        if spec.canonical_name == "lsp.multi_attempt":
-
-            @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
-            async def _lsp_multi_attempt(
-                project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
-                file_path: Annotated[str, Field(description=_param_desc(spec, "file_path"))] = "",
-                line: Annotated[int, Field(description=_param_desc(spec, "line"), ge=1)] = 1,
-                snippets: Annotated[list[str] | None, Field(description=_param_desc(spec, "snippets"))] = None,
-                max_attempts: Annotated[int | None, Field(description=_param_desc(spec, "max_attempts"), ge=1)] = None,
-            ) -> LspMultiAttemptResponse:
-                payload = {
-                    "project_root": project_root,
-                    "file_path": file_path,
-                    "line": line,
-                    "snippets": snippets or [],
-                    "max_attempts": max_attempts,
-                }
-                return await run_sync_mcp_service_handler(
-                    handle_lsp_multi_attempt,
-                    service,
-                    prune_none(payload),
-                )
-
-            return
+        spec = _TOOL_SPEC_MAP["lsp.theorem_soundness"]
 
         @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
         async def _lsp_theorem_soundness(
