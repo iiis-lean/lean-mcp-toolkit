@@ -35,6 +35,7 @@ from ..plugin_base import (
     ToolParamSpec,
     ToolReturnSpec,
     run_sync_mcp_service_handler,
+    with_output_schemas,
 )
 from .factory import create_search_alt_client, create_search_alt_service
 
@@ -59,11 +60,21 @@ _COMMON_RETURNS: tuple[ToolReturnSpec, ...] = (
     ToolReturnSpec("count", "int", "Number of result items."),
 )
 
-_TOOL_SPECS: tuple[GroupToolSpec, ...] = (
+_BASE_TOOL_SPECS: tuple[GroupToolSpec, ...] = (
     GroupToolSpec("search_alt", "leansearch", "leansearch", "/search_alt/leansearch", "Search Lean declarations via LeanSearch.", _SEARCH_PARAMS, _COMMON_RETURNS),
     GroupToolSpec("search_alt", "leandex", "leandex", "/search_alt/leandex", "Search Lean declarations via LeanDex.", _SEARCH_PARAMS, _COMMON_RETURNS),
     GroupToolSpec("search_alt", "loogle", "loogle", "/search_alt/loogle", "Search Lean declarations via Loogle.", _SEARCH_PARAMS, _COMMON_RETURNS),
     GroupToolSpec("search_alt", "leanfinder", "leanfinder", "/search_alt/leanfinder", "Search Lean declarations via LeanFinder.", _SEARCH_PARAMS, _COMMON_RETURNS),
+)
+
+_TOOL_SPECS: tuple[GroupToolSpec, ...] = with_output_schemas(
+    _BASE_TOOL_SPECS,
+    {
+        "leansearch": SearchAltLeanSearchResponse,
+        "leandex": SearchAltLeanDexResponse,
+        "loogle": SearchAltLoogleResponse,
+        "leanfinder": SearchAltLeanFinderResponse,
+    },
 )
 
 _TOOL_SPEC_MAP = {spec.canonical_name: spec for spec in _TOOL_SPECS}
@@ -111,48 +122,114 @@ class SearchAltGroupPlugin(GroupPlugin):
         prune_none,
     ) -> None:
         _ = normalize_str_list
-        handler_map = {
-            "leansearch": handle_search_alt_leansearch,
-            "leandex": handle_search_alt_leandex,
-            "loogle": handle_search_alt_loogle,
-            "leanfinder": handle_search_alt_leanfinder,
-        }
-        response_map = {
-            "leansearch": SearchAltLeanSearchResponse,
-            "leandex": SearchAltLeanDexResponse,
-            "loogle": SearchAltLoogleResponse,
-            "leanfinder": SearchAltLeanFinderResponse,
-        }
-        for canonical_name, handler in handler_map.items():
-            spec = _TOOL_SPEC_MAP[canonical_name]
-            response_type = response_map[canonical_name]
-            for alias in aliases_by_canonical.get(canonical_name, ()):
-                def _make_search_alt_tool(current_handler, current_spec, current_response_type):
-                    async def _search_alt_tool(
-                        query: Annotated[
-                            str,
-                            Field(description=_param_desc(current_spec, "query")),
-                        ] = "",
-                        num_results: Annotated[
-                            int | None,
-                            Field(description=_param_desc(current_spec, "num_results")),
-                        ] = None,
-                    ) -> Any:
-                        return await run_sync_mcp_service_handler(
-                            current_handler,
-                            service,
-                            prune_none({"query": query, "num_results": num_results}),
-                        )
+        for alias in aliases_by_canonical.get("leansearch", ()):
+            self._register_leansearch(mcp, service=service, alias=alias, prune_none=prune_none)
+        for alias in aliases_by_canonical.get("leandex", ()):
+            self._register_leandex(mcp, service=service, alias=alias, prune_none=prune_none)
+        for alias in aliases_by_canonical.get("loogle", ()):
+            self._register_loogle(mcp, service=service, alias=alias, prune_none=prune_none)
+        for alias in aliases_by_canonical.get("leanfinder", ()):
+            self._register_leanfinder(mcp, service=service, alias=alias, prune_none=prune_none)
 
-                    _search_alt_tool.__annotations__["return"] = current_response_type
-                    return _search_alt_tool
+    @staticmethod
+    def _register_leansearch(mcp: Any, *, service: Any, alias: str, prune_none) -> None:
+        spec = _TOOL_SPEC_MAP["leansearch"]
 
-                _search_alt_tool = _make_search_alt_tool(handler, spec, response_type)
-                mcp.tool(
-                    name=alias,
-                    description=spec.render_mcp_description(),
-                    structured_output=True,
-                )(_search_alt_tool)
+        @mcp.tool(
+            name=alias,
+            description=spec.render_mcp_description(),
+            structured_output=True,
+        )
+        async def _leansearch(
+            query: Annotated[
+                str,
+                Field(description=_param_desc(spec, "query")),
+            ] = "",
+            num_results: Annotated[
+                int | None,
+                Field(description=_param_desc(spec, "num_results")),
+            ] = None,
+        ) -> SearchAltLeanSearchResponse:
+            return await run_sync_mcp_service_handler(
+                handle_search_alt_leansearch,
+                service,
+                prune_none({"query": query, "num_results": num_results}),
+            )
+
+    @staticmethod
+    def _register_leandex(mcp: Any, *, service: Any, alias: str, prune_none) -> None:
+        spec = _TOOL_SPEC_MAP["leandex"]
+
+        @mcp.tool(
+            name=alias,
+            description=spec.render_mcp_description(),
+            structured_output=True,
+        )
+        async def _leandex(
+            query: Annotated[
+                str,
+                Field(description=_param_desc(spec, "query")),
+            ] = "",
+            num_results: Annotated[
+                int | None,
+                Field(description=_param_desc(spec, "num_results")),
+            ] = None,
+        ) -> SearchAltLeanDexResponse:
+            return await run_sync_mcp_service_handler(
+                handle_search_alt_leandex,
+                service,
+                prune_none({"query": query, "num_results": num_results}),
+            )
+
+    @staticmethod
+    def _register_loogle(mcp: Any, *, service: Any, alias: str, prune_none) -> None:
+        spec = _TOOL_SPEC_MAP["loogle"]
+
+        @mcp.tool(
+            name=alias,
+            description=spec.render_mcp_description(),
+            structured_output=True,
+        )
+        async def _loogle(
+            query: Annotated[
+                str,
+                Field(description=_param_desc(spec, "query")),
+            ] = "",
+            num_results: Annotated[
+                int | None,
+                Field(description=_param_desc(spec, "num_results")),
+            ] = None,
+        ) -> SearchAltLoogleResponse:
+            return await run_sync_mcp_service_handler(
+                handle_search_alt_loogle,
+                service,
+                prune_none({"query": query, "num_results": num_results}),
+            )
+
+    @staticmethod
+    def _register_leanfinder(mcp: Any, *, service: Any, alias: str, prune_none) -> None:
+        spec = _TOOL_SPEC_MAP["leanfinder"]
+
+        @mcp.tool(
+            name=alias,
+            description=spec.render_mcp_description(),
+            structured_output=True,
+        )
+        async def _leanfinder(
+            query: Annotated[
+                str,
+                Field(description=_param_desc(spec, "query")),
+            ] = "",
+            num_results: Annotated[
+                int | None,
+                Field(description=_param_desc(spec, "num_results")),
+            ] = None,
+        ) -> SearchAltLeanFinderResponse:
+            return await run_sync_mcp_service_handler(
+                handle_search_alt_leanfinder,
+                service,
+                prune_none({"query": query, "num_results": num_results}),
+            )
 
 
 __all__ = ["SearchAltGroupPlugin"]

@@ -35,6 +35,7 @@ from ..plugin_base import (
     ToolParamSpec,
     ToolReturnSpec,
     run_sync_mcp_service_handler,
+    with_output_schemas,
 )
 
 
@@ -89,7 +90,7 @@ _GREP_PARAMS: tuple[ToolParamSpec, ...] = (
     ToolParamSpec("scopes", "list[str] | str | null", "Scopes to scan.", False, "[decl_header, decl_sig, body, comment]"),
 )
 
-_TOOL_SPECS: tuple[GroupToolSpec, ...] = (
+_BASE_TOOL_SPECS: tuple[GroupToolSpec, ...] = (
     GroupToolSpec(
         group_name="mathlib_nav",
         canonical_name="mathlib_nav.tree",
@@ -155,6 +156,16 @@ _TOOL_SPECS: tuple[GroupToolSpec, ...] = (
             ToolReturnSpec("items", "list[LocalTextFindItem]", "Text matches."),
         ),
     ),
+)
+
+_TOOL_SPECS: tuple[GroupToolSpec, ...] = with_output_schemas(
+    _BASE_TOOL_SPECS,
+    {
+        "mathlib_nav.tree": MathlibNavTreeResponse,
+        "mathlib_nav.file_outline": MathlibNavFileOutlineResponse,
+        "mathlib_nav.read": MathlibNavReadResponse,
+        "mathlib_nav.grep": MathlibNavGrepResponse,
+    },
 )
 
 _TOOL_SPEC_MAP: dict[str, GroupToolSpec] = {spec.canonical_name: spec for spec in _TOOL_SPECS}

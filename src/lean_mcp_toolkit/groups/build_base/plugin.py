@@ -25,6 +25,7 @@ from ..plugin_base import (
     ToolParamSpec,
     ToolReturnSpec,
     run_sync_mcp_service_handler,
+    with_output_schemas,
 )
 from .factory import create_build_base_client, create_build_base_service
 
@@ -82,7 +83,7 @@ _WORKSPACE_RETURNS: tuple[ToolReturnSpec, ...] = (
     ToolReturnSpec("stderr", "str", "Combined stderr from executed commands."),
 )
 
-_TOOL_SPECS: tuple[GroupToolSpec, ...] = (
+_BASE_TOOL_SPECS: tuple[GroupToolSpec, ...] = (
     GroupToolSpec(
         group_name="build_base",
         canonical_name="build.workspace",
@@ -92,6 +93,13 @@ _TOOL_SPECS: tuple[GroupToolSpec, ...] = (
         params=_WORKSPACE_PARAMS,
         returns=_WORKSPACE_RETURNS,
     ),
+)
+
+_TOOL_SPECS: tuple[GroupToolSpec, ...] = with_output_schemas(
+    _BASE_TOOL_SPECS,
+    {
+        "build.workspace": BuildWorkspaceResponse,
+    },
 )
 
 _TOOL_SPEC_MAP: dict[str, GroupToolSpec] = {spec.canonical_name: spec for spec in _TOOL_SPECS}

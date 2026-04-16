@@ -188,6 +188,32 @@ def test_named_tool_view_registers_mcp_alias_subset() -> None:
     assert set(mcp.handlers) == {"fake.beta"}
 
 
+def test_describe_tools_uses_registry_output_schema_without_mcp_reflection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cfg = ToolkitConfig.from_dict(
+        {
+            "groups": {
+                "enabled_groups": [plugin.group_name for plugin in builtin_group_plugins()],
+                "tool_naming_mode": "prefixed",
+            }
+        }
+    )
+    server = ToolkitServer.from_config(cfg)
+    monkeypatch.setattr(
+        ToolkitServer,
+        "create_mcp_server",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("describe_tools should not build an MCP server")
+        ),
+    )
+
+    described = server.describe_tools()
+
+    assert described
+    assert all(item["output_schema"] is not None for item in described)
+
+
 def test_runtime_tool_view_management_and_yaml_roundtrip(tmp_path) -> None:
     cfg = ToolkitConfig.from_dict(
         {

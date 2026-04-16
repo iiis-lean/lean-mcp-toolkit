@@ -33,6 +33,7 @@ from ..plugin_base import (
     ToolParamSpec,
     ToolReturnSpec,
     run_sync_mcp_service_handler,
+    with_output_schemas,
 )
 from .factory import create_lsp_heavy_client, create_lsp_heavy_service
 
@@ -55,7 +56,7 @@ _COMMON_FILE_PARAMS: tuple[ToolParamSpec, ...] = (
     ),
 )
 
-_TOOL_SPECS: tuple[GroupToolSpec, ...] = (
+_BASE_TOOL_SPECS: tuple[GroupToolSpec, ...] = (
     GroupToolSpec(
         group_name="lsp_heavy",
         canonical_name="lsp.widgets",
@@ -136,6 +137,15 @@ _TOOL_SPECS: tuple[GroupToolSpec, ...] = (
             ToolReturnSpec("category_count", "int", "Number of profile categories."),
         ),
     ),
+)
+
+_TOOL_SPECS: tuple[GroupToolSpec, ...] = with_output_schemas(
+    _BASE_TOOL_SPECS,
+    {
+        "lsp.widgets": LspWidgetsResponse,
+        "lsp.widget_source": LspWidgetSourceResponse,
+        "lsp.proof_profile": LspProofProfileResponse,
+    },
 )
 
 _TOOL_SPEC_MAP: dict[str, GroupToolSpec] = {spec.canonical_name: spec for spec in _TOOL_SPECS}

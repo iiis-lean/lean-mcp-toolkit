@@ -45,6 +45,7 @@ from ..plugin_base import (
     ToolParamSpec,
     ToolReturnSpec,
     run_sync_mcp_service_handler,
+    with_output_schemas,
 )
 
 
@@ -150,7 +151,7 @@ _LOCAL_REFS_PARAMS: tuple[ToolParamSpec, ...] = (
     ToolParamSpec("context_lines", "int | null", "Snippet context lines.", False, "search_nav.default_context_lines"),
 )
 
-_TOOL_SPECS: tuple[GroupToolSpec, ...] = (
+_BASE_TOOL_SPECS: tuple[GroupToolSpec, ...] = (
     GroupToolSpec(
         group_name="search_nav",
         canonical_name="repo_nav.tree",
@@ -291,6 +292,21 @@ _TOOL_SPECS: tuple[GroupToolSpec, ...] = (
             ToolReturnSpec("items", "list[LocalTextFindItem]", "Text matches."),
         ),
     ),
+)
+
+_TOOL_SPECS: tuple[GroupToolSpec, ...] = with_output_schemas(
+    _BASE_TOOL_SPECS,
+    {
+        "repo_nav.tree": RepoNavTreeResponse,
+        "repo_nav.file_outline": RepoNavFileOutlineResponse,
+        "repo_nav.read": RepoNavReadResponse,
+        "repo_nav.local_decl.find": LocalDeclFindResponse,
+        "repo_nav.local_import.find": LocalImportFindResponse,
+        "repo_nav.local_scope.find": LocalScopeFindResponse,
+        "repo_nav.local_text.find": LocalTextFindResponse,
+        "repo_nav.local_refs.find": LocalRefsFindResponse,
+        "repo_nav.grep": RepoNavGrepResponse,
+    },
 )
 
 _TOOL_SPEC_MAP: dict[str, GroupToolSpec] = {spec.canonical_name: spec for spec in _TOOL_SPECS}

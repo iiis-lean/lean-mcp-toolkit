@@ -35,6 +35,7 @@ from ..plugin_base import (
     ToolParamSpec,
     ToolReturnSpec,
     run_sync_mcp_service_handler,
+    with_output_schemas,
 )
 from .factory import create_lsp_assist_client, create_lsp_assist_service
 
@@ -238,7 +239,7 @@ _THEOREM_SOUNDNESS_RETURNS: tuple[ToolReturnSpec, ...] = (
     ToolReturnSpec("warning_count", "int", "Warning count."),
 )
 
-_TOOL_SPECS: tuple[GroupToolSpec, ...] = (
+_BASE_TOOL_SPECS: tuple[GroupToolSpec, ...] = (
     GroupToolSpec(
         group_name="lsp_assist",
         canonical_name="lsp.completions",
@@ -275,6 +276,16 @@ _TOOL_SPECS: tuple[GroupToolSpec, ...] = (
         params=_THEOREM_SOUNDNESS_PARAMS,
         returns=_THEOREM_SOUNDNESS_RETURNS,
     ),
+)
+
+_TOOL_SPECS: tuple[GroupToolSpec, ...] = with_output_schemas(
+    _BASE_TOOL_SPECS,
+    {
+        "lsp.completions": LspCompletionsResponse,
+        "lsp.declaration_file": LspDeclarationFileResponse,
+        "lsp.multi_attempt": LspMultiAttemptResponse,
+        "lsp.theorem_soundness": LspTheoremSoundnessResponse,
+    },
 )
 
 _TOOL_SPEC_MAP: dict[str, GroupToolSpec] = {spec.canonical_name: spec for spec in _TOOL_SPECS}

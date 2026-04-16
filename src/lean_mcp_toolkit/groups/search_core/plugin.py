@@ -26,6 +26,7 @@ from ..plugin_base import (
     ToolParamSpec,
     ToolReturnSpec,
     run_sync_mcp_service_handler,
+    with_output_schemas,
 )
 
 
@@ -185,7 +186,7 @@ _GET_RETURNS: tuple[ToolReturnSpec, ...] = (
     ),
 )
 
-_TOOL_SPECS: tuple[GroupToolSpec, ...] = (
+_BASE_TOOL_SPECS: tuple[GroupToolSpec, ...] = (
     GroupToolSpec(
         group_name="search_core",
         canonical_name="lean_explore.find",
@@ -204,6 +205,14 @@ _TOOL_SPECS: tuple[GroupToolSpec, ...] = (
         params=_GET_PARAMS,
         returns=_GET_RETURNS,
     ),
+)
+
+_TOOL_SPECS: tuple[GroupToolSpec, ...] = with_output_schemas(
+    _BASE_TOOL_SPECS,
+    {
+        "lean_explore.find": MathlibDeclFindResponse,
+        "lean_explore.get": MathlibDeclGetResponse,
+    },
 )
 
 _TOOL_SPEC_MAP: dict[str, GroupToolSpec] = {spec.canonical_name: spec for spec in _TOOL_SPECS}

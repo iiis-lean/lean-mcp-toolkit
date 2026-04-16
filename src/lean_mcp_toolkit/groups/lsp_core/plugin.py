@@ -39,6 +39,7 @@ from ..plugin_base import (
     ToolParamSpec,
     ToolReturnSpec,
     run_sync_mcp_service_handler,
+    with_output_schemas,
 )
 from .factory import create_lsp_core_client, create_lsp_core_service
 
@@ -237,7 +238,7 @@ _RUN_SNIPPET_RETURNS: tuple[ToolReturnSpec, ...] = (
     ToolReturnSpec("info_count", "int", "Info/hint diagnostics count."),
 )
 
-_TOOL_SPECS: tuple[GroupToolSpec, ...] = (
+_BASE_TOOL_SPECS: tuple[GroupToolSpec, ...] = (
     GroupToolSpec(
         group_name="lsp_core",
         canonical_name="lsp.file_outline",
@@ -292,6 +293,18 @@ _TOOL_SPECS: tuple[GroupToolSpec, ...] = (
         params=_RUN_SNIPPET_PARAMS,
         returns=_RUN_SNIPPET_RETURNS,
     ),
+)
+
+_TOOL_SPECS: tuple[GroupToolSpec, ...] = with_output_schemas(
+    _BASE_TOOL_SPECS,
+    {
+        "lsp.file_outline": LspFileOutlineResponse,
+        "lsp.goal": LspGoalResponse,
+        "lsp.term_goal": LspTermGoalResponse,
+        "lsp.hover": LspHoverResponse,
+        "lsp.code_actions": LspCodeActionsResponse,
+        "lsp.run_snippet": LspRunSnippetResponse,
+    },
 )
 
 _TOOL_SPEC_MAP: dict[str, GroupToolSpec] = {spec.canonical_name: spec for spec in _TOOL_SPECS}

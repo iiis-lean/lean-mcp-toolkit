@@ -38,6 +38,7 @@ from ..plugin_base import (
     ToolParamSpec,
     ToolReturnSpec,
     run_sync_mcp_service_handler,
+    with_output_schemas,
 )
 
 _BUILD_PARAMS: tuple[ToolParamSpec, ...] = (
@@ -348,7 +349,7 @@ _LINT_AXIOM_AUDIT_RETURNS: tuple[ToolReturnSpec, ...] = (
     ),
 )
 
-_TOOL_SPECS: tuple[GroupToolSpec, ...] = (
+_BASE_TOOL_SPECS: tuple[GroupToolSpec, ...] = (
     GroupToolSpec(
         group_name="diagnostics",
         canonical_name="diagnostics.build",
@@ -406,6 +407,17 @@ _TOOL_SPECS: tuple[GroupToolSpec, ...] = (
         params=_LINT_NO_SORRY_PARAMS,
         returns=_LINT_AXIOM_AUDIT_RETURNS,
     ),
+)
+
+_TOOL_SPECS: tuple[GroupToolSpec, ...] = with_output_schemas(
+    _BASE_TOOL_SPECS,
+    {
+        "diagnostics.build": BuildResponse,
+        "diagnostics.file": FileResponse,
+        "diagnostics.lint": LintResponse,
+        "diagnostics.lint.no_sorry": NoSorryResult,
+        "diagnostics.lint.axiom_audit": AxiomAuditResult,
+    },
 )
 
 _TOOL_SPEC_MAP: dict[str, GroupToolSpec] = {spec.canonical_name: spec for spec in _TOOL_SPECS}

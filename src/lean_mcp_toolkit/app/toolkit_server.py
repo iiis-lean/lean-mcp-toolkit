@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import contextlib
-import copy
 from dataclasses import dataclass, field
 import logging
 from pathlib import Path
@@ -51,7 +50,6 @@ class _ToolViewRuntime:
     specs_by_alias: dict[str, GroupToolSpec] = field(default_factory=dict)
     specs_by_api_path: dict[str, GroupToolSpec] = field(default_factory=dict)
     aliases_by_group: dict[str, dict[str, tuple[str, ...]]] = field(default_factory=dict)
-    output_schema_by_canonical: dict[str, Any | None] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -171,7 +169,6 @@ class ToolkitServer:
 
     def describe_tools(self, *, view_name: str | None = None) -> tuple[dict[str, Any], ...]:
         view = self._get_tool_view_runtime(view_name)
-        output_schemas = self._get_tool_output_schemas(view.resolved.name)
         rows: list[dict[str, Any]] = []
         for canonical_name in sorted(view.resolved.specs_by_canonical.keys()):
             spec = view.resolved.specs_by_canonical[canonical_name]
@@ -182,10 +179,7 @@ class ToolkitServer:
                     if alias_spec.canonical_name == canonical_name
                 )
             )
-            row = spec.to_dict(aliases=aliases)
-            schema = output_schemas.get(canonical_name)
-            row["output_schema"] = copy.deepcopy(schema) if schema is not None else None
-            rows.append(row)
+            rows.append(spec.to_dict(aliases=aliases))
         return tuple(rows)
 
     def create_fastapi_app(self):
@@ -1030,41 +1024,6 @@ class ToolkitServer:
         if runtime is None:
             raise KeyError(f"unknown tool view: {normalized}")
         return runtime
-
-    def _get_tool_output_schemas(self, view_name: str | None = None) -> dict[str, Any | None]:
-        runtime = self._get_tool_view_runtime(view_name)
-        if runtime.output_schema_by_canonical:
-            return runtime.output_schema_by_canonical
-
-        schemas: dict[str, Any | None] = {
-            canonical_name: None
-            for canonical_name in runtime.resolved.specs_by_canonical.keys()
-        }
-        try:
-            mcp = self.create_mcp_server(view_name=runtime.resolved.name)
-        except Exception as exc:
-            _LOG.debug(
-                "unable to derive MCP output schemas for view `%s`: %s",
-                runtime.resolved.name,
-                exc,
-            )
-            runtime.output_schema_by_canonical = schemas
-            return runtime.output_schema_by_canonical
-
-        tools = getattr(getattr(mcp, "_tool_manager", None), "_tools", {})
-        if isinstance(tools, dict):
-            for alias, tool in tools.items():
-                spec = runtime.specs_by_alias.get(alias)
-                if spec is None:
-                    continue
-                schema = getattr(tool, "output_schema", None)
-                if schema is None:
-                    continue
-                if schemas.get(spec.canonical_name) is None:
-                    schemas[spec.canonical_name] = schema
-
-        runtime.output_schema_by_canonical = schemas
-        return runtime.output_schema_by_canonical
 
     def _register_alias_handler(
         self,

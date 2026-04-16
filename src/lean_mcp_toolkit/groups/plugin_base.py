@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+import copy
+from dataclasses import dataclass, replace
 from weakref import WeakKeyDictionary
 from typing import Any, Callable, Mapping, Protocol
 
 from ..backends.context import BackendContext
 from ..config import ToolkitConfig
 from ..contracts.base import JsonDict
+from ..contracts.schema_utils import build_output_schema
 from ..transport.http import HttpConfig
 
 ToolHandler = Callable[[JsonDict], Any]
@@ -123,6 +125,7 @@ class GroupToolSpec:
     params: tuple[ToolParamSpec, ...] = tuple()
     returns: tuple[ToolReturnSpec, ...] = tuple()
     tags: tuple[str, ...] = tuple()
+    output_schema: JsonDict | None = None
 
     def match_tokens(self) -> set[str]:
         tokens = {
@@ -158,6 +161,9 @@ class GroupToolSpec:
             "tags": list(self.tags),
             "params": [item.to_dict() for item in self.params],
             "returns": [item.to_dict() for item in self.returns],
+            "output_schema": copy.deepcopy(self.output_schema)
+            if self.output_schema is not None
+            else None,
             "mcp_description": self.render_mcp_description(),
             "api_description": self.render_api_description(),
         }
@@ -223,6 +229,22 @@ class GroupPlugin(Protocol):
         prune_none: Callable[[dict[str, Any]], dict[str, Any]],
     ) -> None:
         ...
+
+
+def with_output_schema(spec: GroupToolSpec, response_type: Any) -> GroupToolSpec:
+    return replace(spec, output_schema=build_output_schema(response_type))
+
+
+def with_output_schemas(
+    specs: tuple[GroupToolSpec, ...],
+    response_types: Mapping[str, Any],
+) -> tuple[GroupToolSpec, ...]:
+    return tuple(
+        with_output_schema(spec, response_types[spec.canonical_name])
+        if spec.canonical_name in response_types
+        else spec
+        for spec in specs
+    )
 
 
 def resolve_active_group_names(
