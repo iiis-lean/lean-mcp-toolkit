@@ -118,6 +118,7 @@ The `Source` and `Original name / upstream reference` columns follow these rules
 
 | Canonical tool | Summary | Source | Original name / upstream reference | Backend notes |
 |---|---|---|---|---|
+| `search_arxiv_theorems` | Search natural-language mathematical statements against arXiv theorem references. | LeanSearch provider | Rethlas-style `search_arxiv_theorems` theorem retrieval | Uses the LeanSearch arXiv theorem backend; this is not a Lean declaration search. |
 | `leansearch` | Query LeanSearch. | LeanSearch provider |  | External provider adapter. |
 | `leandex` | Query LeanDex. | LeanDex provider |  | External provider adapter. |
 | `loogle` | Query Loogle. | Loogle provider |  | External provider adapter. |

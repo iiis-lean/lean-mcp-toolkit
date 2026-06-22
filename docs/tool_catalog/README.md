@@ -24,7 +24,7 @@ This section documents the tool surface exposed by `lean-mcp-toolkit`.
 | `search_core` | LeanExplore-backed declaration search | `lean_explore.find`, `lean_explore.get` |
 | `mathlib_nav` | mathlib tree/outline/read navigation | `mathlib_nav.tree`, `mathlib_nav.file_outline`, `mathlib_nav.read`, `mathlib_nav.grep` |
 | `search_nav` | local repository navigation and lightweight source search | `repo_nav.tree`, `repo_nav.local_decl.find`, `repo_nav.local_refs.find`, `repo_nav.grep` |
-| `search_alt` | external search providers | `leansearch`, `leandex`, `loogle`, `leanfinder` |
+| `search_alt` | external search providers | `search_arxiv_theorems`, `leansearch`, `leandex`, `loogle`, `leanfinder` |
 | `proof_search_alt` | external proof-search providers | `proof_search_alt.state_search`, `proof_search_alt.hammer_premise` |
 
 ## Detailed Reference
