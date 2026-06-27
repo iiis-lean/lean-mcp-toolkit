@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from ...contracts.base import JsonDict
 from ...contracts.search_alt import (
+    SearchAltArxivTheoremsRequest,
+    SearchAltArxivTheoremsResponse,
     SearchAltLeanDexRequest,
     SearchAltLeanDexResponse,
     SearchAltLeanFinderRequest,
@@ -21,6 +23,14 @@ class SearchAltHttpClient(SearchAltService):
     def __init__(self, http_config: HttpConfig, *, http_client: HttpJsonClient | None = None):
         self.http_config = http_config
         self.http_client = http_client or HttpJsonClient(http_config)
+
+    def run_arxiv_theorems(
+        self,
+        req: SearchAltArxivTheoremsRequest,
+    ) -> SearchAltArxivTheoremsResponse:
+        return SearchAltArxivTheoremsResponse.from_dict(
+            self._post("/search_alt/arxiv_theorems", req.to_dict())
+        )
 
     def run_leansearch(self, req: SearchAltLeanSearchRequest) -> SearchAltLeanSearchResponse:
         return SearchAltLeanSearchResponse.from_dict(
@@ -43,4 +53,3 @@ class SearchAltHttpClient(SearchAltService):
 
 
 __all__ = ["SearchAltHttpClient"]
-

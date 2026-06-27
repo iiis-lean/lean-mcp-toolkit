@@ -443,6 +443,7 @@ LoogleMode = Literal["remote", "local", "prefer_local"]
 @dataclass(slots=True, frozen=True)
 class SearchAltConfig:
     enabled: bool = False
+    arxiv_theorems_default_num_results: int = 10
     leansearch_default_num_results: int = 5
     leandex_default_num_results: int = 5
     loogle_default_num_results: int = 8
@@ -453,6 +454,9 @@ class SearchAltConfig:
     def from_dict(cls, data: JsonDict) -> "SearchAltConfig":
         return cls(
             enabled=to_bool(data.get("enabled"), default=False),
+            arxiv_theorems_default_num_results=(
+                to_int(data.get("arxiv_theorems_default_num_results"), default=10) or 10
+            ),
             leansearch_default_num_results=(
                 to_int(data.get("leansearch_default_num_results"), default=5) or 5
             ),
@@ -474,6 +478,7 @@ class SearchAltConfig:
     def to_dict(self) -> JsonDict:
         return {
             "enabled": self.enabled,
+            "arxiv_theorems_default_num_results": self.arxiv_theorems_default_num_results,
             "leansearch_default_num_results": self.leansearch_default_num_results,
             "leandex_default_num_results": self.leandex_default_num_results,
             "loogle_default_num_results": self.loogle_default_num_results,

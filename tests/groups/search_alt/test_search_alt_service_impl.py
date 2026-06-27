@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from lean_mcp_toolkit.config import ToolkitConfig
 from lean_mcp_toolkit.contracts.search_alt import (
+    SearchAltArxivTheoremsRequest,
     SearchAltLeanDexRequest,
     SearchAltLeanFinderRequest,
     SearchAltLeanSearchRequest,
@@ -15,6 +16,23 @@ class _FakeLeansearch:
     def search(self, *, query: str, num_results: int, include_raw_payload: bool):
         _ = query, num_results, include_raw_payload
         return [{"name": "Nat.succ", "module_name": "Init.Prelude"}]
+
+    def search_arxiv_theorems(
+        self,
+        *,
+        query: str,
+        num_results: int,
+        include_raw_payload: bool,
+    ):
+        _ = query, num_results, include_raw_payload
+        return [
+            {
+                "title": "A compactness paper",
+                "theorem": "Every open cover has a finite subcover.",
+                "arxiv_id": "2401.01234",
+                "theorem_id": "thm:compact",
+            }
+        ]
 
 
 @dataclass(slots=True)
@@ -64,14 +82,18 @@ def test_search_alt_service_roundtrip() -> None:
     )
     service = SearchAltServiceImpl(config=cfg, backend_manager=manager)
 
+    arxiv_theorems = service.run_arxiv_theorems(
+        SearchAltArxivTheoremsRequest(query="compact open cover")
+    )
     leansearch = service.run_leansearch(SearchAltLeanSearchRequest(query="Nat.succ"))
     leandex = service.run_leandex(SearchAltLeanDexRequest(query="succ"))
     loogle = service.run_loogle(SearchAltLoogleRequest(query="Nat -> Nat"))
     leanfinder = service.run_leanfinder(SearchAltLeanFinderRequest(query="succ is not self"))
 
+    assert arxiv_theorems.success is True
+    assert arxiv_theorems.items[0].arxiv_id == "2401.01234"
     assert leansearch.success is True
     assert leansearch.items[0].name == "Nat.succ"
     assert leandex.items[0].primary_declaration == "Nat.succ_ne_self"
     assert loogle.backend_mode == "local"
     assert leanfinder.items[0].full_name == "Nat.succ_ne_self"
-

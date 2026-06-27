@@ -70,6 +70,8 @@ from ...contracts.search_core import (
     MathlibDeclGetResponse,
 )
 from ...contracts.search_alt import (
+    SearchAltArxivTheoremsRequest,
+    SearchAltArxivTheoremsResponse,
     SearchAltLeanDexRequest,
     SearchAltLeanDexResponse,
     SearchAltLeanFinderRequest,
@@ -227,6 +229,12 @@ class SearchCoreService(Protocol):
 
 class SearchAltService(Protocol):
     """Search-alt service API expected by HTTP/MCP adapters."""
+
+    def run_arxiv_theorems(
+        self,
+        req: SearchAltArxivTheoremsRequest,
+    ) -> SearchAltArxivTheoremsResponse:
+        ...
 
     def run_leansearch(self, req: SearchAltLeanSearchRequest) -> SearchAltLeanSearchResponse:
         ...

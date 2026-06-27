@@ -39,6 +39,7 @@ from .proof_search_alt_routes import (
     handle_proof_search_alt_state_search,
 )
 from .search_alt_routes import (
+    handle_search_alt_arxiv_theorems,
     handle_search_alt_leandex,
     handle_search_alt_leanfinder,
     handle_search_alt_leansearch,
@@ -89,6 +90,7 @@ __all__ = [
     "handle_search_mathlib_nav_grep",
     "handle_search_mathlib_nav_read",
     "handle_search_alt_leansearch",
+    "handle_search_alt_arxiv_theorems",
     "handle_search_alt_leandex",
     "handle_search_alt_loogle",
     "handle_search_alt_leanfinder",

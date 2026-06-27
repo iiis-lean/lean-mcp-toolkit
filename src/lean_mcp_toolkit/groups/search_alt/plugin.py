@@ -12,6 +12,7 @@ except Exception:  # pragma: no cover
         return None
 
 from ...adapters.http import (
+    handle_search_alt_arxiv_theorems,
     handle_search_alt_leandex,
     handle_search_alt_leanfinder,
     handle_search_alt_leansearch,
@@ -22,6 +23,7 @@ from ...backends.keys import BackendKey
 from ...config import ToolkitConfig
 from ...contracts.base import JsonDict
 from ...contracts.search_alt import (
+    SearchAltArxivTheoremsResponse,
     SearchAltLeanDexResponse,
     SearchAltLeanFinderResponse,
     SearchAltLeanSearchResponse,
@@ -61,6 +63,7 @@ _COMMON_RETURNS: tuple[ToolReturnSpec, ...] = (
 )
 
 _BASE_TOOL_SPECS: tuple[GroupToolSpec, ...] = (
+    GroupToolSpec("search_alt", "search_arxiv_theorems", "search_arxiv_theorems", "/search_alt/arxiv_theorems", "Search natural-language mathematical statements against arXiv theorem references.", _SEARCH_PARAMS, _COMMON_RETURNS),
     GroupToolSpec("search_alt", "leansearch", "leansearch", "/search_alt/leansearch", "Search Lean declarations via LeanSearch.", _SEARCH_PARAMS, _COMMON_RETURNS),
     GroupToolSpec("search_alt", "leandex", "leandex", "/search_alt/leandex", "Search Lean declarations via LeanDex.", _SEARCH_PARAMS, _COMMON_RETURNS),
     GroupToolSpec("search_alt", "loogle", "loogle", "/search_alt/loogle", "Search Lean declarations via Loogle.", _SEARCH_PARAMS, _COMMON_RETURNS),
@@ -70,6 +73,7 @@ _BASE_TOOL_SPECS: tuple[GroupToolSpec, ...] = (
 _TOOL_SPECS: tuple[GroupToolSpec, ...] = with_output_schemas(
     _BASE_TOOL_SPECS,
     {
+        "search_arxiv_theorems": SearchAltArxivTheoremsResponse,
         "leansearch": SearchAltLeanSearchResponse,
         "leandex": SearchAltLeanDexResponse,
         "loogle": SearchAltLoogleResponse,
@@ -106,6 +110,7 @@ class SearchAltGroupPlugin(GroupPlugin):
 
     def tool_handlers(self, service: Any) -> Mapping[str, ToolHandler]:
         return {
+            "search_arxiv_theorems": lambda payload: handle_search_alt_arxiv_theorems(service, payload),
             "leansearch": lambda payload: handle_search_alt_leansearch(service, payload),
             "leandex": lambda payload: handle_search_alt_leandex(service, payload),
             "loogle": lambda payload: handle_search_alt_loogle(service, payload),
@@ -122,6 +127,8 @@ class SearchAltGroupPlugin(GroupPlugin):
         prune_none,
     ) -> None:
         _ = normalize_str_list
+        for alias in aliases_by_canonical.get("search_arxiv_theorems", ()):
+            self._register_arxiv_theorems(mcp, service=service, alias=alias, prune_none=prune_none)
         for alias in aliases_by_canonical.get("leansearch", ()):
             self._register_leansearch(mcp, service=service, alias=alias, prune_none=prune_none)
         for alias in aliases_by_canonical.get("leandex", ()):
@@ -130,6 +137,31 @@ class SearchAltGroupPlugin(GroupPlugin):
             self._register_loogle(mcp, service=service, alias=alias, prune_none=prune_none)
         for alias in aliases_by_canonical.get("leanfinder", ()):
             self._register_leanfinder(mcp, service=service, alias=alias, prune_none=prune_none)
+
+    @staticmethod
+    def _register_arxiv_theorems(mcp: Any, *, service: Any, alias: str, prune_none) -> None:
+        spec = _TOOL_SPEC_MAP["search_arxiv_theorems"]
+
+        @mcp.tool(
+            name=alias,
+            description=spec.render_mcp_description(),
+            structured_output=True,
+        )
+        async def _arxiv_theorems(
+            query: Annotated[
+                str,
+                Field(description=_param_desc(spec, "query")),
+            ] = "",
+            num_results: Annotated[
+                int | None,
+                Field(description=_param_desc(spec, "num_results")),
+            ] = None,
+        ) -> SearchAltArxivTheoremsResponse:
+            return await run_sync_mcp_service_handler(
+                handle_search_alt_arxiv_theorems,
+                service,
+                prune_none({"query": query, "num_results": num_results}),
+            )
 
     @staticmethod
     def _register_leansearch(mcp: Any, *, service: Any, alias: str, prune_none) -> None:

@@ -1,4 +1,5 @@
 from lean_mcp_toolkit.contracts.search_alt import (
+    SearchAltArxivTheoremsRequest,
     SearchAltLeanSearchRequest,
     SearchAltLoogleRequest,
 )
@@ -28,10 +29,11 @@ def test_search_alt_http_client_roundtrip() -> None:
         http_config=HttpConfig(base_url="http://example.com"),
         http_client=http,
     )
+    client.run_arxiv_theorems(SearchAltArxivTheoremsRequest(query="compactness"))
     client.run_leansearch(SearchAltLeanSearchRequest(query="Nat.succ"))
     client.run_loogle(SearchAltLoogleRequest(query="Nat -> Nat"))
     assert [path for path, _ in http.calls] == [
+        "/search_alt/arxiv_theorems",
         "/search_alt/leansearch",
         "/search_alt/loogle",
     ]
-

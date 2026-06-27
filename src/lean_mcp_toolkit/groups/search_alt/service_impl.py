@@ -9,10 +9,13 @@ from ...backends.lean.path import resolve_project_root
 from ...backends.search_providers import SearchAltBackendManager
 from ...config import ToolkitConfig
 from ...contracts.search_alt import (
+    ArxivTheoremItem,
     LeanDexItem,
     LeanFinderItem,
     LeanSearchItem,
     LoogleItem,
+    SearchAltArxivTheoremsRequest,
+    SearchAltArxivTheoremsResponse,
     SearchAltLeanDexRequest,
     SearchAltLeanDexResponse,
     SearchAltLeanFinderRequest,
@@ -40,6 +43,47 @@ class SearchAltServiceImpl(SearchAltService):
         self.backend_manager = backend_manager or SearchAltBackendManager(
             config=config.backends.search_providers
         )
+
+    def run_arxiv_theorems(
+        self,
+        req: SearchAltArxivTheoremsRequest,
+    ) -> SearchAltArxivTheoremsResponse:
+        try:
+            query = req.query.strip()
+            if not query:
+                raise ValueError("query is required")
+            include_raw = self.config.search_alt.include_raw_payload_default
+            limit = self._cap(
+                req.num_results or self.config.search_alt.arxiv_theorems_default_num_results,
+                self.backend_manager.config.leansearch.max_results_hard_limit,
+            )
+            items = tuple(
+                ArxivTheoremItem.from_dict(item)
+                for item in self.backend_manager.leansearch.search_arxiv_theorems(
+                    query=query,
+                    num_results=limit,
+                    include_raw_payload=include_raw,
+                )
+            )
+            return SearchAltArxivTheoremsResponse(
+                success=True,
+                error_message=None,
+                query=query,
+                provider="arxiv_theorems",
+                backend_mode="remote",
+                items=items,
+                count=len(items),
+            )
+        except Exception as exc:
+            return SearchAltArxivTheoremsResponse(
+                success=False,
+                error_message=str(exc),
+                query=req.query,
+                provider="arxiv_theorems",
+                backend_mode="remote",
+                items=tuple(),
+                count=0,
+            )
 
     def run_leansearch(self, req: SearchAltLeanSearchRequest) -> SearchAltLeanSearchResponse:
         try:
