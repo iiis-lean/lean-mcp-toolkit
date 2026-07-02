@@ -113,7 +113,29 @@ backend layers, including:
 
 These are configured under the corresponding sections in the toolkit config.
 
-## 5. `lsp.run_snippet` Runtime Controls
+## 5. Startup Warmup And Local LeanExplore Shutdown
+
+The default startup warmup includes a `lean_explore.find` request with
+`rerank_top=50`. For the local LeanExplore backend, this intentionally warms both
+the embedding model and the cross-encoder reranker. Cold startup can take tens of
+seconds on a GPU machine, but subsequent reranked Mathlib searches should avoid
+the first-call model-load penalty.
+
+For CUDA-backed local LeanExplore deployments, prefer one long-lived toolkit
+server process shared by clients. Starting several independent local LeanExplore
+processes can load duplicate embedding/reranker models and exhaust GPU memory.
+
+On shutdown, the local LeanExplore backend disposes the async database engine,
+drops references to embedding/reranker model objects, clears cached search
+indices, and asks PyTorch to release CUDA cache. After stopping a GPU-backed
+server, `nvidia-smi` and `lsof /dev/nvidia*` should not show a lingering toolkit
+Python process.
+
+If the same server also runs tools that fork Lean/LSP subprocesses after
+HuggingFace tokenizers have been used, setting `TOKENIZERS_PARALLELISM=false` in
+the server environment suppresses tokenizer fork warnings.
+
+## 6. `lsp.run_snippet` Runtime Controls
 
 The toolkit-owned `lsp.run_snippet` tool is configured under `lsp_core`:
 
@@ -128,7 +150,7 @@ user-supplied timeout, and the maximum snippet size accepted by the server.
 collection so that cleanup and client recycle still happen if the underlying LSP
 call does not return promptly.
 
-## 6. Structured Output Notes
+## 7. Structured Output Notes
 
 MCP tools now expose structured output schemas derived from the same toolkit
 response contracts used by the HTTP API.
@@ -140,7 +162,7 @@ Practical implications:
 - Core `lsp_core` inspection tools now return structured responses only; there is no
   `response_format=markdown` switch in the runtime config or request payloads.
 
-## 7. CLI Defaults
+## 8. CLI Defaults
 
 The remote CLI (`lean-cli-toolkit`) also has a user-scoped config file:
 
@@ -157,7 +179,7 @@ This stores client-side defaults such as:
 
 These defaults are separate from the toolkit server configuration.
 
-## 8. Suggested Reading Order
+## 9. Suggested Reading Order
 
 For practical use:
 

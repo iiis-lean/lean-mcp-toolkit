@@ -1054,7 +1054,7 @@ def _default_warmup_calls() -> dict[str, WarmupCallConfig]:
             request={
                 "query": "Nat.succ",
                 "limit": 1,
-                "rerank_top": 0,
+                "rerank_top": 50,
                 "packages": ["Mathlib"],
             },
         ),

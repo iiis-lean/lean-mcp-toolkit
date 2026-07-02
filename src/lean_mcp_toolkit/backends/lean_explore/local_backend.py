@@ -6,6 +6,9 @@ https://github.com/justincasher/lean-explore
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
+import gc
 import os
 from dataclasses import dataclass, field
 from typing import Any
@@ -107,15 +110,80 @@ class LeanExploreLocalBackend:
         return self._service
 
     def close(self) -> None:
-        if self._service is not None:
-            close_resource_best_effort(self._service)
-            self._service = None
-        if self._engine is not None:
-            close_resource_best_effort(self._engine)
-            self._engine = None
+        service = self._service
+        engine = self._engine or getattr(service, "engine", None)
+        self._service = None
+        self._engine = None
+
+        if service is not None:
+            with contextlib.suppress(Exception):
+                setattr(service, "engine", None)
+            close_resource_best_effort(service)
+        self._release_search_engine_resources(engine)
+        self._release_torch_cuda()
 
     def recycle(self) -> None:
         self.close()
+
+    @staticmethod
+    def _release_search_engine_resources(engine: Any | None) -> None:
+        if engine is None:
+            return
+
+        async_engine = getattr(engine, "engine", None)
+        dispose = getattr(async_engine, "dispose", None)
+        if callable(dispose):
+            with contextlib.suppress(Exception):
+                result = dispose()
+                if asyncio.iscoroutine(result):
+                    run_async(result, timeout_seconds=5.0)
+
+        for attr_name in ("_embedding_client", "_reranker_client"):
+            client = getattr(engine, attr_name, None)
+            if client is not None:
+                LeanExploreLocalBackend._release_model_client(client)
+            with contextlib.suppress(Exception):
+                setattr(engine, attr_name, None)
+
+        for attr_name in (
+            "_faiss_informal_index",
+            "_faiss_informal_id_map",
+            "_bm25_name_spaced",
+            "_bm25_name_raw",
+            "_all_declaration_ids",
+        ):
+            with contextlib.suppress(Exception):
+                setattr(engine, attr_name, None)
+
+    @staticmethod
+    def _release_model_client(client: Any) -> None:
+        close_resource_best_effort(client)
+        model = getattr(client, "model", None)
+        if model is not None:
+            for method_name, args in (("to", ("cpu",)), ("cpu", ())):
+                method = getattr(model, method_name, None)
+                if callable(method):
+                    with contextlib.suppress(Exception):
+                        method(*args)
+        for attr_name in ("model", "_model", "tokenizer", "_tokenizer"):
+            with contextlib.suppress(Exception):
+                setattr(client, attr_name, None)
+
+    @staticmethod
+    def _release_torch_cuda() -> None:
+        gc.collect()
+        try:
+            import torch
+        except Exception:  # pragma: no cover - optional dependency boundary.
+            return
+        if not getattr(torch, "cuda", None) or not torch.cuda.is_available():
+            return
+        with contextlib.suppress(Exception):
+            torch.cuda.synchronize()
+        with contextlib.suppress(Exception):
+            torch.cuda.empty_cache()
+        with contextlib.suppress(Exception):
+            torch.cuda.ipc_collect()
 
     def _configure_env(self) -> None:
         toolchain_id = resolve_toolchain_id(self.search_config.mathlib_lean_version)
