@@ -60,7 +60,10 @@ class LeanExploreBackendAdapter(LeanExploreBackend):
 
         mode = self.backend_config.mode.strip().lower()
         if mode == "api":
-            self._backend = LeanExploreApiBackend(backend_config=self.backend_config)
+            self._backend = LeanExploreApiBackend(
+                backend_config=self.backend_config,
+                search_config=self.search_config,
+            )
         else:
             self._backend = LeanExploreLocalBackend(
                 backend_config=self.backend_config,

@@ -23,6 +23,7 @@ This project focuses on single-agent Lean tooling:
 - Declaration extraction, symbol location, and indexed declaration search
 - Build, diagnostics, and lint checks such as `no_sorry` and `axiom_audit`
 - Configurable backend selection for selected capabilities
+- Local or separately deployed LeanExplore search with the same public tools
 - One shared tool catalog across MCP, HTTP API, remote CLI, and local shell
 - Structured MCP tool outputs backed by the same response contracts used by HTTP
 
@@ -68,6 +69,10 @@ lean-mcp-toolkit shell --config path/to/toolkit.yaml
 ```
 
 For complete startup and CLI usage, see [docs/usage/README.md](docs/usage/README.md).
+
+To move only LeanExplore index/model work to another machine, see
+[Remote LeanExplore](docs/usage/README.md#5-remote-leanexplore-service). Existing
+configurations continue to use the local Lean 4.28.0 backend by default.
 
 ## Tool Groups
 

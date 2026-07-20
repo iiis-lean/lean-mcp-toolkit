@@ -188,7 +188,77 @@ Built-in shell commands:
 - `quit`
 - `exit`
 
-## 5. Tool Names and Aliases
+## 5. Remote LeanExplore Service
+
+LeanExplore can run as a separate HTTP service while the main Toolkit process
+continues to host local LSP, diagnostics, declaration, and repository tools.
+The Agent-facing tools remain `lean_explore.find` and `lean_explore.get`.
+
+Install the service dependencies on the GPU host:
+
+```bash
+pip install 'lean-mcp-toolkit[lean-explore-server]'
+```
+
+Start a service for the existing Lean 4.28.0 index:
+
+```bash
+export LEANEXPLORE_API_KEY='replace-with-a-secret'
+TOKENIZERS_PARALLELISM=false \
+lean-mcp-toolkit-explore-server \
+  --lean-version 4.28.0 \
+  --host 127.0.0.1 \
+  --port 18081
+```
+
+For the supported Lean 4.32.0 index, fetch index `20260714_172516` into a
+separate cache root so the older active index is not changed:
+
+```bash
+export LEAN_EXPLORE_CACHE_DIR=/srv/lean-explore-4.32/cache
+lean-explore data fetch --version 20260714_172516
+
+lean-mcp-toolkit-explore-server \
+  --lean-version 4.32.0 \
+  --cache-dir /srv/lean-explore-4.32/cache \
+  --host 127.0.0.1 \
+  --port 18081
+```
+
+The service exposes:
+
+```text
+GET /health
+GET /api/v2/health
+GET /api/v2/search
+GET /api/v2/declarations/{declaration_id}
+```
+
+Search and declaration routes require the bearer token from
+`LEANEXPLORE_API_KEY`. The health response includes `index_id`, `lean_version`,
+and the detected Mathlib revision when available.
+
+If the GPU host is reachable over SSH, forward its loopback service to the
+Toolkit host:
+
+```bash
+ssh -NT \
+  -L 127.0.0.1:18081:127.0.0.1:18081 \
+  gpu-user@gpu-host
+```
+
+Then start the main Toolkit with the remote client configuration:
+
+```bash
+export LEANEXPLORE_API_KEY='the-same-secret'
+lean-mcp-toolkit serve \
+  --config configs/lean_explore_remote_client.example.yaml
+```
+
+Run only one service worker per GPU unless model sharing is provided outside the
+process. Multiple workers load duplicate embedding and reranker models.
+
+## 6. Tool Names and Aliases
 
 The CLI command tree is generated from the live tool aliases exposed by the
 running server. This means:

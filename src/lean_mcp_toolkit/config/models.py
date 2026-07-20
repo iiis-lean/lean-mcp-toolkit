@@ -1265,6 +1265,12 @@ class LeanExploreBackendConfig:
     api_base_url: str = "https://www.leanexplore.com/api/v2"
     api_key_env: str = "LEANEXPLORE_API_KEY"
     api_timeout_seconds: int = 30
+    api_verify_on_startup: bool = False
+    api_health_path: str = "/health"
+    api_trust_env: bool = True
+    api_verify_ssl: bool = True
+    api_retry_count: int = 0
+    api_retry_backoff_seconds: float = 0.0
 
     @classmethod
     def from_dict(cls, data: JsonDict) -> "LeanExploreBackendConfig":
@@ -1294,6 +1300,15 @@ class LeanExploreBackendConfig:
             api_base_url=str(data.get("api_base_url") or "https://www.leanexplore.com/api/v2"),
             api_key_env=str(data.get("api_key_env") or "LEANEXPLORE_API_KEY"),
             api_timeout_seconds=to_int(data.get("api_timeout_seconds"), default=30) or 30,
+            api_verify_on_startup=to_bool(
+                data.get("api_verify_on_startup"),
+                default=False,
+            ),
+            api_health_path=str(data.get("api_health_path") or "/health"),
+            api_trust_env=to_bool(data.get("api_trust_env"), default=True),
+            api_verify_ssl=to_bool(data.get("api_verify_ssl"), default=True),
+            api_retry_count=to_int(data.get("api_retry_count"), default=0) or 0,
+            api_retry_backoff_seconds=float(data.get("api_retry_backoff_seconds") or 0.0),
         )
 
     def to_dict(self) -> JsonDict:
@@ -1311,6 +1326,12 @@ class LeanExploreBackendConfig:
             "api_base_url": self.api_base_url,
             "api_key_env": self.api_key_env,
             "api_timeout_seconds": self.api_timeout_seconds,
+            "api_verify_on_startup": self.api_verify_on_startup,
+            "api_health_path": self.api_health_path,
+            "api_trust_env": self.api_trust_env,
+            "api_verify_ssl": self.api_verify_ssl,
+            "api_retry_count": self.api_retry_count,
+            "api_retry_backoff_seconds": self.api_retry_backoff_seconds,
         }
 
 

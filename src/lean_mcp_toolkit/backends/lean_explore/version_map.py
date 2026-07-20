@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 LEAN_VERSION_TO_TOOLCHAIN_ID: dict[str, str] = {
+    "4.32.0": "20260714_172516",
     "4.28.0": "20260217_050001",
     "4.24.0": "v4.24.0",
 }

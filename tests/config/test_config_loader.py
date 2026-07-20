@@ -50,6 +50,39 @@ def test_default_diagnostics_config() -> None:
     assert cfg.lsp_core.run_snippet_max_timeout_seconds == 120
     assert cfg.lsp_core.run_snippet_max_code_chars == 20000
     assert cfg.backends.lean_explore.local_timeout_seconds == 30
+    assert cfg.search_core.mathlib_lean_version == "4.28.0"
+    assert cfg.backends.lean_explore.mode == "local"
+    assert cfg.backends.lean_explore.api_verify_on_startup is False
+    assert cfg.backends.lean_explore.api_trust_env is True
+
+
+def test_lean_explore_remote_config_is_additive() -> None:
+    cfg = load_toolkit_config(
+        cli_overrides={
+            "search_core": {"mathlib_lean_version": "4.32.0"},
+            "backends": {
+                "lean_explore": {
+                    "mode": "api",
+                    "api_base_url": "http://127.0.0.1:18081/api/v2",
+                    "api_verify_on_startup": True,
+                    "api_health_path": "/health",
+                    "api_trust_env": False,
+                    "api_verify_ssl": False,
+                    "api_retry_count": 2,
+                    "api_retry_backoff_seconds": 0.25,
+                }
+            },
+        }
+    )
+
+    assert cfg.search_core.mathlib_lean_version == "4.32.0"
+    assert cfg.backends.lean_explore.mode == "api"
+    assert cfg.backends.lean_explore.api_verify_on_startup is True
+    assert cfg.backends.lean_explore.api_health_path == "/health"
+    assert cfg.backends.lean_explore.api_trust_env is False
+    assert cfg.backends.lean_explore.api_verify_ssl is False
+    assert cfg.backends.lean_explore.api_retry_count == 2
+    assert cfg.backends.lean_explore.api_retry_backoff_seconds == 0.25
 
 
 def test_default_nav_group_activation() -> None:

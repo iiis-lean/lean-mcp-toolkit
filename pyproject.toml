@@ -28,10 +28,16 @@ server = [
   "PyYAML>=6.0",
   "uvicorn>=0.29.0"
 ]
+lean-explore-server = [
+  "fastapi>=0.110.0",
+  "uvicorn>=0.29.0",
+  "lean-explore[local]>=1.2.1"
+]
 
 [project.scripts]
 lean-mcp-toolkit = "lean_mcp_toolkit.app.cli:main"
 lean-cli-toolkit = "lean_mcp_toolkit.app.client_cli:main"
+lean-mcp-toolkit-explore-server = "lean_mcp_toolkit.backends.lean_explore.remote_server:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

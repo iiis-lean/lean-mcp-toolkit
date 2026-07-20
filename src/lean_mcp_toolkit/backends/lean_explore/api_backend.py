@@ -1,30 +1,23 @@
-"""Remote API lean-explore backend adapter.
-
-This adapter talks to the external ``lean-explore`` API client:
-https://github.com/justincasher/lean-explore
-"""
+"""Remote HTTP LeanExplore backend adapter."""
 
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import Any
 
-from ...config import LeanExploreBackendConfig
-from .base import (
-    LeanExploreRecord,
-    LeanExploreSearchResult,
-    close_resource_best_effort,
-    run_async,
-)
+from ...config import LeanExploreBackendConfig, SearchCoreConfig
+from .base import LeanExploreRecord, LeanExploreSearchResult
+from .remote_client import LeanExploreRemoteClient, LeanExploreRemoteMetadata
 
 
 @dataclass(slots=True)
 class LeanExploreApiBackend:
-    """Adapter around the remote lean-explore API client."""
+    """Adapter around a remote LeanExplore HTTP service."""
 
     backend_config: LeanExploreBackendConfig
-    _client: Any | None = field(default=None, init=False, repr=False)
+    search_config: SearchCoreConfig = field(default_factory=SearchCoreConfig)
+    _client: LeanExploreRemoteClient | None = field(default=None, init=False, repr=False)
+    _metadata: LeanExploreRemoteMetadata | None = field(default=None, init=False, repr=False)
 
     def search(
         self,
@@ -34,99 +27,63 @@ class LeanExploreApiBackend:
         rerank_top: int | None,
         packages: tuple[str, ...] | None,
     ) -> LeanExploreSearchResult:
-        client = self._get_client()
-        response = run_async(
-            client.search(
-                query=query,
-                limit=limit,
-                rerank_top=rerank_top,
-                packages=list(packages) if packages is not None else None,
-            )
-        )
-        items = tuple(self._to_record(item) for item in getattr(response, "results", []))
-        return LeanExploreSearchResult(
-            query=str(getattr(response, "query", query) or query),
-            processing_time_ms=(
-                int(getattr(response, "processing_time_ms"))
-                if getattr(response, "processing_time_ms", None) is not None
-                else None
-            ),
-            items=items,
+        return self._get_client().search(
+            query=query,
+            limit=limit,
+            rerank_top=rerank_top,
+            packages=packages,
         )
 
     def get_by_id(self, declaration_id: int) -> LeanExploreRecord | None:
-        client = self._get_client()
-        item = run_async(client.get_by_id(int(declaration_id)))
-        if item is None:
-            return None
-        return self._to_record(item)
+        return self._get_client().get_by_id(declaration_id)
 
-    def _get_client(self) -> Any:
+    def close(self) -> None:
+        if self._client is not None:
+            self._client.close()
+        self._client = None
+        self._metadata = None
+
+    def recycle(self) -> None:
+        self.close()
+
+    def _get_client(self) -> LeanExploreRemoteClient:
         if self._client is not None:
             return self._client
-
-        try:
-            from lean_explore.api.client import ApiClient
-        except Exception as exc:  # pragma: no cover - dependency boundary
-            raise RuntimeError(
-                "lean_explore api backend is unavailable; install lean_explore package"
-            ) from exc
 
         api_key = os.getenv(self.backend_config.api_key_env, "").strip()
         if not api_key:
             raise RuntimeError(
                 f"missing API key environment variable: {self.backend_config.api_key_env}"
             )
-
-        client = ApiClient(api_key=api_key, timeout=float(self.backend_config.api_timeout_seconds))
-        client.base_url = self.backend_config.api_base_url.rstrip("/")
-        self._client = client
-        return self._client
-
-    def close(self) -> None:
-        if self._client is not None:
-            close_resource_best_effort(self._client)
-            self._client = None
-
-    def recycle(self) -> None:
-        self.close()
-
-    @staticmethod
-    def _to_record(item: Any) -> LeanExploreRecord:
-        return LeanExploreRecord(
-            id=int(getattr(item, "id", 0)),
-            name=str(getattr(item, "name", "") or ""),
-            module=(
-                str(getattr(item, "module"))
-                if getattr(item, "module", None) is not None
-                else None
-            ),
-            docstring=(
-                str(getattr(item, "docstring"))
-                if getattr(item, "docstring", None) is not None
-                else None
-            ),
-            source_text=(
-                str(getattr(item, "source_text"))
-                if getattr(item, "source_text", None) is not None
-                else None
-            ),
-            source_link=(
-                str(getattr(item, "source_link"))
-                if getattr(item, "source_link", None) is not None
-                else None
-            ),
-            dependencies=(
-                str(getattr(item, "dependencies"))
-                if getattr(item, "dependencies", None) is not None
-                else None
-            ),
-            informalization=(
-                str(getattr(item, "informalization"))
-                if getattr(item, "informalization", None) is not None
-                else None
-            ),
+        client = LeanExploreRemoteClient(
+            backend_config=self.backend_config,
+            api_key=api_key,
         )
+        if self.backend_config.api_verify_on_startup:
+            try:
+                metadata = client.health()
+                self._validate_metadata(metadata)
+            except Exception:
+                client.close()
+                raise
+            self._metadata = metadata
+        self._client = client
+        return client
+
+    def _validate_metadata(self, metadata: LeanExploreRemoteMetadata) -> None:
+        if metadata.status.strip().lower() not in {"ok", "ready"}:
+            raise RuntimeError(
+                f"remote LeanExplore service is not ready: status={metadata.status!r}"
+            )
+        expected = self.search_config.mathlib_lean_version.strip()
+        actual = (metadata.lean_version or "").strip()
+        if not actual:
+            raise RuntimeError("remote LeanExplore health response is missing `lean_version`")
+        if actual != expected:
+            raise RuntimeError(
+                "remote LeanExplore Lean version mismatch: "
+                f"expected {expected}, got {actual}"
+            )
 
 
 __all__ = ["LeanExploreApiBackend"]

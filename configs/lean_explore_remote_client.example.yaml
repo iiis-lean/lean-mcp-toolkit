@@ -1,0 +1,44 @@
+# Example Toolkit client configuration for a separately deployed LeanExplore service.
+# Existing configurations remain local and use Lean 4.28.0 by default.
+
+search_core:
+  enabled: true
+  default_limit: 10
+  default_rerank_top: 50
+  default_packages:
+    - Mathlib
+  mathlib_lean_version: "4.32.0"
+  require_mathlib: true
+
+backends:
+  lean_explore:
+    enabled: true
+    mode: api
+    api_base_url: http://127.0.0.1:18081/api/v2
+    api_key_env: LEANEXPLORE_API_KEY
+    api_timeout_seconds: 120
+    api_verify_on_startup: true
+    api_health_path: /health
+    api_trust_env: false
+    api_verify_ssl: true
+    api_retry_count: 2
+    api_retry_backoff_seconds: 0.5
+
+warmup:
+  policy:
+    enabled: true
+    run_on_startup: true
+    continue_on_error: false
+  plan:
+    order:
+      - lean_explore.find
+  calls:
+    lean_explore.find:
+      enabled: true
+      use_probe_file: false
+      request:
+        query: Nat.succ
+        limit: 1
+        rerank_top: 50
+        packages:
+          - Mathlib

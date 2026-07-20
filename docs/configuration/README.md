@@ -135,6 +135,47 @@ If the same server also runs tools that fork Lean/LSP subprocesses after
 HuggingFace tokenizers have been used, setting `TOKENIZERS_PARALLELISM=false` in
 the server environment suppresses tokenizer fork warnings.
 
+### Remote LeanExplore backend
+
+`search_core.mathlib_lean_version` remains the single expected Lean/Mathlib
+version for both local and remote operation. The default remains `4.28.0`.
+Supported local index mappings currently include:
+
+- `4.28.0` -> `20260217_050001`
+- `4.32.0` -> `20260714_172516`
+
+Remote operation is additive and does not change the `lean_explore.find` or
+`lean_explore.get` tool contracts:
+
+```yaml
+search_core:
+  mathlib_lean_version: "4.32.0"
+
+backends:
+  lean_explore:
+    mode: api
+    api_base_url: http://127.0.0.1:18081/api/v2
+    api_key_env: LEANEXPLORE_API_KEY
+    api_timeout_seconds: 120
+    api_verify_on_startup: true
+    api_health_path: /health
+    api_trust_env: false
+    api_verify_ssl: true
+    api_retry_count: 2
+    api_retry_backoff_seconds: 0.5
+```
+
+When `api_verify_on_startup` is enabled, the first backend activation checks the
+remote health metadata and rejects a service whose `lean_version` differs from
+`search_core.mathlib_lean_version`. Enable the normal Toolkit startup warmup to
+make this check part of server startup rather than the first user request.
+
+`api_trust_env=false` prevents inherited `HTTP_PROXY`, `HTTPS_PROXY`, and
+`ALL_PROXY` settings from intercepting a loopback SSH tunnel. Keep
+`api_verify_ssl=true` for HTTPS deployments.
+
+See [the complete example config](../../configs/lean_explore_remote_client.example.yaml).
+
 ## 6. `lsp.run_snippet` Runtime Controls
 
 The toolkit-owned `lsp.run_snippet` tool is configured under `lsp_core`:
