@@ -89,6 +89,8 @@ The `Source` and `Original name / upstream reference` columns follow these rules
 | `lean_explore.find` | Search indexed declarations by name or meaning. | `lean-explore` | search endpoint in `lean-explore` | Supports local and remote LeanExplore backends. |
 | `lean_explore.get` | Fetch one indexed declaration by id. | `lean-explore` | get-by-id endpoint in `lean-explore` | Supports local and remote LeanExplore backends. |
 
+`lean_explore.find` remains a fuzzy discovery tool by default. Callers that already know a complete declaration name may pass `exact_name`; the response then contains only records whose full `name` equals that value. A related fuzzy candidate is never substituted for a missing exact declaration.
+
 The default server warmup calls `lean_explore.find` with `rerank_top=50` so that
 GPU-backed local deployments load both embedding and reranker models before the
 first user request.

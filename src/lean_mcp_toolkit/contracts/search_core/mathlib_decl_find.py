@@ -10,6 +10,7 @@ from ..base import DictModel, JsonDict, to_bool, to_int, to_list_of_str
 @dataclass(frozen=True)
 class MathlibDeclFindRequest(DictModel):
     query: str = ""
+    exact_name: str | None = None
     limit: int | None = None
     rerank_top: int | None = None
     packages: tuple[str, ...] | None = None
@@ -24,6 +25,7 @@ class MathlibDeclFindRequest(DictModel):
     def from_dict(cls, data: JsonDict) -> "MathlibDeclFindRequest":
         return cls(
             query=str(data.get("query") or ""),
+            exact_name=(str(data["exact_name"]).strip() if data.get("exact_name") is not None else None),
             limit=to_int(data.get("limit"), default=None),
             rerank_top=to_int(data.get("rerank_top"), default=None),
             packages=(
@@ -45,6 +47,7 @@ class MathlibDeclFindRequest(DictModel):
     def to_dict(self) -> JsonDict:
         return {
             "query": self.query,
+            "exact_name": self.exact_name,
             "limit": self.limit,
             "rerank_top": self.rerank_top,
             "packages": list(self.packages) if self.packages is not None else None,

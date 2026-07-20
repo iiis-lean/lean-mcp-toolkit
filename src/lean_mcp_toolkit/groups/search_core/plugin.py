@@ -38,6 +38,13 @@ _SEARCH_PARAMS: tuple[ToolParamSpec, ...] = (
         description="Search query by declaration name fragment or mathematical meaning.",
     ),
     ToolParamSpec(
+        name="exact_name",
+        type_hint="str | null",
+        required=False,
+        default_value="null",
+        description="When provided, return only a result whose full declaration name exactly matches this value.",
+    ),
+    ToolParamSpec(
         name="limit",
         type_hint="int | null",
         required=False,

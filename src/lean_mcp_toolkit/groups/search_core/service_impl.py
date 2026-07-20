@@ -79,6 +79,10 @@ class SearchCoreServiceImpl(SearchCoreService):
             self._recycle_backend_best_effort()
             raise
 
+        records = result.items
+        if req.exact_name is not None:
+            records = tuple(item for item in records if item.name == req.exact_name)
+
         items = tuple(
             self._project_item(
                 record=item,
@@ -89,7 +93,7 @@ class SearchCoreServiceImpl(SearchCoreService):
                 include_dependencies=req.include_dependencies,
                 include_informalization=req.include_informalization,
             )
-            for item in result.items
+            for item in records
         )
 
         return MathlibDeclFindResponse(

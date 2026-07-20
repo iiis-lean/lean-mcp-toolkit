@@ -101,6 +101,50 @@ def test_search_core_service_recycles_backend_on_error() -> None:
     assert backend.recycle_calls == 1
 
 
+def test_search_core_exact_name_filter_never_substitutes_a_related_candidate() -> None:
+    cfg = ToolkitConfig()
+    related = LeanExploreRecord(
+        id=1,
+        name="Int.natAbs",
+        module="Mathlib.Data.Int.NatAbs",
+        docstring=None,
+        source_text=None,
+        source_link=None,
+        dependencies=None,
+        informalization=None,
+    )
+    exact = LeanExploreRecord(
+        id=2,
+        name="Int.natAbs_mul",
+        module="Mathlib.Data.Int.NatAbs",
+        docstring=None,
+        source_text=None,
+        source_link=None,
+        dependencies=None,
+        informalization=None,
+    )
+    svc = SearchCoreServiceImpl(
+        config=cfg,
+        lean_explore_backend=_FakeLeanExploreBackend(items=(related, exact)),
+    )
+
+    found = svc.run_mathlib_decl_find(
+        MathlibDeclFindRequest.from_dict(
+            {"query": "Int.natAbs_mul", "exact_name": "Int.natAbs_mul", "include_module": True}
+        )
+    )
+    missing = svc.run_mathlib_decl_find(
+        MathlibDeclFindRequest.from_dict(
+            {"query": "Int.natAbs_pow", "exact_name": "Int.natAbs_pow", "include_module": True}
+        )
+    )
+
+    assert [item.name for item in found.results] == ["Int.natAbs_mul"]
+    assert found.count == 1
+    assert missing.results == ()
+    assert missing.count == 0
+
+
 def test_search_core_service_recycles_backend_on_get_error_and_closes_backend() -> None:
     cfg = ToolkitConfig()
     backend = _FakeLeanExploreBackend(items=tuple(), error=RuntimeError("backend failed"))
