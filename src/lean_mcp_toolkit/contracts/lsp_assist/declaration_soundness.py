@@ -9,20 +9,27 @@ from ..base import DictModel, JsonDict, to_bool
 
 @dataclass(frozen=True)
 class DeclarationSoundnessTarget(DictModel):
-    file_path: str = ""
+    module: str = ""
     declaration_name: str = ""
+    source_file_path: str | None = None
 
     @classmethod
     def from_dict(cls, data: JsonDict) -> "DeclarationSoundnessTarget":
         return cls(
-            file_path=str(data.get("file_path") or ""),
+            module=str(data.get("module") or ""),
             declaration_name=str(data.get("declaration_name") or ""),
+            source_file_path=(
+                str(data["source_file_path"])
+                if data.get("source_file_path") is not None
+                else None
+            ),
         )
 
     def to_dict(self) -> JsonDict:
         return {
-            "file_path": self.file_path,
+            "module": self.module,
             "declaration_name": self.declaration_name,
+            "source_file_path": self.source_file_path,
         }
 
 
@@ -47,9 +54,10 @@ class SourceWarning(DictModel):
 
 @dataclass(frozen=True)
 class DeclarationSoundnessResult(DictModel):
-    file_path: str
+    module: str
     declaration_name: str
     success: bool
+    source_file_path: str | None = None
     error_message: str | None = None
     axioms: tuple[str, ...] = field(default_factory=tuple)
     warnings: tuple[SourceWarning, ...] = field(default_factory=tuple)
@@ -75,9 +83,14 @@ class DeclarationSoundnessResult(DictModel):
             else tuple()
         )
         return cls(
-            file_path=str(data.get("file_path") or ""),
+            module=str(data.get("module") or ""),
             declaration_name=str(data.get("declaration_name") or ""),
             success=bool(data.get("success", False)),
+            source_file_path=(
+                str(data["source_file_path"])
+                if data.get("source_file_path") is not None
+                else None
+            ),
             error_message=(
                 str(data["error_message"])
                 if data.get("error_message") is not None
@@ -91,9 +104,10 @@ class DeclarationSoundnessResult(DictModel):
 
     def to_dict(self) -> JsonDict:
         return {
-            "file_path": self.file_path,
+            "module": self.module,
             "declaration_name": self.declaration_name,
             "success": self.success,
+            "source_file_path": self.source_file_path,
             "error_message": self.error_message,
             "axioms": list(self.axioms),
             "warnings": [item.to_dict() for item in self.warnings],
@@ -105,8 +119,9 @@ class DeclarationSoundnessResult(DictModel):
 @dataclass(frozen=True)
 class LspDeclarationSoundnessRequest(DictModel):
     project_root: str | None = None
-    file_path: str = ""
+    module: str = ""
     declaration_name: str = ""
+    source_file_path: str | None = None
     scan_source: bool | None = None
 
     @classmethod
@@ -122,16 +137,22 @@ class LspDeclarationSoundnessRequest(DictModel):
                 if data.get("project_root") is not None
                 else None
             ),
-            file_path=str(data.get("file_path") or ""),
+            module=str(data.get("module") or ""),
             declaration_name=str(data.get("declaration_name") or ""),
+            source_file_path=(
+                str(data["source_file_path"])
+                if data.get("source_file_path") is not None
+                else None
+            ),
             scan_source=scan_source,
         )
 
     def to_dict(self) -> JsonDict:
         return {
             "project_root": self.project_root,
-            "file_path": self.file_path,
+            "module": self.module,
             "declaration_name": self.declaration_name,
+            "source_file_path": self.source_file_path,
             "scan_source": self.scan_source,
         }
 

@@ -73,7 +73,7 @@ The `Source` and `Original name / upstream reference` columns follow these rules
 | `lsp.declaration_file` | Locate the declaration file for a symbol. | `lean-lsp-mcp` / upstream | `lean_declaration_file` | LSP client based. |
 | `lsp.multi_attempt` | Try multiple tactic snippets against one goal. | `lean-lsp-mcp` / upstream | `lean_multi_attempt` | LSP client based. |
 | `lsp.declaration_soundness` | Inspect one exact declaration's recursive axiom dependencies and optional source warnings. | Local implementation |  | Uses one temporary LSP probe and fails closed on missing, mismatched, or ambiguous reports. |
-| `lsp.declaration_soundness_batch` | Inspect multiple explicit declarations in one request without discovering the whole repository. | Local implementation |  | Imports the distinct source modules once, runs all exact `#print axioms` commands in one temporary LSP probe, and returns results in request order. |
+| `lsp.declaration_soundness_batch` | Inspect multiple explicit declarations in one request without discovering the whole repository. | Local implementation |  | Imports the distinct explicit modules once, runs all exact `#print axioms` commands in one temporary LSP probe, and returns results in request order; optional source files are separate scan evidence. |
 
 ### Heavy LSP tools
 

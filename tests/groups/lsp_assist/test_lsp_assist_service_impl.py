@@ -172,7 +172,7 @@ def _run_soundness_with_diagnostics(
     return service.run_declaration_soundness(
         LspDeclarationSoundnessRequest.from_dict(
             {
-                "file_path": "A/B.lean",
+                "module": "A.B",
                 "declaration_name": "A.B.t",
                 "scan_source": False,
             }
@@ -246,7 +246,7 @@ def test_lsp_assist_service_roundtrip(tmp_path: Path) -> None:
     soundness = service.run_declaration_soundness(
         LspDeclarationSoundnessRequest.from_dict(
             {
-                "file_path": "A/B.lean",
+                "module": "A.B",
                 "declaration_name": "A.B.t",
                 "scan_source": False,
             }
@@ -370,8 +370,8 @@ def test_lsp_assist_declaration_soundness_batch_uses_one_probe_and_preserves_ord
         LspDeclarationSoundnessBatchRequest.from_dict(
             {
                 "declarations": [
-                    {"file_path": "A/B.lean", "declaration_name": "A.B.t"},
-                    {"file_path": "C/D.lean", "declaration_name": "C.D.x"},
+                    {"module": "Dependency.One", "declaration_name": "A.B.t"},
+                    {"module": "Dependency.Two", "declaration_name": "C.D.x"},
                 ],
                 "scan_source": False,
             }
@@ -383,10 +383,66 @@ def test_lsp_assist_declaration_soundness_batch_uses_one_probe_and_preserves_ord
     assert response.success_count == 2
     assert response.failure_count == 0
     assert [item.declaration_name for item in response.items] == ["A.B.t", "C.D.x"]
+    assert [item.module for item in response.items] == [
+        "Dependency.One",
+        "Dependency.Two",
+    ]
     assert response.items[0].axioms == tuple()
     assert response.items[1].axioms == ("Classical.choice",)
     assert fake_client.diag_timeouts == [15.0]
     assert list(tmp_path.glob("_mcp_decl_soundness_*.lean")) == []
+
+
+def test_lsp_assist_declaration_soundness_source_scan_is_explicit(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "lean-toolchain").write_text(
+        "leanprover/lean4:v4.32.0\n",
+        encoding="utf-8",
+    )
+    source_file = tmp_path / "Captured" / "Entry.lean"
+    source_file.parent.mkdir(parents=True)
+    source_file.write_text("unsafe def helper : Nat := 1\n", encoding="utf-8")
+    cfg = ToolkitConfig.from_dict(
+        {
+            "server": {"default_project_root": str(tmp_path)},
+            "groups": {"enabled_groups": ["lsp_assist"]},
+            "lsp_assist": {"enabled": True},
+        }
+    )
+    fake_client = _FakeLspClient(
+        file_content="",
+        target_uri=source_file.resolve().as_uri(),
+        verify_diagnostics=[
+            {"severity": 3, "message": "'Upstream.t' does not depend on any axioms"},
+        ],
+    )
+    service = LspAssistServiceImpl(
+        config=cfg,
+        lsp_client_manager=_FakeLspClientManager(client=fake_client),
+    )
+
+    missing_source = service.run_declaration_soundness(
+        LspDeclarationSoundnessRequest.from_dict(
+            {"module": "Upstream.Basic", "declaration_name": "Upstream.t"}
+        )
+    )
+    assert missing_source.success is False
+    assert "source_file_path is required" in (missing_source.error_message or "")
+
+    scanned = service.run_declaration_soundness(
+        LspDeclarationSoundnessRequest.from_dict(
+            {
+                "module": "Upstream.Basic",
+                "declaration_name": "Upstream.t",
+                "source_file_path": "Captured/Entry.lean",
+            }
+        )
+    )
+    assert scanned.success is True
+    assert scanned.module == "Upstream.Basic"
+    assert scanned.source_file_path == "Captured/Entry.lean"
+    assert [warning.pattern for warning in scanned.warnings] == ["unsafe"]
 
 
 def test_lsp_assist_declaration_soundness_batch_keeps_resolved_partial_results(
@@ -426,8 +482,8 @@ def test_lsp_assist_declaration_soundness_batch_keeps_resolved_partial_results(
         LspDeclarationSoundnessBatchRequest.from_dict(
             {
                 "declarations": [
-                    {"file_path": "A/B.lean", "declaration_name": "A.B.t"},
-                    {"file_path": "A/B.lean", "declaration_name": "A.B.missing"},
+                    {"module": "A.B", "declaration_name": "A.B.t"},
+                    {"module": "A.B", "declaration_name": "A.B.missing"},
                 ],
                 "scan_source": False,
             }
@@ -510,7 +566,7 @@ def test_lsp_assist_declaration_soundness_recycles_on_failure(tmp_path: Path) ->
     response = service.run_declaration_soundness(
         LspDeclarationSoundnessRequest.from_dict(
             {
-                "file_path": "A/B.lean",
+                "module": "A.B",
                 "declaration_name": "A.B.t",
                 "scan_source": False,
             }
@@ -555,7 +611,7 @@ def test_lsp_assist_declaration_soundness_hard_timeout_recycles_when_diagnostics
     response = service.run_declaration_soundness(
         LspDeclarationSoundnessRequest.from_dict(
             {
-                "file_path": "A/B.lean",
+                "module": "A.B",
                 "declaration_name": "A.B.t",
                 "scan_source": False,
             }

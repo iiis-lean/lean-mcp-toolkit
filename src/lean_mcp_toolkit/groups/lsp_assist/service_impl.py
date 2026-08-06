@@ -457,8 +457,9 @@ class LspAssistServiceImpl(LspAssistService):
                 project_root=req.project_root,
                 declarations=(
                     DeclarationSoundnessTarget(
-                        file_path=req.file_path,
+                        module=req.module,
                         declaration_name=req.declaration_name,
+                        source_file_path=req.source_file_path,
                     ),
                 ),
                 scan_source=req.scan_source,
@@ -469,15 +470,17 @@ class LspAssistServiceImpl(LspAssistService):
             if batch.success and item.success:
                 return LspDeclarationSoundnessResponse(**item.__dict__)
             return LspDeclarationSoundnessResponse(
-                file_path=item.file_path,
+                module=item.module,
                 declaration_name=item.declaration_name,
                 success=False,
+                source_file_path=item.source_file_path,
                 error_message=item.error_message or batch.error_message,
             )
         return LspDeclarationSoundnessResponse(
-            file_path=req.file_path,
+            module=req.module,
             declaration_name=req.declaration_name,
             success=False,
+            source_file_path=req.source_file_path,
             error_message=batch.error_message or "declaration soundness check failed",
         )
 
@@ -496,14 +499,16 @@ class LspAssistServiceImpl(LspAssistService):
             if not req.declarations:
                 raise ValueError("declarations must be a non-empty list")
 
+            scan_source = (
+                req.scan_source
+                if req.scan_source is not None
+                else self.config.lsp_assist.declaration_soundness_scan_source_default
+            )
             normalized: list[DeclarationSoundnessTarget] = []
             declaration_names: set[str] = set()
             module_names: list[str] = []
             for target in req.declarations:
-                rel_file = self._normalize_file_path(
-                    project_root=project_root,
-                    file_path=target.file_path,
-                )
+                module_name = LeanPath.from_dot(target.module).dot
                 declaration_name = target.declaration_name.strip()
                 if not declaration_name:
                     raise ValueError("declaration_name is required")
@@ -516,13 +521,23 @@ class LspAssistServiceImpl(LspAssistService):
                 if declaration_name in declaration_names:
                     raise ValueError(f"duplicate declaration_name: {declaration_name}")
                 declaration_names.add(declaration_name)
+                source_file_path = None
+                if target.source_file_path is not None:
+                    source_file_path = self._normalize_file_path(
+                        project_root=project_root,
+                        file_path=target.source_file_path,
+                    )
+                if scan_source and source_file_path is None:
+                    raise ValueError(
+                        "source_file_path is required when scan_source is true"
+                    )
                 normalized.append(
                     DeclarationSoundnessTarget(
-                        file_path=rel_file,
+                        module=module_name,
                         declaration_name=declaration_name,
+                        source_file_path=source_file_path,
                     )
                 )
-                module_name = LeanPath.from_rel_file(rel_file).dot
                 if module_name not in module_names:
                     module_names.append(module_name)
 
@@ -557,31 +572,30 @@ class LspAssistServiceImpl(LspAssistService):
                     + ", ".join(repr(name) for name in unexpected_names)
                 )
 
-            scan_source = (
-                req.scan_source
-                if req.scan_source is not None
-                else self.config.lsp_assist.declaration_soundness_scan_source_default
-            )
             warnings_by_file: dict[str, tuple[SourceWarning, ...]] = {}
             if scan_source:
                 for target in normalized:
-                    if target.file_path not in warnings_by_file:
-                        warnings_by_file[target.file_path] = self._scan_source_warnings(
-                            (project_root / target.file_path).resolve()
+                    assert target.source_file_path is not None
+                    if target.source_file_path not in warnings_by_file:
+                        warnings_by_file[target.source_file_path] = (
+                            self._scan_source_warnings(
+                                (project_root / target.source_file_path).resolve()
+                            )
                         )
 
             items: list[DeclarationSoundnessResult] = []
             fallback_error = "; ".join(batch_errors)
             for target in normalized:
                 matching_reports = reports.get(target.declaration_name, [])
-                warnings = warnings_by_file.get(target.file_path, tuple())
+                warnings = warnings_by_file.get(target.source_file_path or "", tuple())
                 if len(matching_reports) == 1:
                     axioms = matching_reports[0]
                     items.append(
                         DeclarationSoundnessResult(
-                            file_path=target.file_path,
+                            module=target.module,
                             declaration_name=target.declaration_name,
                             success=True,
+                            source_file_path=target.source_file_path,
                             axioms=axioms,
                             warnings=warnings,
                             axiom_count=len(axioms),
@@ -601,9 +615,10 @@ class LspAssistServiceImpl(LspAssistService):
                     )
                 items.append(
                     DeclarationSoundnessResult(
-                        file_path=target.file_path,
+                        module=target.module,
                         declaration_name=target.declaration_name,
                         success=False,
+                        source_file_path=target.source_file_path,
                         error_message=item_error,
                         warnings=warnings,
                         warning_count=len(warnings),

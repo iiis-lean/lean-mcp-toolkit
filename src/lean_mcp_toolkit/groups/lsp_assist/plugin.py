@@ -122,12 +122,28 @@ _MULTI_ATTEMPT_PARAMS: tuple[ToolParamSpec, ...] = (
 )
 
 _DECLARATION_SOUNDNESS_PARAMS: tuple[ToolParamSpec, ...] = (
-    *_COMMON_FILE_PARAMS,
+    _COMMON_FILE_PARAMS[0],
+    ToolParamSpec(
+        name="module",
+        type_hint="str",
+        required=True,
+        description="Exact Lean module to import before inspecting the declaration.",
+    ),
     ToolParamSpec(
         name="declaration_name",
         type_hint="str",
         required=True,
         description="Fully qualified Lean declaration name to inspect.",
+    ),
+    ToolParamSpec(
+        name="source_file_path",
+        type_hint="str | null",
+        required=False,
+        default_value="null",
+        description=(
+            "Optional project-relative source file to scan; required only when "
+            "scan_source resolves to true."
+        ),
     ),
     ToolParamSpec(
         name="scan_source",
@@ -145,8 +161,9 @@ _DECLARATION_SOUNDNESS_BATCH_PARAMS: tuple[ToolParamSpec, ...] = (
         type_hint="list[DeclarationSoundnessTarget]",
         required=True,
         description=(
-            "Non-empty exact declaration targets. Each item contains file_path and the "
-            "fully qualified declaration_name; duplicate declaration names are rejected."
+            "Non-empty exact declaration targets. Each item contains module, the fully "
+            "qualified declaration_name, and an optional source_file_path; duplicate "
+            "declaration names are rejected."
         ),
     ),
     ToolParamSpec(
@@ -244,9 +261,14 @@ _MULTI_ATTEMPT_RETURNS: tuple[ToolReturnSpec, ...] = (
 )
 
 _DECLARATION_SOUNDNESS_RESULT_RETURNS: tuple[ToolReturnSpec, ...] = (
-    ToolReturnSpec("file_path", "str", "Normalized project-relative Lean source file path."),
+    ToolReturnSpec("module", "str", "Exact imported Lean module."),
     ToolReturnSpec("declaration_name", "str", "Exact fully qualified declaration name."),
     ToolReturnSpec("success", "bool", "Whether the exact axiom report was resolved."),
+    ToolReturnSpec(
+        "source_file_path",
+        "str | null",
+        "Normalized source file path when optional source scanning was requested.",
+    ),
     ToolReturnSpec("error_message", "str | null", "Failure detail when success=false."),
     ToolReturnSpec("axioms", "list[str]", "Axioms reported by `#print axioms`."),
     ToolReturnSpec(
@@ -518,14 +540,19 @@ class LspAssistGroupPlugin(GroupPlugin):
         @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
         async def _lsp_declaration_soundness(
             project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
-            file_path: Annotated[str, Field(description=_param_desc(spec, "file_path"))] = "",
+            module: Annotated[str, Field(description=_param_desc(spec, "module"))] = "",
             declaration_name: Annotated[str, Field(description=_param_desc(spec, "declaration_name"))] = "",
+            source_file_path: Annotated[
+                str | None,
+                Field(description=_param_desc(spec, "source_file_path")),
+            ] = None,
             scan_source: Annotated[bool | None, Field(description=_param_desc(spec, "scan_source"))] = None,
         ) -> LspDeclarationSoundnessResponse:
             payload = {
                 "project_root": project_root,
-                "file_path": file_path,
+                "module": module,
                 "declaration_name": declaration_name,
+                "source_file_path": source_file_path,
                 "scan_source": scan_source,
             }
             return await run_sync_mcp_service_handler(

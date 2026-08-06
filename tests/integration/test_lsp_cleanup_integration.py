@@ -178,7 +178,7 @@ def test_declaration_soundness_timeout_recycles_real_lsp_process_tree(tmp_path: 
         LspDeclarationSoundnessRequest.from_dict(
             {
                 "project_root": str(project_root),
-                "file_path": "CleanupCase/Basic.lean",
+                "module": "CleanupCase.Basic",
                 "declaration_name": "CleanupCase.Basic.t",
                 "scan_source": False,
             }

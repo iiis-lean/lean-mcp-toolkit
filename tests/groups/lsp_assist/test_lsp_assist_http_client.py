@@ -33,7 +33,7 @@ class _FakeHttpJsonClient:
         if path == "/lsp/declaration_soundness":
             return {
                 "success": True,
-                "file_path": "A/B.lean",
+                "module": "A.B",
                 "declaration_name": "A.B.t",
                 "axioms": ["Classical.choice"],
                 "warnings": [],
@@ -46,7 +46,7 @@ class _FakeHttpJsonClient:
                 "items": [
                     {
                         "success": True,
-                        "file_path": "A/B.lean",
+                        "module": "A.B",
                         "declaration_name": "A.B.t",
                         "axioms": [],
                         "warnings": [],
@@ -91,7 +91,11 @@ def test_lsp_assist_http_client_roundtrip() -> None:
 
     soundness = client.run_declaration_soundness(
         LspDeclarationSoundnessRequest.from_dict(
-            {"file_path": "A/B.lean", "declaration_name": "A.B.t"}
+            {
+                "module": "A.B",
+                "declaration_name": "A.B.t",
+                "scan_source": False,
+            }
         )
     )
     assert soundness.success is True
@@ -99,7 +103,12 @@ def test_lsp_assist_http_client_roundtrip() -> None:
 
     batch = client.run_declaration_soundness_batch(
         LspDeclarationSoundnessBatchRequest.from_dict(
-            {"declarations": [{"file_path": "A/B.lean", "declaration_name": "A.B.t"}]}
+            {
+                "declarations": [
+                    {"module": "A.B", "declaration_name": "A.B.t"}
+                ],
+                "scan_source": False,
+            }
         )
     )
     assert batch.success is True

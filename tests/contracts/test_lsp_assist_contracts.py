@@ -61,23 +61,37 @@ def test_lsp_assist_requests_roundtrip() -> None:
     assert snippet.code == "import Mathlib"
 
     soundness = LspDeclarationSoundnessRequest.from_dict(
-        {"file_path": "A/B.lean", "declaration_name": "A.B.t", "scan_source": False}
+        {
+            "module": "A.B",
+            "declaration_name": "A.B.t",
+            "source_file_path": "A/B.lean",
+            "scan_source": False,
+        }
     )
     assert soundness.scan_source is False
+    assert soundness.module == "A.B"
 
     batch = LspDeclarationSoundnessBatchRequest.from_dict(
         {
             "project_root": "/tmp/proj",
             "declarations": [
-                {"file_path": "A/B.lean", "declaration_name": "A.B.t"},
-                {"file_path": "C/D.lean", "declaration_name": "C.D.x"},
+                {"module": "A.B", "declaration_name": "A.B.t"},
+                {
+                    "module": "C.D",
+                    "declaration_name": "C.D.x",
+                    "source_file_path": "C/D.lean",
+                },
             ],
             "scan_source": False,
         }
     )
     assert batch.declarations == (
-        DeclarationSoundnessTarget(file_path="A/B.lean", declaration_name="A.B.t"),
-        DeclarationSoundnessTarget(file_path="C/D.lean", declaration_name="C.D.x"),
+        DeclarationSoundnessTarget(module="A.B", declaration_name="A.B.t"),
+        DeclarationSoundnessTarget(
+            module="C.D",
+            declaration_name="C.D.x",
+            source_file_path="C/D.lean",
+        ),
     )
     assert batch.to_dict()["declarations"][1]["declaration_name"] == "C.D.x"
 
@@ -161,9 +175,10 @@ def test_lsp_assist_responses_roundtrip() -> None:
     ).to_dict()
 
     soundness_resp = LspDeclarationSoundnessResponse(
-        file_path="A/B.lean",
+        module="A.B",
         declaration_name="A.B.t",
         success=True,
+        source_file_path="A/B.lean",
         axioms=("Classical.choice",),
         warnings=(SourceWarning(line=8, pattern="unsafe"),),
         axiom_count=1,
@@ -180,12 +195,12 @@ def test_lsp_assist_responses_roundtrip() -> None:
         error_message="one item failed",
         items=(
             DeclarationSoundnessResult(
-                file_path="A/B.lean",
+                module="A.B",
                 declaration_name="A.B.t",
                 success=True,
             ),
             DeclarationSoundnessResult(
-                file_path="C/D.lean",
+                module="C.D",
                 declaration_name="C.D.x",
                 success=False,
                 error_message="report not found",
