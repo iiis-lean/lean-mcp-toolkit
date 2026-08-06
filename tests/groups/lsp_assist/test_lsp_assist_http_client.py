@@ -2,10 +2,11 @@ from dataclasses import dataclass
 
 from lean_mcp_toolkit.contracts.lsp_assist import (
     LspCompletionsRequest,
+    LspDeclarationSoundnessBatchRequest,
+    LspDeclarationSoundnessRequest,
     LspDeclarationFileRequest,
     LspMultiAttemptRequest,
     LspRunSnippetRequest,
-    LspTheoremSoundnessRequest,
 )
 from lean_mcp_toolkit.groups.lsp_assist.client_http import LspAssistHttpClient
 from lean_mcp_toolkit.transport.http import HttpConfig
@@ -29,13 +30,31 @@ class _FakeHttpJsonClient:
                 "warning_count": 0,
                 "info_count": 0,
             }
-        if path == "/lsp/theorem_soundness":
+        if path == "/lsp/declaration_soundness":
             return {
                 "success": True,
+                "file_path": "A/B.lean",
+                "declaration_name": "A.B.t",
                 "axioms": ["Classical.choice"],
                 "warnings": [],
                 "axiom_count": 1,
                 "warning_count": 0,
+            }
+        if path == "/lsp/declaration_soundness_batch":
+            return {
+                "success": True,
+                "items": [
+                    {
+                        "success": True,
+                        "file_path": "A/B.lean",
+                        "declaration_name": "A.B.t",
+                        "axioms": [],
+                        "warnings": [],
+                    }
+                ],
+                "count": 1,
+                "success_count": 1,
+                "failure_count": 0,
             }
         raise AssertionError(f"unexpected path: {path}")
 
@@ -70,11 +89,18 @@ def test_lsp_assist_http_client_roundtrip() -> None:
     snippet = client.run_snippet(LspRunSnippetRequest.from_dict({"code": "def x := 1"}))
     assert snippet.success is True
 
-    soundness = client.run_theorem_soundness(
-        LspTheoremSoundnessRequest.from_dict(
-            {"file_path": "A/B.lean", "theorem_name": "A.B.t"}
+    soundness = client.run_declaration_soundness(
+        LspDeclarationSoundnessRequest.from_dict(
+            {"file_path": "A/B.lean", "declaration_name": "A.B.t"}
         )
     )
     assert soundness.success is True
     assert soundness.axiom_count == 1
 
+    batch = client.run_declaration_soundness_batch(
+        LspDeclarationSoundnessBatchRequest.from_dict(
+            {"declarations": [{"file_path": "A/B.lean", "declaration_name": "A.B.t"}]}
+        )
+    )
+    assert batch.success is True
+    assert batch.items[0].declaration_name == "A.B.t"

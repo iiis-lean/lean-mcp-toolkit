@@ -13,19 +13,20 @@ except Exception:  # pragma: no cover
 
 from ...adapters.http import (
     handle_lsp_completions,
+    handle_lsp_declaration_soundness,
+    handle_lsp_declaration_soundness_batch,
     handle_lsp_declaration_file,
     handle_lsp_multi_attempt,
-    handle_lsp_theorem_soundness,
 )
 from ...backends.context import BackendContext
 from ...backends.keys import BackendKey
 from ...config import ToolkitConfig
-from ...contracts.base import JsonDict
 from ...contracts.lsp_assist import (
     LspCompletionsResponse,
+    LspDeclarationSoundnessBatchResponse,
+    LspDeclarationSoundnessResponse,
     LspDeclarationFileResponse,
     LspMultiAttemptResponse,
-    LspTheoremSoundnessResponse,
 )
 from ...transport.http import HttpConfig
 from ..plugin_base import (
@@ -120,20 +121,40 @@ _MULTI_ATTEMPT_PARAMS: tuple[ToolParamSpec, ...] = (
     ),
 )
 
-_THEOREM_SOUNDNESS_PARAMS: tuple[ToolParamSpec, ...] = (
+_DECLARATION_SOUNDNESS_PARAMS: tuple[ToolParamSpec, ...] = (
     *_COMMON_FILE_PARAMS,
     ToolParamSpec(
-        name="theorem_name",
+        name="declaration_name",
         type_hint="str",
         required=True,
-        description="Theorem full name (recommended) or accessible name in imported module.",
+        description="Fully qualified Lean declaration name to inspect.",
     ),
     ToolParamSpec(
         name="scan_source",
         type_hint="bool | null",
         required=False,
-        default_value="lsp_assist.theorem_soundness_scan_source_default",
+        default_value="lsp_assist.declaration_soundness_scan_source_default",
         description="Whether to scan source file for suspicious patterns.",
+    ),
+)
+
+_DECLARATION_SOUNDNESS_BATCH_PARAMS: tuple[ToolParamSpec, ...] = (
+    _COMMON_FILE_PARAMS[0],
+    ToolParamSpec(
+        name="declarations",
+        type_hint="list[DeclarationSoundnessTarget]",
+        required=True,
+        description=(
+            "Non-empty exact declaration targets. Each item contains file_path and the "
+            "fully qualified declaration_name; duplicate declaration names are rejected."
+        ),
+    ),
+    ToolParamSpec(
+        name="scan_source",
+        type_hint="bool | null",
+        required=False,
+        default_value="lsp_assist.declaration_soundness_scan_source_default",
+        description="Whether to scan each distinct source file for suspicious patterns.",
     ),
 )
 
@@ -222,8 +243,10 @@ _MULTI_ATTEMPT_RETURNS: tuple[ToolReturnSpec, ...] = (
     ToolReturnSpec("any_success", "bool", "Whether any attempt succeeded."),
 )
 
-_THEOREM_SOUNDNESS_RETURNS: tuple[ToolReturnSpec, ...] = (
-    ToolReturnSpec("success", "bool", "Whether theorem soundness check succeeded."),
+_DECLARATION_SOUNDNESS_RESULT_RETURNS: tuple[ToolReturnSpec, ...] = (
+    ToolReturnSpec("file_path", "str", "Normalized project-relative Lean source file path."),
+    ToolReturnSpec("declaration_name", "str", "Exact fully qualified declaration name."),
+    ToolReturnSpec("success", "bool", "Whether the exact axiom report was resolved."),
     ToolReturnSpec("error_message", "str | null", "Failure detail when success=false."),
     ToolReturnSpec("axioms", "list[str]", "Axioms reported by `#print axioms`."),
     ToolReturnSpec(
@@ -237,6 +260,20 @@ _THEOREM_SOUNDNESS_RETURNS: tuple[ToolReturnSpec, ...] = (
     ),
     ToolReturnSpec("axiom_count", "int", "Axiom count."),
     ToolReturnSpec("warning_count", "int", "Warning count."),
+)
+
+_DECLARATION_SOUNDNESS_BATCH_RETURNS: tuple[ToolReturnSpec, ...] = (
+    ToolReturnSpec("success", "bool", "Whether every requested declaration was resolved without batch errors."),
+    ToolReturnSpec("error_message", "str | null", "Batch-level failure detail when success=false."),
+    ToolReturnSpec(
+        "items",
+        "list[DeclarationSoundnessResult]",
+        "Per-declaration results in request order.",
+        children=_DECLARATION_SOUNDNESS_RESULT_RETURNS,
+    ),
+    ToolReturnSpec("count", "int", "Number of returned declaration results."),
+    ToolReturnSpec("success_count", "int", "Number of successful declaration results."),
+    ToolReturnSpec("failure_count", "int", "Number of failed declaration results."),
 )
 
 _BASE_TOOL_SPECS: tuple[GroupToolSpec, ...] = (
@@ -269,12 +306,27 @@ _BASE_TOOL_SPECS: tuple[GroupToolSpec, ...] = (
     ),
     GroupToolSpec(
         group_name="lsp_assist",
-        canonical_name="lsp.theorem_soundness",
-        raw_name="theorem_soundness",
-        api_path="/lsp/theorem_soundness",
-        description="Check theorem axioms and optionally scan source for suspicious patterns.",
-        params=_THEOREM_SOUNDNESS_PARAMS,
-        returns=_THEOREM_SOUNDNESS_RETURNS,
+        canonical_name="lsp.declaration_soundness",
+        raw_name="declaration_soundness",
+        api_path="/lsp/declaration_soundness",
+        description=(
+            "Check one declaration's recursive axiom dependencies and optionally scan its "
+            "source file for suspicious patterns."
+        ),
+        params=_DECLARATION_SOUNDNESS_PARAMS,
+        returns=_DECLARATION_SOUNDNESS_RESULT_RETURNS,
+    ),
+    GroupToolSpec(
+        group_name="lsp_assist",
+        canonical_name="lsp.declaration_soundness_batch",
+        raw_name="declaration_soundness_batch",
+        api_path="/lsp/declaration_soundness_batch",
+        description=(
+            "Check multiple exact declarations' recursive axiom dependencies through one "
+            "temporary LSP probe; this does not discover or audit the whole repository."
+        ),
+        params=_DECLARATION_SOUNDNESS_BATCH_PARAMS,
+        returns=_DECLARATION_SOUNDNESS_BATCH_RETURNS,
     ),
 )
 
@@ -284,7 +336,8 @@ _TOOL_SPECS: tuple[GroupToolSpec, ...] = with_output_schemas(
         "lsp.completions": LspCompletionsResponse,
         "lsp.declaration_file": LspDeclarationFileResponse,
         "lsp.multi_attempt": LspMultiAttemptResponse,
-        "lsp.theorem_soundness": LspTheoremSoundnessResponse,
+        "lsp.declaration_soundness": LspDeclarationSoundnessResponse,
+        "lsp.declaration_soundness_batch": LspDeclarationSoundnessBatchResponse,
     },
 )
 
@@ -325,7 +378,8 @@ class LspAssistGroupPlugin(GroupPlugin):
             "lsp.completions": lambda payload: handle_lsp_completions(service, payload),
             "lsp.declaration_file": lambda payload: handle_lsp_declaration_file(service, payload),
             "lsp.multi_attempt": lambda payload: handle_lsp_multi_attempt(service, payload),
-            "lsp.theorem_soundness": lambda payload: handle_lsp_theorem_soundness(service, payload),
+            "lsp.declaration_soundness": lambda payload: handle_lsp_declaration_soundness(service, payload),
+            "lsp.declaration_soundness_batch": lambda payload: handle_lsp_declaration_soundness_batch(service, payload),
         }
 
     def register_mcp_tools(
@@ -359,8 +413,15 @@ class LspAssistGroupPlugin(GroupPlugin):
                 alias=alias,
                 prune_none=prune_none,
             )
-        for alias in aliases_by_canonical.get("lsp.theorem_soundness", ()):
-            self._register_theorem_soundness(
+        for alias in aliases_by_canonical.get("lsp.declaration_soundness", ()):
+            self._register_declaration_soundness(
+                mcp,
+                service=service,
+                alias=alias,
+                prune_none=prune_none,
+            )
+        for alias in aliases_by_canonical.get("lsp.declaration_soundness_batch", ()):
+            self._register_declaration_soundness_batch(
                 mcp,
                 service=service,
                 alias=alias,
@@ -445,30 +506,57 @@ class LspAssistGroupPlugin(GroupPlugin):
             )
 
     @staticmethod
-    def _register_theorem_soundness(
+    def _register_declaration_soundness(
         mcp: Any,
         *,
         service: Any,
         alias: str,
         prune_none,
     ) -> None:
-        spec = _TOOL_SPEC_MAP["lsp.theorem_soundness"]
+        spec = _TOOL_SPEC_MAP["lsp.declaration_soundness"]
 
         @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
-        async def _lsp_theorem_soundness(
+        async def _lsp_declaration_soundness(
             project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
             file_path: Annotated[str, Field(description=_param_desc(spec, "file_path"))] = "",
-            theorem_name: Annotated[str, Field(description=_param_desc(spec, "theorem_name"))] = "",
+            declaration_name: Annotated[str, Field(description=_param_desc(spec, "declaration_name"))] = "",
             scan_source: Annotated[bool | None, Field(description=_param_desc(spec, "scan_source"))] = None,
-        ) -> LspTheoremSoundnessResponse:
+        ) -> LspDeclarationSoundnessResponse:
             payload = {
                 "project_root": project_root,
                 "file_path": file_path,
-                "theorem_name": theorem_name,
+                "declaration_name": declaration_name,
                 "scan_source": scan_source,
             }
             return await run_sync_mcp_service_handler(
-                handle_lsp_theorem_soundness,
+                handle_lsp_declaration_soundness,
+                service,
+                prune_none(payload),
+            )
+
+    @staticmethod
+    def _register_declaration_soundness_batch(
+        mcp: Any,
+        *,
+        service: Any,
+        alias: str,
+        prune_none,
+    ) -> None:
+        spec = _TOOL_SPEC_MAP["lsp.declaration_soundness_batch"]
+
+        @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
+        async def _lsp_declaration_soundness_batch(
+            project_root: Annotated[str | None, Field(description=_param_desc(spec, "project_root"))] = None,
+            declarations: Annotated[list[dict[str, str]] | None, Field(description=_param_desc(spec, "declarations"))] = None,
+            scan_source: Annotated[bool | None, Field(description=_param_desc(spec, "scan_source"))] = None,
+        ) -> LspDeclarationSoundnessBatchResponse:
+            payload = {
+                "project_root": project_root,
+                "declarations": declarations or [],
+                "scan_source": scan_source,
+            }
+            return await run_sync_mcp_service_handler(
+                handle_lsp_declaration_soundness_batch,
                 service,
                 prune_none(payload),
             )

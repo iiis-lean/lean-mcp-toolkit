@@ -19,7 +19,7 @@ This section documents the tool surface exposed by `lean-mcp-toolkit`.
 | `diagnostics` | build/file diagnostics and lint checks | `diagnostics.build`, `diagnostics.lint`, `diagnostics.lint.no_sorry` |
 | `declarations` | declaration extraction and symbol location | `declarations.extract`, `declarations.locate` |
 | `lsp_core` | core Lean LSP inspection | `lsp.hover`, `lsp.goal`, `lsp.file_outline`, `lsp.run_snippet` |
-| `lsp_assist` | higher-level LSP proof assistance | `lsp.completions`, `lsp.multi_attempt`, `lsp.theorem_soundness` |
+| `lsp_assist` | higher-level LSP proof assistance | `lsp.completions`, `lsp.multi_attempt`, `lsp.declaration_soundness`, `lsp.declaration_soundness_batch` |
 | `lsp_heavy` | heavier widget/profile inspection | `lsp.widgets`, `lsp.widget_source`, `lsp.proof_profile` |
 | `search_core` | LeanExplore-backed declaration search | `lean_explore.find`, `lean_explore.get` |
 | `mathlib_nav` | mathlib tree/outline/read navigation | `mathlib_nav.tree`, `mathlib_nav.file_outline`, `mathlib_nav.read`, `mathlib_nav.grep` |

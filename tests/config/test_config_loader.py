@@ -49,6 +49,7 @@ def test_default_diagnostics_config() -> None:
     assert cfg.lsp_core.run_snippet_default_timeout_seconds == 30
     assert cfg.lsp_core.run_snippet_max_timeout_seconds == 120
     assert cfg.lsp_core.run_snippet_max_code_chars == 20000
+    assert cfg.lsp_assist.declaration_soundness_scan_source_default is True
     assert cfg.backends.lean_explore.local_timeout_seconds == 30
     assert cfg.search_core.mathlib_lean_version == "4.28.0"
     assert cfg.backends.lean_explore.mode == "local"

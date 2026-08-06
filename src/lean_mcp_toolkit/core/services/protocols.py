@@ -38,12 +38,14 @@ from ...contracts.lsp_core import (
 from ...contracts.lsp_assist import (
     LspCompletionsRequest,
     LspCompletionsResponse,
+    LspDeclarationSoundnessBatchRequest,
+    LspDeclarationSoundnessBatchResponse,
+    LspDeclarationSoundnessRequest,
+    LspDeclarationSoundnessResponse,
     LspDeclarationFileRequest,
     LspDeclarationFileResponse,
     LspMultiAttemptRequest,
     LspMultiAttemptResponse,
-    LspTheoremSoundnessRequest,
-    LspTheoremSoundnessResponse,
 )
 from ...contracts.lsp_heavy import (
     LspProofProfileRequest,
@@ -194,10 +196,16 @@ class LspAssistService(Protocol):
     def run_snippet(self, req: LspRunSnippetRequest) -> LspRunSnippetResponse:
         ...
 
-    def run_theorem_soundness(
+    def run_declaration_soundness(
         self,
-        req: LspTheoremSoundnessRequest,
-    ) -> LspTheoremSoundnessResponse:
+        req: LspDeclarationSoundnessRequest,
+    ) -> LspDeclarationSoundnessResponse:
+        ...
+
+    def run_declaration_soundness_batch(
+        self,
+        req: LspDeclarationSoundnessBatchRequest,
+    ) -> LspDeclarationSoundnessBatchResponse:
         ...
 
 

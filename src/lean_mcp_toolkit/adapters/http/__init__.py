@@ -19,9 +19,10 @@ from .lsp_core_routes import (
 )
 from .lsp_assist_routes import (
     handle_lsp_completions,
+    handle_lsp_declaration_soundness,
+    handle_lsp_declaration_soundness_batch,
     handle_lsp_declaration_file,
     handle_lsp_multi_attempt,
-    handle_lsp_theorem_soundness,
 )
 from .lsp_heavy_routes import (
     handle_lsp_proof_profile,
@@ -76,10 +77,11 @@ __all__ = [
     "handle_lsp_hover",
     "handle_lsp_code_actions",
     "handle_lsp_completions",
+    "handle_lsp_declaration_soundness",
+    "handle_lsp_declaration_soundness_batch",
     "handle_lsp_declaration_file",
     "handle_lsp_multi_attempt",
     "handle_lsp_run_snippet",
-    "handle_lsp_theorem_soundness",
     "handle_lsp_widgets",
     "handle_lsp_widget_source",
     "handle_lsp_proof_profile",

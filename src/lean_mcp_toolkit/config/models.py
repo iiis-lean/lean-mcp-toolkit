@@ -371,7 +371,7 @@ class LspAssistConfig:
     default_max_completions: int = 32
     multi_attempt_default_max_attempts: int | None = None
     multi_attempt_max_snippets_hard_limit: int = 16
-    theorem_soundness_scan_source_default: bool = True
+    declaration_soundness_scan_source_default: bool = True
     declaration_file_include_content_default: bool = False
 
     @classmethod
@@ -386,8 +386,8 @@ class LspAssistConfig:
             multi_attempt_max_snippets_hard_limit=(
                 to_int(data.get("multi_attempt_max_snippets_hard_limit"), default=16) or 16
             ),
-            theorem_soundness_scan_source_default=to_bool(
-                data.get("theorem_soundness_scan_source_default"),
+            declaration_soundness_scan_source_default=to_bool(
+                data.get("declaration_soundness_scan_source_default"),
                 default=True,
             ),
             declaration_file_include_content_default=to_bool(
@@ -402,7 +402,7 @@ class LspAssistConfig:
             "default_max_completions": self.default_max_completions,
             "multi_attempt_default_max_attempts": self.multi_attempt_default_max_attempts,
             "multi_attempt_max_snippets_hard_limit": self.multi_attempt_max_snippets_hard_limit,
-            "theorem_soundness_scan_source_default": self.theorem_soundness_scan_source_default,
+            "declaration_soundness_scan_source_default": self.declaration_soundness_scan_source_default,
             "declaration_file_include_content_default": self.declaration_file_include_content_default,
         }
 

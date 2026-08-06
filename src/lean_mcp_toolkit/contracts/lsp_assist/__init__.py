@@ -2,14 +2,18 @@
 
 from .common import DiagnosticMessage, Position, Range
 from .completions import CompletionItem, LspCompletionsRequest, LspCompletionsResponse
+from .declaration_soundness import (
+    DeclarationSoundnessResult,
+    DeclarationSoundnessTarget,
+    LspDeclarationSoundnessBatchRequest,
+    LspDeclarationSoundnessBatchResponse,
+    LspDeclarationSoundnessRequest,
+    LspDeclarationSoundnessResponse,
+    SourceWarning,
+)
 from .declaration_file import LspDeclarationFileRequest, LspDeclarationFileResponse
 from .multi_attempt import AttemptResult, LspMultiAttemptRequest, LspMultiAttemptResponse
 from .run_snippet import LspRunSnippetRequest, LspRunSnippetResponse
-from .theorem_soundness import (
-    LspTheoremSoundnessRequest,
-    LspTheoremSoundnessResponse,
-    SourceWarning,
-)
 
 __all__ = [
     "Position",
@@ -18,6 +22,12 @@ __all__ = [
     "CompletionItem",
     "LspCompletionsRequest",
     "LspCompletionsResponse",
+    "DeclarationSoundnessTarget",
+    "DeclarationSoundnessResult",
+    "LspDeclarationSoundnessRequest",
+    "LspDeclarationSoundnessResponse",
+    "LspDeclarationSoundnessBatchRequest",
+    "LspDeclarationSoundnessBatchResponse",
     "LspDeclarationFileRequest",
     "LspDeclarationFileResponse",
     "AttemptResult",
@@ -26,7 +36,4 @@ __all__ = [
     "LspRunSnippetRequest",
     "LspRunSnippetResponse",
     "SourceWarning",
-    "LspTheoremSoundnessRequest",
-    "LspTheoremSoundnessResponse",
 ]
-

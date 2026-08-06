@@ -11,7 +11,8 @@ Method mapping:
 - ``run_completions`` -> ``lean_completions``
 - ``run_declaration_file`` -> ``lean_declaration_file``
 - ``run_multi_attempt`` -> ``lean_multi_attempt``
-- ``run_theorem_soundness`` -> toolkit-native theorem soundness helper
+- ``run_declaration_soundness`` -> toolkit-native exact declaration soundness helper
+- ``run_declaration_soundness_batch`` -> batched exact declaration soundness helper
 """
 
 from __future__ import annotations
@@ -33,24 +34,34 @@ from ...config import ToolkitConfig
 from ...contracts.lsp_assist import (
     AttemptResult,
     CompletionItem,
+    DeclarationSoundnessResult,
+    DeclarationSoundnessTarget,
     DiagnosticMessage,
     LspCompletionsRequest,
     LspCompletionsResponse,
+    LspDeclarationSoundnessBatchRequest,
+    LspDeclarationSoundnessBatchResponse,
+    LspDeclarationSoundnessRequest,
+    LspDeclarationSoundnessResponse,
     LspDeclarationFileRequest,
     LspDeclarationFileResponse,
     LspMultiAttemptRequest,
     LspMultiAttemptResponse,
     LspRunSnippetRequest,
     LspRunSnippetResponse,
-    LspTheoremSoundnessRequest,
-    LspTheoremSoundnessResponse,
     Position,
     Range,
     SourceWarning,
 )
 from ...core.services import LspAssistService
 
-_AXIOM_DEPENDS_RE = re.compile(r"depends on axioms:\s*\[(?P<axioms>.*)\]")
+_AXIOM_DEPENDS_RE = re.compile(
+    r"^'(?P<declaration>.+?)'\s+depends on axioms:\s*\[(?P<axioms>.*?)\]\s*$",
+    re.DOTALL,
+)
+_AXIOM_NONE_RE = re.compile(
+    r"^'(?P<declaration>.+?)'\s+does not depend on any axioms\s*$"
+)
 
 _WARNING_PATTERNS: tuple[str, ...] = (
     r"set_option\s+debug\.",
@@ -436,11 +447,45 @@ class LspAssistServiceImpl(LspAssistService):
         finally:
             executor.shutdown(wait=False, cancel_futures=True)
 
-    def run_theorem_soundness(
+    def run_declaration_soundness(
         self,
-        req: LspTheoremSoundnessRequest,
-    ) -> LspTheoremSoundnessResponse:
-        """Check theorem soundness via a temporary ``#print axioms`` file."""
+        req: LspDeclarationSoundnessRequest,
+    ) -> LspDeclarationSoundnessResponse:
+        """Check one exact declaration through the batch implementation."""
+        batch = self.run_declaration_soundness_batch(
+            LspDeclarationSoundnessBatchRequest(
+                project_root=req.project_root,
+                declarations=(
+                    DeclarationSoundnessTarget(
+                        file_path=req.file_path,
+                        declaration_name=req.declaration_name,
+                    ),
+                ),
+                scan_source=req.scan_source,
+            )
+        )
+        if batch.items:
+            item = batch.items[0]
+            if batch.success and item.success:
+                return LspDeclarationSoundnessResponse(**item.__dict__)
+            return LspDeclarationSoundnessResponse(
+                file_path=item.file_path,
+                declaration_name=item.declaration_name,
+                success=False,
+                error_message=item.error_message or batch.error_message,
+            )
+        return LspDeclarationSoundnessResponse(
+            file_path=req.file_path,
+            declaration_name=req.declaration_name,
+            success=False,
+            error_message=batch.error_message or "declaration soundness check failed",
+        )
+
+    def run_declaration_soundness_batch(
+        self,
+        req: LspDeclarationSoundnessBatchRequest,
+    ) -> LspDeclarationSoundnessBatchResponse:
+        """Check exact declarations in one temporary ``#print axioms`` LSP file."""
         project_root: Path | None = None
         verify_path: Path | None = None
         rel_path: str | None = None
@@ -448,18 +493,46 @@ class LspAssistServiceImpl(LspAssistService):
         recycle_client = False
         try:
             project_root = self._resolve_project_root(req.project_root)
-            rel_file = self._normalize_file_path(project_root=project_root, file_path=req.file_path)
-            theorem_name = req.theorem_name.strip()
-            if not theorem_name:
-                raise ValueError("theorem_name is required")
+            if not req.declarations:
+                raise ValueError("declarations must be a non-empty list")
 
-            module_dot = LeanPath.from_rel_file(rel_file).dot
-            rel_path = f"_mcp_verify_{uuid.uuid4().hex}.lean"
-            verify_path = (project_root / rel_path).resolve()
-            verify_path.write_text(
-                f"import {module_dot}\n#print axioms {theorem_name}\n",
-                encoding="utf-8",
+            normalized: list[DeclarationSoundnessTarget] = []
+            declaration_names: set[str] = set()
+            module_names: list[str] = []
+            for target in req.declarations:
+                rel_file = self._normalize_file_path(
+                    project_root=project_root,
+                    file_path=target.file_path,
+                )
+                declaration_name = target.declaration_name.strip()
+                if not declaration_name:
+                    raise ValueError("declaration_name is required")
+                if any(char.isspace() for char in declaration_name) or any(
+                    char in declaration_name for char in "#;\n\r"
+                ):
+                    raise ValueError(
+                        f"declaration_name is not a safe exact Lean name: {declaration_name!r}"
+                    )
+                if declaration_name in declaration_names:
+                    raise ValueError(f"duplicate declaration_name: {declaration_name}")
+                declaration_names.add(declaration_name)
+                normalized.append(
+                    DeclarationSoundnessTarget(
+                        file_path=rel_file,
+                        declaration_name=declaration_name,
+                    )
+                )
+                module_name = LeanPath.from_rel_file(rel_file).dot
+                if module_name not in module_names:
+                    module_names.append(module_name)
+
+            lines = [*(f"import {module_name}" for module_name in module_names), ""]
+            lines.extend(
+                f"#print axioms {target.declaration_name}" for target in normalized
             )
+            rel_path = f"_mcp_decl_soundness_{uuid.uuid4().hex}.lean"
+            verify_path = (project_root / rel_path).resolve()
+            verify_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
             client = self.lsp_client_manager.get_client(project_root)
             client.open_file(rel_path)
@@ -474,44 +547,96 @@ class LspAssistServiceImpl(LspAssistService):
                 for item in diagnostics
                 if self._severity_text(item.get("severity")) == "error"
             ]
-            if error_messages:
-                return LspTheoremSoundnessResponse(
-                    success=False,
-                    error_message="; ".join(msg for msg in error_messages if msg.strip()),
-                    axioms=tuple(),
-                    warnings=tuple(),
-                    axiom_count=0,
-                    warning_count=0,
+            reports = self._parse_axiom_reports_from_diagnostics(diagnostics)
+            requested_names = {target.declaration_name for target in normalized}
+            unexpected_names = sorted(name for name in reports if name not in requested_names)
+            batch_errors = [msg for msg in error_messages if msg.strip()]
+            if unexpected_names:
+                batch_errors.append(
+                    "unexpected axiom reports for: "
+                    + ", ".join(repr(name) for name in unexpected_names)
                 )
 
-            axioms = self._parse_axioms_from_diagnostics(diagnostics)
             scan_source = (
                 req.scan_source
                 if req.scan_source is not None
-                else self.config.lsp_assist.theorem_soundness_scan_source_default
+                else self.config.lsp_assist.declaration_soundness_scan_source_default
             )
-            warnings = (
-                self._scan_source_warnings((project_root / rel_file).resolve())
-                if scan_source
-                else tuple()
-            )
-            return LspTheoremSoundnessResponse(
-                success=True,
-                error_message=None,
-                axioms=axioms,
-                warnings=warnings,
-                axiom_count=len(axioms),
-                warning_count=len(warnings),
+            warnings_by_file: dict[str, tuple[SourceWarning, ...]] = {}
+            if scan_source:
+                for target in normalized:
+                    if target.file_path not in warnings_by_file:
+                        warnings_by_file[target.file_path] = self._scan_source_warnings(
+                            (project_root / target.file_path).resolve()
+                        )
+
+            items: list[DeclarationSoundnessResult] = []
+            fallback_error = "; ".join(batch_errors)
+            for target in normalized:
+                matching_reports = reports.get(target.declaration_name, [])
+                warnings = warnings_by_file.get(target.file_path, tuple())
+                if len(matching_reports) == 1:
+                    axioms = matching_reports[0]
+                    items.append(
+                        DeclarationSoundnessResult(
+                            file_path=target.file_path,
+                            declaration_name=target.declaration_name,
+                            success=True,
+                            axioms=axioms,
+                            warnings=warnings,
+                            axiom_count=len(axioms),
+                            warning_count=len(warnings),
+                        )
+                    )
+                    continue
+                if not matching_reports:
+                    item_error = (
+                        fallback_error
+                        or f"axiom report not found for declaration '{target.declaration_name}'"
+                    )
+                else:
+                    item_error = (
+                        f"expected one axiom report for declaration '{target.declaration_name}', "
+                        f"received {len(matching_reports)}"
+                    )
+                items.append(
+                    DeclarationSoundnessResult(
+                        file_path=target.file_path,
+                        declaration_name=target.declaration_name,
+                        success=False,
+                        error_message=item_error,
+                        warnings=warnings,
+                        warning_count=len(warnings),
+                    )
+                )
+
+            success_count = sum(item.success for item in items)
+            failure_count = len(items) - success_count
+            success = failure_count == 0 and not batch_errors
+            error_message = None
+            if not success:
+                error_message = (
+                    "; ".join(batch_errors)
+                    if batch_errors
+                    else f"{failure_count} of {len(items)} declaration soundness checks failed"
+                )
+            return LspDeclarationSoundnessBatchResponse(
+                success=success,
+                error_message=error_message,
+                items=tuple(items),
+                count=len(items),
+                success_count=success_count,
+                failure_count=failure_count,
             )
         except Exception as exc:
             recycle_client = client is not None and project_root is not None
-            return LspTheoremSoundnessResponse(
+            return LspDeclarationSoundnessBatchResponse(
                 success=False,
                 error_message=str(exc),
-                axioms=tuple(),
-                warnings=tuple(),
-                axiom_count=0,
-                warning_count=0,
+                items=tuple(),
+                count=0,
+                success_count=0,
+                failure_count=0,
             )
         finally:
             if recycle_client and project_root is not None:
@@ -762,21 +887,27 @@ class LspAssistServiceImpl(LspAssistService):
 
         return sorted(items, key=sort_key)
 
-    @staticmethod
-    def _parse_axioms_from_diagnostics(raw_diags: list[dict[str, Any]]) -> tuple[str, ...]:
-        axioms: list[str] = []
+    @classmethod
+    def _parse_axiom_reports_from_diagnostics(
+        cls,
+        raw_diags: list[dict[str, Any]],
+    ) -> dict[str, list[tuple[str, ...]]]:
+        reports: dict[str, list[tuple[str, ...]]] = {}
         for item in raw_diags:
-            if LspAssistServiceImpl._severity_text(item.get("severity")) not in {"information", "info"}:
+            if cls._severity_text(item.get("severity")) not in {"information", "info"}:
                 continue
             msg = str(item.get("message") or item.get("data") or "")
-            match = _AXIOM_DEPENDS_RE.search(msg)
-            if match is None:
+            depends_match = _AXIOM_DEPENDS_RE.match(msg)
+            if depends_match is not None:
+                payload = depends_match.group("axioms").strip()
+                reports.setdefault(depends_match.group("declaration"), []).append(
+                    tuple(part.strip() for part in payload.split(",") if part.strip())
+                )
                 continue
-            payload = match.group("axioms").strip()
-            if not payload:
-                continue
-            axioms.extend(part.strip() for part in payload.split(",") if part.strip())
-        return tuple(axioms)
+            none_match = _AXIOM_NONE_RE.match(msg)
+            if none_match is not None:
+                reports.setdefault(none_match.group("declaration"), []).append(tuple())
+        return reports
 
     @staticmethod
     def _scan_source_warnings(abs_file: Path) -> tuple[SourceWarning, ...]:

@@ -6,14 +6,16 @@ from ...contracts.base import JsonDict
 from ...contracts.lsp_assist import (
     LspCompletionsRequest,
     LspCompletionsResponse,
+    LspDeclarationSoundnessBatchRequest,
+    LspDeclarationSoundnessBatchResponse,
+    LspDeclarationSoundnessRequest,
+    LspDeclarationSoundnessResponse,
     LspDeclarationFileRequest,
     LspDeclarationFileResponse,
     LspMultiAttemptRequest,
     LspMultiAttemptResponse,
     LspRunSnippetRequest,
     LspRunSnippetResponse,
-    LspTheoremSoundnessRequest,
-    LspTheoremSoundnessResponse,
 )
 from ...core.services import LspAssistService
 from ...transport.http import HttpConfig, HttpJsonClient
@@ -43,16 +45,22 @@ class LspAssistHttpClient(LspAssistService):
         data = self._post("/lsp/run_snippet", req.to_dict())
         return LspRunSnippetResponse.from_dict(data)
 
-    def run_theorem_soundness(
+    def run_declaration_soundness(
         self,
-        req: LspTheoremSoundnessRequest,
-    ) -> LspTheoremSoundnessResponse:
-        data = self._post("/lsp/theorem_soundness", req.to_dict())
-        return LspTheoremSoundnessResponse.from_dict(data)
+        req: LspDeclarationSoundnessRequest,
+    ) -> LspDeclarationSoundnessResponse:
+        data = self._post("/lsp/declaration_soundness", req.to_dict())
+        return LspDeclarationSoundnessResponse.from_dict(data)
+
+    def run_declaration_soundness_batch(
+        self,
+        req: LspDeclarationSoundnessBatchRequest,
+    ) -> LspDeclarationSoundnessBatchResponse:
+        data = self._post("/lsp/declaration_soundness_batch", req.to_dict())
+        return LspDeclarationSoundnessBatchResponse.from_dict(data)
 
     def _post(self, path: str, payload: JsonDict) -> JsonDict:
         return self.http_client.post_json(path, payload)
 
 
 __all__ = ["LspAssistHttpClient"]
-

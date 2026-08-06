@@ -1,16 +1,20 @@
 from lean_mcp_toolkit.contracts.lsp_assist import (
     CompletionItem,
+    DeclarationSoundnessResult,
+    DeclarationSoundnessTarget,
     DiagnosticMessage,
     LspCompletionsRequest,
     LspCompletionsResponse,
+    LspDeclarationSoundnessBatchRequest,
+    LspDeclarationSoundnessBatchResponse,
+    LspDeclarationSoundnessRequest,
+    LspDeclarationSoundnessResponse,
     LspDeclarationFileRequest,
     LspDeclarationFileResponse,
     LspMultiAttemptRequest,
     LspMultiAttemptResponse,
     LspRunSnippetRequest,
     LspRunSnippetResponse,
-    LspTheoremSoundnessRequest,
-    LspTheoremSoundnessResponse,
     Position,
     Range,
     SourceWarning,
@@ -56,10 +60,26 @@ def test_lsp_assist_requests_roundtrip() -> None:
     snippet = LspRunSnippetRequest.from_dict({"code": "import Mathlib"})
     assert snippet.code == "import Mathlib"
 
-    soundness = LspTheoremSoundnessRequest.from_dict(
-        {"file_path": "A/B.lean", "theorem_name": "A.B.t", "scan_source": False}
+    soundness = LspDeclarationSoundnessRequest.from_dict(
+        {"file_path": "A/B.lean", "declaration_name": "A.B.t", "scan_source": False}
     )
     assert soundness.scan_source is False
+
+    batch = LspDeclarationSoundnessBatchRequest.from_dict(
+        {
+            "project_root": "/tmp/proj",
+            "declarations": [
+                {"file_path": "A/B.lean", "declaration_name": "A.B.t"},
+                {"file_path": "C/D.lean", "declaration_name": "C.D.x"},
+            ],
+            "scan_source": False,
+        }
+    )
+    assert batch.declarations == (
+        DeclarationSoundnessTarget(file_path="A/B.lean", declaration_name="A.B.t"),
+        DeclarationSoundnessTarget(file_path="C/D.lean", declaration_name="C.D.x"),
+    )
+    assert batch.to_dict()["declarations"][1]["declaration_name"] == "C.D.x"
 
 
 def test_lsp_assist_responses_roundtrip() -> None:
@@ -133,22 +153,51 @@ def test_lsp_assist_responses_roundtrip() -> None:
     )
     assert run_resp.success is False
     assert run_resp.error_count == 1
-    assert run_resp.diagnostics[0] == DiagnosticMessage(
+    assert run_resp.diagnostics[0].to_dict() == DiagnosticMessage(
         severity="error",
         message="type mismatch",
         line=2,
         column=3,
-    )
+    ).to_dict()
 
-    soundness_resp = LspTheoremSoundnessResponse(
+    soundness_resp = LspDeclarationSoundnessResponse(
+        file_path="A/B.lean",
+        declaration_name="A.B.t",
         success=True,
         axioms=("Classical.choice",),
         warnings=(SourceWarning(line=8, pattern="unsafe"),),
         axiom_count=1,
         warning_count=1,
     )
-    loaded_soundness = LspTheoremSoundnessResponse.from_dict(soundness_resp.to_dict())
+    loaded_soundness = LspDeclarationSoundnessResponse.from_dict(soundness_resp.to_dict())
     assert loaded_soundness.success is True
+    assert loaded_soundness.declaration_name == "A.B.t"
     assert loaded_soundness.axiom_count == 1
     assert loaded_soundness.warnings[0].pattern == "unsafe"
 
+    batch_resp = LspDeclarationSoundnessBatchResponse(
+        success=False,
+        error_message="one item failed",
+        items=(
+            DeclarationSoundnessResult(
+                file_path="A/B.lean",
+                declaration_name="A.B.t",
+                success=True,
+            ),
+            DeclarationSoundnessResult(
+                file_path="C/D.lean",
+                declaration_name="C.D.x",
+                success=False,
+                error_message="report not found",
+            ),
+        ),
+        count=2,
+        success_count=1,
+        failure_count=1,
+    )
+    loaded_batch = LspDeclarationSoundnessBatchResponse.from_dict(batch_resp.to_dict())
+    assert loaded_batch.success is False
+    assert loaded_batch.count == 2
+    assert loaded_batch.success_count == 1
+    assert loaded_batch.failure_count == 1
+    assert loaded_batch.items[1].declaration_name == "C.D.x"

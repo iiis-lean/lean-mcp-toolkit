@@ -12,8 +12,8 @@ from lean_mcp_toolkit.app import ToolkitServer
 from lean_mcp_toolkit.backends import BackendKey
 from lean_mcp_toolkit.config import ToolkitConfig
 from lean_mcp_toolkit.contracts.lsp_assist import (
+    LspDeclarationSoundnessRequest,
     LspRunSnippetRequest,
-    LspTheoremSoundnessRequest,
 )
 from lean_mcp_toolkit.groups.lsp_assist.service_impl import LspAssistServiceImpl
 from lean_mcp_toolkit.groups.lsp_core.service_impl import LspCoreServiceImpl
@@ -140,8 +140,11 @@ def test_run_snippet_timeout_recycles_real_lsp_process_tree(tmp_path: Path) -> N
     not _has_real_lsp_runtime(),
     reason="real LSP cleanup test requires leanclient and lean/lake toolchain",
 )
-def test_theorem_soundness_timeout_recycles_real_lsp_process_tree(tmp_path: Path) -> None:
-    project_root, package_dir = _init_lake_project(tmp_path / "theorem_soundness_timeout", "CleanupCase")
+def test_declaration_soundness_timeout_recycles_real_lsp_process_tree(tmp_path: Path) -> None:
+    project_root, package_dir = _init_lake_project(
+        tmp_path / "declaration_soundness_timeout",
+        "CleanupCase",
+    )
     package_dir.mkdir(parents=True, exist_ok=True)
     basic_source = package_dir / "Basic.lean"
     basic_source.write_text("theorem t : True := by\n  trivial\n", encoding="utf-8")
@@ -171,12 +174,12 @@ def test_theorem_soundness_timeout_recycles_real_lsp_process_tree(tmp_path: Path
 
     service._get_diagnostics_with_hard_timeout = _raise_timeout  # type: ignore[method-assign]
 
-    response = service.run_theorem_soundness(
-        LspTheoremSoundnessRequest.from_dict(
+    response = service.run_declaration_soundness(
+        LspDeclarationSoundnessRequest.from_dict(
             {
                 "project_root": str(project_root),
                 "file_path": "CleanupCase/Basic.lean",
-                "theorem_name": "CleanupCase.Basic.t",
+                "declaration_name": "CleanupCase.Basic.t",
                 "scan_source": False,
             }
         )
@@ -185,7 +188,7 @@ def test_theorem_soundness_timeout_recycles_real_lsp_process_tree(tmp_path: Path
     assert response.success is False
     assert "timed out" in (response.error_message or "").lower()
     _wait_for_pids_to_exit(tracked_pids)
-    assert list(project_root.glob("_mcp_verify_*.lean")) == []
+    assert list(project_root.glob("_mcp_decl_soundness_*.lean")) == []
 
 
 @pytest.mark.skipif(
