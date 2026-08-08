@@ -731,6 +731,7 @@ class LspAssistServiceImpl(LspAssistService):
                 )
 
             lines = [*(f"import {module_name}" for module_name in module_names)]
+            lines.extend(["import Lean.Meta.Eqns", "import Lean.ProjFns"])
             if include_to_additive:
                 lines.append("import Mathlib.Tactic.Translate.ToAdditive")
             lines.extend(["", "open Lean Meta", "", "run_meta do", "  let env ← getEnv"])
@@ -770,6 +771,18 @@ class LspAssistServiceImpl(LspAssistService):
                     "      let signature := toString (← ppExpr info.type)",
                     "      let owner := env.getModuleIdxFor? target |>.map fun idx =>",
                     "        env.header.moduleNames[idx]!",
+                    "      let equationSource ← do",
+                    "        let .thmInfo theoremInfo := info | pure none",
+                    "        let some (_, lhs, _) := theoremInfo.type.getForallBody.eq? | pure none",
+                    "        let some candidate := lhs.getAppFn.constName? | pure none",
+                    "        let some equations ← Meta.getEqnsFor? candidate | pure none",
+                    "        if equations.contains target then pure (some candidate) else pure none",
+                    "      let coreProvenance : Option (String × Name) := match info with",
+                    '        | .ctorInfo ctorInfo => some ("inductive_constructor", ctorInfo.induct)',
+                    '        | .recInfo recInfo => some ("inductive_recursor", recInfo.getMajorInduct)',
+                    "        | _ => match env.getProjectionStructureName? target with",
+                    '          | some structureName => some ("structure_projection", structureName)',
+                    '          | none => equationSource.map fun source => ("equation_theorem", source)',
                 ]
             )
             if include_to_additive:
@@ -791,6 +804,8 @@ class LspAssistServiceImpl(LspAssistService):
                     '        ("signature", toJson signature),',
                     '        ("universe_count", toJson info.levelParams.length),',
                     '        ("owner_module", owner.map (toJson ·.toString) |>.getD Json.null),',
+                    '        ("core_generation_kind", coreProvenance.map (toJson ·.1) |>.getD Json.null),',
+                    '        ("core_generator_declaration", coreProvenance.map (toJson ·.2.toString) |>.getD Json.null),',
                     '        ("to_additive_sources", toJson toAdditiveSources)]',
                     f'      logInfo m!"{_COMPILED_DECLARATION_MARKER}{{payload.compress}}"',
                 ]
@@ -867,6 +882,10 @@ class LspAssistServiceImpl(LspAssistService):
                 signature = str(report.get("signature") or "")
                 owner_module = report.get("owner_module")
                 sources = report.get("to_additive_sources")
+                core_generation_kind = report.get("core_generation_kind")
+                core_generator_declaration = report.get(
+                    "core_generator_declaration"
+                )
                 if not kind or not signature or not isinstance(sources, list):
                     items.append(
                         CompiledDeclarationResult(
@@ -874,6 +893,21 @@ class LspAssistServiceImpl(LspAssistService):
                             declaration_name=target.declaration_name,
                             success=False,
                             error_message="compiled declaration report is incomplete",
+                            provenance_error_message=provenance_error_message,
+                        )
+                    )
+                    continue
+                core_fields = (core_generation_kind, core_generator_declaration)
+                if (core_fields[0] is None) != (core_fields[1] is None) or any(
+                    value is not None and not isinstance(value, str)
+                    for value in core_fields
+                ):
+                    items.append(
+                        CompiledDeclarationResult(
+                            module=target.module,
+                            declaration_name=target.declaration_name,
+                            success=False,
+                            error_message="compiled declaration core provenance is incomplete",
                             provenance_error_message=provenance_error_message,
                         )
                     )
@@ -888,6 +922,11 @@ class LspAssistServiceImpl(LspAssistService):
                     item_provenance_error = (
                         "multiple to_additive sources map to the exact compiled declaration"
                     )
+                if generation_kind is None and isinstance(
+                    core_generation_kind, str
+                ) and isinstance(core_generator_declaration, str):
+                    generation_kind = core_generation_kind
+                    generator_declaration = core_generator_declaration
                 items.append(
                     CompiledDeclarationResult(
                         module=target.module,

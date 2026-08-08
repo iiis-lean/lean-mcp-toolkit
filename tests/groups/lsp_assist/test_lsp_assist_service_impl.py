@@ -644,6 +644,72 @@ def test_lsp_assist_compiled_declaration_batch_keeps_identity_without_mathlib(
     )
 
 
+def test_lsp_assist_compiled_declaration_batch_preserves_core_provenance(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "lean-toolchain").write_text(
+        "leanprover/lean4:v4.32.0\n",
+        encoding="utf-8",
+    )
+    cfg = ToolkitConfig.from_dict(
+        {
+            "server": {"default_project_root": str(tmp_path)},
+            "groups": {"enabled_groups": ["lsp_assist"]},
+            "lsp_assist": {"enabled": True},
+        }
+    )
+    provenance = [
+        ("Fixture.eq_1", "theorem", "equation_theorem", "Fixture.fn"),
+        ("Fixture.mk", "constructor", "inductive_constructor", "Fixture"),
+        ("Fixture.rec", "recursor", "inductive_recursor", "Fixture"),
+        ("Fixture.field", "definition", "structure_projection", "Fixture"),
+    ]
+    diagnostics = []
+    for index, (name, kind, generation_kind, generator) in enumerate(provenance):
+        diagnostics.append(
+            {
+                "severity": 3,
+                "message": (
+                    "__TOOLKIT_COMPILED_DECL__"
+                    f'{{"core_generation_kind":"{generation_kind}",'
+                    f'"core_generator_declaration":"{generator}",'
+                    f'"declaration_kind":"{kind}",'
+                    f'"declaration_name":"{name}","found":true,"index":{index},'
+                    f'"owner_module":"Fixture","signature":"True",'
+                    '"to_additive_sources":[],"universe_count":0}'
+                ),
+            }
+        )
+    fake_client = _FakeLspClient(
+        file_content="",
+        target_uri=tmp_path.resolve().as_uri(),
+        verify_diagnostics=diagnostics,
+    )
+    service = LspAssistServiceImpl(
+        config=cfg,
+        lsp_client_manager=_FakeLspClientManager(client=fake_client),
+    )
+
+    response = service.run_compiled_declaration_batch(
+        LspCompiledDeclarationBatchRequest.from_dict(
+            {
+                "declarations": [
+                    {"module": "Fixture", "declaration_name": item[0]}
+                    for item in provenance
+                ]
+            }
+        )
+    )
+
+    assert response.success is True
+    assert [item.generation_kind for item in response.items] == [
+        item[2] for item in provenance
+    ]
+    assert [item.generator_declaration for item in response.items] == [
+        item[3] for item in provenance
+    ]
+
+
 def test_lsp_assist_compiled_declaration_batch_rejects_duplicate_exact_ref(
     tmp_path: Path,
 ) -> None:

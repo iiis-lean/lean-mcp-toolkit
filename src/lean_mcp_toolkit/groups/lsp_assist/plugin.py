@@ -334,8 +334,16 @@ _COMPILED_DECLARATION_RESULT_RETURNS: tuple[ToolReturnSpec, ...] = (
     ToolReturnSpec("universe_count", "int", "Number of declaration universe parameters."),
     ToolReturnSpec("representation", "str | null", "Always compiled_reference on success."),
     ToolReturnSpec("reference_code", "str | null", "Stable exact-reference witness when supported."),
-    ToolReturnSpec("generation_kind", "str | null", "Recognized generator kind, if any."),
-    ToolReturnSpec("generator_declaration", "str | null", "Exact generator source declaration."),
+    ToolReturnSpec(
+        "generation_kind",
+        "str | null",
+        "Recognized to_additive, equation, inductive, or structure generator kind, if any.",
+    ),
+    ToolReturnSpec(
+        "generator_declaration",
+        "str | null",
+        "Exact generator/source declaration established by Lean environment state.",
+    ),
     ToolReturnSpec(
         "provenance_error_message",
         "str | null",
