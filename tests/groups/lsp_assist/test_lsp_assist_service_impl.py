@@ -582,9 +582,7 @@ def test_lsp_assist_compiled_declaration_batch_preserves_exact_identity_and_prov
     assert exact.declaration_kind == "theorem"
     assert exact.signature == "∀ {α : Type}, True"
     assert exact.representation == "compiled_reference"
-    assert exact.reference_code == (
-        "theorem _root_.Finset.add_kneser := _root_.Finset.add_kneser"
-    )
+    assert exact.reference_code == "#check _root_.Finset.add_kneser"
     assert exact.generation_kind == "to_additive"
     assert exact.generator_declaration == "Finset.mul_kneser"
     assert response.items[1].success is False

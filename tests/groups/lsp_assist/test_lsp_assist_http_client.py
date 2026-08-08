@@ -69,7 +69,7 @@ class _FakeHttpJsonClient:
                         "declaration_kind": "theorem",
                         "signature": "True",
                         "representation": "compiled_reference",
-                        "reference_code": "theorem _root_.A.B.t := _root_.A.B.t",
+                        "reference_code": "#check _root_.A.B.t",
                     }
                 ],
                 "count": 1,

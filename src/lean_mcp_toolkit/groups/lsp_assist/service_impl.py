@@ -1018,7 +1018,7 @@ class LspAssistServiceImpl(LspAssistService):
         if declaration_kind != "theorem":
             return None
         rooted_name = declaration_name.removeprefix("_root_.")
-        return f"theorem _root_.{rooted_name} := _root_.{rooted_name}"
+        return f"#check _root_.{rooted_name}"
 
     def _resolve_project_root(self, project_root: str | None) -> Path:
         return resolve_project_root(
