@@ -13,6 +13,7 @@ Method mapping:
 - ``run_multi_attempt`` -> ``lean_multi_attempt``
 - ``run_declaration_soundness`` -> toolkit-native exact declaration soundness helper
 - ``run_declaration_soundness_batch`` -> batched exact declaration soundness helper
+- ``run_compiled_declaration_batch`` -> batched Environment identity/provenance helper
 """
 
 from __future__ import annotations
@@ -33,12 +34,16 @@ from ...backends.lsp import LeanLSPClientManager
 from ...config import ToolkitConfig
 from ...contracts.lsp_assist import (
     AttemptResult,
+    CompiledDeclarationResult,
+    CompiledDeclarationTarget,
     CompletionItem,
     DeclarationSoundnessResult,
     DeclarationSoundnessTarget,
     DiagnosticMessage,
     LspCompletionsRequest,
     LspCompletionsResponse,
+    LspCompiledDeclarationBatchRequest,
+    LspCompiledDeclarationBatchResponse,
     LspDeclarationSoundnessBatchRequest,
     LspDeclarationSoundnessBatchResponse,
     LspDeclarationSoundnessRequest,
@@ -62,6 +67,7 @@ _AXIOM_DEPENDS_RE = re.compile(
 _AXIOM_NONE_RE = re.compile(
     r"^'(?P<declaration>.+?)'\s+does not depend on any axioms\s*$"
 )
+_COMPILED_DECLARATION_MARKER = "__TOOLKIT_COMPILED_DECL__"
 
 _WARNING_PATTERNS: tuple[str, ...] = (
     r"set_option\s+debug\.",
@@ -670,6 +676,311 @@ class LspAssistServiceImpl(LspAssistService):
                 except Exception:
                     pass
 
+    def run_compiled_declaration_batch(
+        self,
+        req: LspCompiledDeclarationBatchRequest,
+    ) -> LspCompiledDeclarationBatchResponse:
+        """Inspect exact imported constants through one compiler-backed LSP probe."""
+        project_root: Path | None = None
+        verify_path: Path | None = None
+        rel_path: str | None = None
+        client: Any | None = None
+        recycle_client = False
+        try:
+            project_root = self._resolve_project_root(req.project_root)
+            if not req.declarations:
+                raise ValueError("declarations must be a non-empty list")
+
+            normalized: list[CompiledDeclarationTarget] = []
+            exact_refs: set[tuple[str, str]] = set()
+            module_names: list[str] = []
+            for target in req.declarations:
+                module_name = LeanPath.from_dot(target.module).dot
+                declaration_name = target.declaration_name.strip()
+                if not declaration_name:
+                    raise ValueError("declaration_name is required")
+                if any(char.isspace() for char in declaration_name) or any(
+                    char in declaration_name for char in "#;`\n\r"
+                ):
+                    raise ValueError(
+                        f"declaration_name is not a safe exact Lean name: {declaration_name!r}"
+                    )
+                exact_ref = (module_name, declaration_name)
+                if exact_ref in exact_refs:
+                    raise ValueError(
+                        "duplicate compiled declaration target: "
+                        f"{module_name}::{declaration_name}"
+                    )
+                exact_refs.add(exact_ref)
+                normalized.append(
+                    CompiledDeclarationTarget(
+                        module=module_name,
+                        declaration_name=declaration_name,
+                    )
+                )
+                if module_name not in module_names:
+                    module_names.append(module_name)
+
+            provenance_error_message: str | None = None
+            include_to_additive = req.include_to_additive_provenance
+            if include_to_additive and not self._project_has_to_additive(project_root):
+                include_to_additive = False
+                provenance_error_message = (
+                    "to_additive provenance is unavailable because the project does not expose "
+                    "Mathlib.Tactic.Translate.ToAdditive"
+                )
+
+            lines = [*(f"import {module_name}" for module_name in module_names)]
+            if include_to_additive:
+                lines.append("import Mathlib.Tactic.Translate.ToAdditive")
+            lines.extend(["", "open Lean Meta", "", "run_meta do", "  let env ← getEnv"])
+            if include_to_additive:
+                lines.extend(
+                    [
+                        "  let translations :=",
+                        "    (SimplePersistentEnvExtension.getState "
+                        "Mathlib.Tactic.ToAdditive.translations env).get",
+                    ]
+                )
+            targets = ", ".join(
+                f"({index}, `{target.declaration_name})"
+                for index, target in enumerate(normalized)
+            )
+            lines.extend(
+                [
+                    f"  let targets : Array (Nat × Name) := #[{targets}]",
+                    "  for (index, target) in targets do",
+                    "    match env.find? target with",
+                    "    | none =>",
+                    "      let payload := Json.mkObj [",
+                    '        ("index", toJson index),',
+                    '        ("declaration_name", toJson target.toString),',
+                    '        ("found", toJson false)]',
+                    f'      logInfo m!"{_COMPILED_DECLARATION_MARKER}{{payload.compress}}"',
+                    "    | some info =>",
+                    "      let kind := match info with",
+                    '        | .axiomInfo _ => "axiom"',
+                    '        | .defnInfo _ => "definition"',
+                    '        | .thmInfo _ => "theorem"',
+                    '        | .opaqueInfo _ => "opaque"',
+                    '        | .quotInfo _ => "quotient"',
+                    '        | .inductInfo _ => "inductive"',
+                    '        | .ctorInfo _ => "constructor"',
+                    '        | .recInfo _ => "recursor"',
+                    "      let signature := toString (← ppExpr info.type)",
+                    "      let owner := env.getModuleIdxFor? target |>.map fun idx =>",
+                    "        env.header.moduleNames[idx]!",
+                ]
+            )
+            if include_to_additive:
+                lines.extend(
+                    [
+                        "      let toAdditiveSources := translations.toList.filterMap fun item =>",
+                        "        if item.2.translation == target then some item.1.toString else none",
+                    ]
+                )
+            else:
+                lines.append("      let toAdditiveSources : List String := []")
+            lines.extend(
+                [
+                    "      let payload := Json.mkObj [",
+                    '        ("index", toJson index),',
+                    '        ("declaration_name", toJson target.toString),',
+                    '        ("found", toJson true),',
+                    '        ("declaration_kind", toJson kind),',
+                    '        ("signature", toJson signature),',
+                    '        ("universe_count", toJson info.levelParams.length),',
+                    '        ("owner_module", owner.map (toJson ·.toString) |>.getD Json.null),',
+                    '        ("to_additive_sources", toJson toAdditiveSources)]',
+                    f'      logInfo m!"{_COMPILED_DECLARATION_MARKER}{{payload.compress}}"',
+                ]
+            )
+
+            rel_path = f"_mcp_compiled_decls_{uuid.uuid4().hex}.lean"
+            verify_path = (project_root / rel_path).resolve()
+            verify_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+            client = self.lsp_client_manager.get_client(project_root)
+            client.open_file(rel_path)
+            raw_diag = self._get_diagnostics_with_hard_timeout(
+                client=client,
+                rel_path=rel_path,
+                timeout_seconds=float(self.config.backends.lsp.diagnostics_timeout_seconds),
+            )
+            diagnostics = self._extract_diagnostics_list(raw_diag)
+            error_messages = [
+                str(item.get("message") or item.get("data") or "")
+                for item in diagnostics
+                if self._severity_text(item.get("severity")) == "error"
+            ]
+            reports, report_errors = self._parse_compiled_declaration_reports(diagnostics)
+            batch_errors = [message for message in [*error_messages, *report_errors] if message]
+            unexpected_indexes = sorted(set(reports) - set(range(len(normalized))))
+            if unexpected_indexes:
+                batch_errors.append(
+                    "unexpected compiled declaration report indexes: "
+                    + ", ".join(str(index) for index in unexpected_indexes)
+                )
+
+            items: list[CompiledDeclarationResult] = []
+            for index, target in enumerate(normalized):
+                report = reports.get(index)
+                if report is None:
+                    items.append(
+                        CompiledDeclarationResult(
+                            module=target.module,
+                            declaration_name=target.declaration_name,
+                            success=False,
+                            error_message=(
+                                "; ".join(batch_errors)
+                                or "compiled declaration report was not returned"
+                            ),
+                            provenance_error_message=provenance_error_message,
+                        )
+                    )
+                    continue
+                if report.get("declaration_name") != target.declaration_name:
+                    items.append(
+                        CompiledDeclarationResult(
+                            module=target.module,
+                            declaration_name=target.declaration_name,
+                            success=False,
+                            error_message="compiled declaration report identity mismatch",
+                            provenance_error_message=provenance_error_message,
+                        )
+                    )
+                    continue
+                if report.get("found") is not True:
+                    items.append(
+                        CompiledDeclarationResult(
+                            module=target.module,
+                            declaration_name=target.declaration_name,
+                            success=False,
+                            error_message=(
+                                f"compiled declaration not found: {target.declaration_name}"
+                            ),
+                            provenance_error_message=provenance_error_message,
+                        )
+                    )
+                    continue
+                kind = str(report.get("declaration_kind") or "")
+                signature = str(report.get("signature") or "")
+                owner_module = report.get("owner_module")
+                sources = report.get("to_additive_sources")
+                if not kind or not signature or not isinstance(sources, list):
+                    items.append(
+                        CompiledDeclarationResult(
+                            module=target.module,
+                            declaration_name=target.declaration_name,
+                            success=False,
+                            error_message="compiled declaration report is incomplete",
+                            provenance_error_message=provenance_error_message,
+                        )
+                    )
+                    continue
+                generation_kind: str | None = None
+                generator_declaration: str | None = None
+                item_provenance_error = provenance_error_message
+                if len(sources) == 1 and isinstance(sources[0], str):
+                    generation_kind = "to_additive"
+                    generator_declaration = sources[0]
+                elif len(sources) > 1:
+                    item_provenance_error = (
+                        "multiple to_additive sources map to the exact compiled declaration"
+                    )
+                items.append(
+                    CompiledDeclarationResult(
+                        module=target.module,
+                        declaration_name=target.declaration_name,
+                        success=True,
+                        owner_module=(
+                            str(owner_module) if owner_module is not None else None
+                        ),
+                        declaration_kind=kind,
+                        signature=signature,
+                        universe_count=int(report.get("universe_count") or 0),
+                        representation="compiled_reference",
+                        reference_code=self._compiled_reference_code(
+                            declaration_name=target.declaration_name,
+                            declaration_kind=kind,
+                        ),
+                        generation_kind=generation_kind,
+                        generator_declaration=generator_declaration,
+                        provenance_error_message=item_provenance_error,
+                    )
+                )
+
+            success_count = sum(item.success for item in items)
+            failure_count = len(items) - success_count
+            success = failure_count == 0 and not batch_errors
+            error_message = None
+            if not success:
+                error_message = (
+                    "; ".join(batch_errors)
+                    if batch_errors
+                    else f"{failure_count} of {len(items)} compiled declaration checks failed"
+                )
+            return LspCompiledDeclarationBatchResponse(
+                success=success,
+                error_message=error_message,
+                items=tuple(items),
+                count=len(items),
+                success_count=success_count,
+                failure_count=failure_count,
+            )
+        except Exception as exc:
+            recycle_client = client is not None and project_root is not None
+            return LspCompiledDeclarationBatchResponse(
+                success=False,
+                error_message=str(exc),
+                items=tuple(),
+                count=0,
+                success_count=0,
+                failure_count=0,
+            )
+        finally:
+            if recycle_client and project_root is not None:
+                try:
+                    self.lsp_client_manager.recycle_client(project_root)
+                except Exception:
+                    pass
+            elif client is not None and rel_path is not None:
+                try:
+                    client.close_files([rel_path])
+                except Exception:
+                    pass
+            if verify_path is not None:
+                try:
+                    verify_path.unlink(missing_ok=True)
+                except Exception:
+                    pass
+
+    @staticmethod
+    def _project_has_to_additive(project_root: Path) -> bool:
+        package_root = project_root / ".lake" / "packages" / "mathlib"
+        source = package_root / "Mathlib" / "Tactic" / "Translate" / "ToAdditive.lean"
+        olean = (
+            package_root
+            / ".lake"
+            / "build"
+            / "lib"
+            / "lean"
+            / "Mathlib"
+            / "Tactic"
+            / "Translate"
+            / "ToAdditive.olean"
+        )
+        return source.is_file() or olean.is_file()
+
+    @staticmethod
+    def _compiled_reference_code(
+        *, declaration_name: str, declaration_kind: str
+    ) -> str | None:
+        if declaration_kind != "theorem":
+            return None
+        rooted_name = declaration_name.removeprefix("_root_.")
+        return f"theorem _root_.{rooted_name} := _root_.{rooted_name}"
+
     def _resolve_project_root(self, project_root: str | None) -> Path:
         return resolve_project_root(
             project_root,
@@ -923,6 +1234,36 @@ class LspAssistServiceImpl(LspAssistService):
             if none_match is not None:
                 reports.setdefault(none_match.group("declaration"), []).append(tuple())
         return reports
+
+    @classmethod
+    def _parse_compiled_declaration_reports(
+        cls,
+        raw_diags: list[dict[str, Any]],
+    ) -> tuple[dict[int, dict[str, Any]], list[str]]:
+        reports: dict[int, dict[str, Any]] = {}
+        errors: list[str] = []
+        for item in raw_diags:
+            if cls._severity_text(item.get("severity")) not in {"information", "info"}:
+                continue
+            message = str(item.get("message") or item.get("data") or "")
+            marker_index = message.find(_COMPILED_DECLARATION_MARKER)
+            if marker_index < 0:
+                continue
+            payload = message[marker_index + len(_COMPILED_DECLARATION_MARKER) :].strip()
+            try:
+                report = json.loads(payload)
+            except Exception as exc:
+                errors.append(f"invalid compiled declaration report JSON: {exc}")
+                continue
+            if not isinstance(report, dict) or type(report.get("index")) is not int:
+                errors.append("compiled declaration report is missing integer index")
+                continue
+            index = report["index"]
+            if index in reports:
+                errors.append(f"duplicate compiled declaration report index: {index}")
+                continue
+            reports[index] = report
+        return reports, errors
 
     @staticmethod
     def _scan_source_warnings(abs_file: Path) -> tuple[SourceWarning, ...]:

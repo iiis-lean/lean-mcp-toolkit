@@ -13,6 +13,7 @@ except Exception:  # pragma: no cover
 
 from ...adapters.http import (
     handle_lsp_completions,
+    handle_lsp_compiled_declaration_batch,
     handle_lsp_declaration_soundness,
     handle_lsp_declaration_soundness_batch,
     handle_lsp_declaration_file,
@@ -23,6 +24,7 @@ from ...backends.keys import BackendKey
 from ...config import ToolkitConfig
 from ...contracts.lsp_assist import (
     LspCompletionsResponse,
+    LspCompiledDeclarationBatchResponse,
     LspDeclarationSoundnessBatchResponse,
     LspDeclarationSoundnessResponse,
     LspDeclarationFileResponse,
@@ -175,6 +177,29 @@ _DECLARATION_SOUNDNESS_BATCH_PARAMS: tuple[ToolParamSpec, ...] = (
     ),
 )
 
+_COMPILED_DECLARATION_BATCH_PARAMS: tuple[ToolParamSpec, ...] = (
+    _COMMON_FILE_PARAMS[0],
+    ToolParamSpec(
+        name="declarations",
+        type_hint="list[CompiledDeclarationTarget]",
+        required=True,
+        description=(
+            "Non-empty exact module/declaration_name targets. The tool imports each distinct "
+            "module once and preserves request order."
+        ),
+    ),
+    ToolParamSpec(
+        name="include_to_additive_provenance",
+        type_hint="bool",
+        required=False,
+        default_value="false",
+        description=(
+            "Whether to query Mathlib's to_additive translation state for generator provenance. "
+            "Compiled identity remains authoritative when provenance is unavailable."
+        ),
+    ),
+)
+
 _DIAGNOSTIC_RETURNS: tuple[ToolReturnSpec, ...] = (
     ToolReturnSpec("severity", "str", "Diagnostic severity."),
     ToolReturnSpec("message", "str", "Diagnostic message."),
@@ -298,6 +323,40 @@ _DECLARATION_SOUNDNESS_BATCH_RETURNS: tuple[ToolReturnSpec, ...] = (
     ToolReturnSpec("failure_count", "int", "Number of failed declaration results."),
 )
 
+_COMPILED_DECLARATION_RESULT_RETURNS: tuple[ToolReturnSpec, ...] = (
+    ToolReturnSpec("module", "str", "Exact module imported for this request item."),
+    ToolReturnSpec("declaration_name", "str", "Exact fully qualified declaration name."),
+    ToolReturnSpec("success", "bool", "Whether the exact constant was resolved."),
+    ToolReturnSpec("error_message", "str | null", "Per-item failure detail."),
+    ToolReturnSpec("owner_module", "str | null", "Compiler-recorded owner module."),
+    ToolReturnSpec("declaration_kind", "str | null", "Lean ConstantInfo kind."),
+    ToolReturnSpec("signature", "str | null", "Compiler pretty-printed declaration type."),
+    ToolReturnSpec("universe_count", "int", "Number of declaration universe parameters."),
+    ToolReturnSpec("representation", "str | null", "Always compiled_reference on success."),
+    ToolReturnSpec("reference_code", "str | null", "Stable exact-reference witness when supported."),
+    ToolReturnSpec("generation_kind", "str | null", "Recognized generator kind, if any."),
+    ToolReturnSpec("generator_declaration", "str | null", "Exact generator source declaration."),
+    ToolReturnSpec(
+        "provenance_error_message",
+        "str | null",
+        "Non-fatal provenance limitation; exact compiled identity remains valid.",
+    ),
+)
+
+_COMPILED_DECLARATION_BATCH_RETURNS: tuple[ToolReturnSpec, ...] = (
+    ToolReturnSpec("success", "bool", "Whether every exact declaration was resolved."),
+    ToolReturnSpec("error_message", "str | null", "Batch-level failure detail."),
+    ToolReturnSpec(
+        "items",
+        "list[CompiledDeclarationResult]",
+        "Per-declaration results in request order.",
+        children=_COMPILED_DECLARATION_RESULT_RETURNS,
+    ),
+    ToolReturnSpec("count", "int", "Number of returned items."),
+    ToolReturnSpec("success_count", "int", "Number of successful items."),
+    ToolReturnSpec("failure_count", "int", "Number of failed items."),
+)
+
 _BASE_TOOL_SPECS: tuple[GroupToolSpec, ...] = (
     GroupToolSpec(
         group_name="lsp_assist",
@@ -350,6 +409,18 @@ _BASE_TOOL_SPECS: tuple[GroupToolSpec, ...] = (
         params=_DECLARATION_SOUNDNESS_BATCH_PARAMS,
         returns=_DECLARATION_SOUNDNESS_BATCH_RETURNS,
     ),
+    GroupToolSpec(
+        group_name="lsp_assist",
+        canonical_name="lsp.compiled_declaration_batch",
+        raw_name="compiled_declaration_batch",
+        api_path="/lsp/compiled_declaration_batch",
+        description=(
+            "Inspect exact declarations from the compiled Lean Environment in one batch. "
+            "This is not source extraction or repository-wide discovery."
+        ),
+        params=_COMPILED_DECLARATION_BATCH_PARAMS,
+        returns=_COMPILED_DECLARATION_BATCH_RETURNS,
+    ),
 )
 
 _TOOL_SPECS: tuple[GroupToolSpec, ...] = with_output_schemas(
@@ -360,6 +431,7 @@ _TOOL_SPECS: tuple[GroupToolSpec, ...] = with_output_schemas(
         "lsp.multi_attempt": LspMultiAttemptResponse,
         "lsp.declaration_soundness": LspDeclarationSoundnessResponse,
         "lsp.declaration_soundness_batch": LspDeclarationSoundnessBatchResponse,
+        "lsp.compiled_declaration_batch": LspCompiledDeclarationBatchResponse,
     },
 )
 
@@ -402,6 +474,7 @@ class LspAssistGroupPlugin(GroupPlugin):
             "lsp.multi_attempt": lambda payload: handle_lsp_multi_attempt(service, payload),
             "lsp.declaration_soundness": lambda payload: handle_lsp_declaration_soundness(service, payload),
             "lsp.declaration_soundness_batch": lambda payload: handle_lsp_declaration_soundness_batch(service, payload),
+            "lsp.compiled_declaration_batch": lambda payload: handle_lsp_compiled_declaration_batch(service, payload),
         }
 
     def register_mcp_tools(
@@ -444,6 +517,13 @@ class LspAssistGroupPlugin(GroupPlugin):
             )
         for alias in aliases_by_canonical.get("lsp.declaration_soundness_batch", ()):
             self._register_declaration_soundness_batch(
+                mcp,
+                service=service,
+                alias=alias,
+                prune_none=prune_none,
+            )
+        for alias in aliases_by_canonical.get("lsp.compiled_declaration_batch", ()):
+            self._register_compiled_declaration_batch(
                 mcp,
                 service=service,
                 alias=alias,
@@ -584,6 +664,42 @@ class LspAssistGroupPlugin(GroupPlugin):
             }
             return await run_sync_mcp_service_handler(
                 handle_lsp_declaration_soundness_batch,
+                service,
+                prune_none(payload),
+            )
+
+    @staticmethod
+    def _register_compiled_declaration_batch(
+        mcp: Any,
+        *,
+        service: Any,
+        alias: str,
+        prune_none,
+    ) -> None:
+        spec = _TOOL_SPEC_MAP["lsp.compiled_declaration_batch"]
+
+        @mcp.tool(name=alias, description=spec.render_mcp_description(), structured_output=True)
+        async def _lsp_compiled_declaration_batch(
+            project_root: Annotated[
+                str | None,
+                Field(description=_param_desc(spec, "project_root")),
+            ] = None,
+            declarations: Annotated[
+                list[dict[str, str]] | None,
+                Field(description=_param_desc(spec, "declarations")),
+            ] = None,
+            include_to_additive_provenance: Annotated[
+                bool,
+                Field(description=_param_desc(spec, "include_to_additive_provenance")),
+            ] = False,
+        ) -> LspCompiledDeclarationBatchResponse:
+            payload = {
+                "project_root": project_root,
+                "declarations": declarations or [],
+                "include_to_additive_provenance": include_to_additive_provenance,
+            }
+            return await run_sync_mcp_service_handler(
+                handle_lsp_compiled_declaration_batch,
                 service,
                 prune_none(payload),
             )

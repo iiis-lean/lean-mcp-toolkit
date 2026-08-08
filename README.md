@@ -198,7 +198,7 @@ Inside the shell, the same live command vocabulary is available without the
 | `diagnostics` | Build/file diagnostics and lint checks | `diagnostics.build`, `diagnostics.lint`, `diagnostics.lint.no_sorry` |
 | `declarations` | Declaration extraction and symbol location | `declarations.extract`, `declarations.locate` |
 | `lsp_core` | Core Lean LSP inspection | `lsp.goal`, `lsp.hover`, `lsp.file_outline`, `lsp.run_snippet` |
-| `lsp_assist` | Higher-level proof assistance | `lsp.completions`, `lsp.multi_attempt`, `lsp.declaration_soundness`, `lsp.declaration_soundness_batch` |
+| `lsp_assist` | Higher-level proof assistance | `lsp.completions`, `lsp.multi_attempt`, `lsp.declaration_soundness`, `lsp.declaration_soundness_batch`, `lsp.compiled_declaration_batch` |
 | `lsp_heavy` | Widget and proof-profile inspection | `lsp.widgets`, `lsp.widget_source`, `lsp.proof_profile` |
 | `search_core` | LeanExplore declaration search | `lean_explore.find`, `lean_explore.get` |
 | `search_nav` | Local repository navigation | `repo_nav.tree`, `repo_nav.local_decl.find`, `repo_nav.grep` |

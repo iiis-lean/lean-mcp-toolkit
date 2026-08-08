@@ -307,6 +307,7 @@ def test_builtin_plugins_register_async_mcp_tools() -> None:
             assert "lsp.run_snippet" not in mcp.handlers
             assert "lsp.declaration_soundness" in mcp.handlers
             assert "lsp.declaration_soundness_batch" in mcp.handlers
+            assert "lsp.compiled_declaration_batch" in mcp.handlers
             assert "lsp.theorem_soundness" not in mcp.handlers
 
 

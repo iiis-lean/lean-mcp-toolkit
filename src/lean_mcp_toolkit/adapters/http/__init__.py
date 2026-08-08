@@ -19,6 +19,7 @@ from .lsp_core_routes import (
 )
 from .lsp_assist_routes import (
     handle_lsp_completions,
+    handle_lsp_compiled_declaration_batch,
     handle_lsp_declaration_soundness,
     handle_lsp_declaration_soundness_batch,
     handle_lsp_declaration_file,
@@ -77,6 +78,7 @@ __all__ = [
     "handle_lsp_hover",
     "handle_lsp_code_actions",
     "handle_lsp_completions",
+    "handle_lsp_compiled_declaration_batch",
     "handle_lsp_declaration_soundness",
     "handle_lsp_declaration_soundness_batch",
     "handle_lsp_declaration_file",

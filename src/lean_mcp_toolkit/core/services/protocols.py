@@ -38,6 +38,8 @@ from ...contracts.lsp_core import (
 from ...contracts.lsp_assist import (
     LspCompletionsRequest,
     LspCompletionsResponse,
+    LspCompiledDeclarationBatchRequest,
+    LspCompiledDeclarationBatchResponse,
     LspDeclarationSoundnessBatchRequest,
     LspDeclarationSoundnessBatchResponse,
     LspDeclarationSoundnessRequest,
@@ -206,6 +208,12 @@ class LspAssistService(Protocol):
         self,
         req: LspDeclarationSoundnessBatchRequest,
     ) -> LspDeclarationSoundnessBatchResponse:
+        ...
+
+    def run_compiled_declaration_batch(
+        self,
+        req: LspCompiledDeclarationBatchRequest,
+    ) -> LspCompiledDeclarationBatchResponse:
         ...
 
 

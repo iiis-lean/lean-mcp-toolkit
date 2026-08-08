@@ -6,6 +6,8 @@ from ...contracts.base import JsonDict
 from ...contracts.lsp_assist import (
     LspCompletionsRequest,
     LspCompletionsResponse,
+    LspCompiledDeclarationBatchRequest,
+    LspCompiledDeclarationBatchResponse,
     LspDeclarationSoundnessBatchRequest,
     LspDeclarationSoundnessBatchResponse,
     LspDeclarationSoundnessRequest,
@@ -58,6 +60,13 @@ class LspAssistHttpClient(LspAssistService):
     ) -> LspDeclarationSoundnessBatchResponse:
         data = self._post("/lsp/declaration_soundness_batch", req.to_dict())
         return LspDeclarationSoundnessBatchResponse.from_dict(data)
+
+    def run_compiled_declaration_batch(
+        self,
+        req: LspCompiledDeclarationBatchRequest,
+    ) -> LspCompiledDeclarationBatchResponse:
+        data = self._post("/lsp/compiled_declaration_batch", req.to_dict())
+        return LspCompiledDeclarationBatchResponse.from_dict(data)
 
     def _post(self, path: str, payload: JsonDict) -> JsonDict:
         return self.http_client.post_json(path, payload)

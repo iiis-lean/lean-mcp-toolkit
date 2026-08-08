@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from lean_mcp_toolkit.contracts.lsp_assist import (
     LspCompletionsRequest,
+    LspCompiledDeclarationBatchRequest,
     LspDeclarationSoundnessBatchRequest,
     LspDeclarationSoundnessRequest,
     LspDeclarationFileRequest,
@@ -50,6 +51,25 @@ class _FakeHttpJsonClient:
                         "declaration_name": "A.B.t",
                         "axioms": [],
                         "warnings": [],
+                    }
+                ],
+                "count": 1,
+                "success_count": 1,
+                "failure_count": 0,
+            }
+        if path == "/lsp/compiled_declaration_batch":
+            return {
+                "success": True,
+                "items": [
+                    {
+                        "success": True,
+                        "module": "A.B",
+                        "declaration_name": "A.B.t",
+                        "owner_module": "A.B",
+                        "declaration_kind": "theorem",
+                        "signature": "True",
+                        "representation": "compiled_reference",
+                        "reference_code": "theorem _root_.A.B.t := _root_.A.B.t",
                     }
                 ],
                 "count": 1,
@@ -113,3 +133,16 @@ def test_lsp_assist_http_client_roundtrip() -> None:
     )
     assert batch.success is True
     assert batch.items[0].declaration_name == "A.B.t"
+
+    compiled = client.run_compiled_declaration_batch(
+        LspCompiledDeclarationBatchRequest.from_dict(
+            {
+                "declarations": [
+                    {"module": "A.B", "declaration_name": "A.B.t"}
+                ]
+            }
+        )
+    )
+    assert compiled.success is True
+    assert compiled.items[0].owner_module == "A.B"
+    assert compiled.items[0].representation == "compiled_reference"

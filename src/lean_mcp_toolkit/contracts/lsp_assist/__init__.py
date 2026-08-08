@@ -2,6 +2,12 @@
 
 from .common import DiagnosticMessage, Position, Range
 from .completions import CompletionItem, LspCompletionsRequest, LspCompletionsResponse
+from .compiled_declaration import (
+    CompiledDeclarationResult,
+    CompiledDeclarationTarget,
+    LspCompiledDeclarationBatchRequest,
+    LspCompiledDeclarationBatchResponse,
+)
 from .declaration_soundness import (
     DeclarationSoundnessResult,
     DeclarationSoundnessTarget,
@@ -22,6 +28,10 @@ __all__ = [
     "CompletionItem",
     "LspCompletionsRequest",
     "LspCompletionsResponse",
+    "CompiledDeclarationTarget",
+    "CompiledDeclarationResult",
+    "LspCompiledDeclarationBatchRequest",
+    "LspCompiledDeclarationBatchResponse",
     "DeclarationSoundnessTarget",
     "DeclarationSoundnessResult",
     "LspDeclarationSoundnessRequest",

@@ -7,6 +7,7 @@ import pytest
 from lean_mcp_toolkit.config import ToolkitConfig
 from lean_mcp_toolkit.contracts.lsp_assist import (
     LspCompletionsRequest,
+    LspCompiledDeclarationBatchRequest,
     LspDeclarationSoundnessBatchRequest,
     LspDeclarationSoundnessRequest,
     LspDeclarationSoundnessResponse,
@@ -93,6 +94,7 @@ class _FakeLspClient:
         if self.diag_error is not None and (
             rel_path.startswith("_mcp_snippet_")
             or rel_path.startswith("_mcp_decl_soundness_")
+            or rel_path.startswith("_mcp_compiled_decls_")
         ):
             raise self.diag_error
         if rel_path.startswith("_mcp_snippet_"):
@@ -119,6 +121,8 @@ class _FakeLspClient:
                     },
                 }
             ]
+        if rel_path.startswith("_mcp_compiled_decls_"):
+            return self.verify_diagnostics or []
         return [
             {
                 "severity": 2,
@@ -496,6 +500,184 @@ def test_lsp_assist_declaration_soundness_batch_keeps_resolved_partial_results(
     assert response.items[0].success is True
     assert response.items[1].success is False
     assert "unknown constant" in (response.items[1].error_message or "")
+
+
+def test_lsp_assist_compiled_declaration_batch_preserves_exact_identity_and_provenance(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "lean-toolchain").write_text(
+        "leanprover/lean4:v4.32.0\n",
+        encoding="utf-8",
+    )
+    to_additive = (
+        tmp_path
+        / ".lake"
+        / "packages"
+        / "mathlib"
+        / "Mathlib"
+        / "Tactic"
+        / "Translate"
+        / "ToAdditive.lean"
+    )
+    to_additive.parent.mkdir(parents=True)
+    to_additive.write_text("", encoding="utf-8")
+    cfg = ToolkitConfig.from_dict(
+        {
+            "server": {"default_project_root": str(tmp_path)},
+            "groups": {"enabled_groups": ["lsp_assist"]},
+            "lsp_assist": {"enabled": True},
+        }
+    )
+    fake_client = _FakeLspClient(
+        file_content="",
+        target_uri=tmp_path.resolve().as_uri(),
+        diag_timeouts=[],
+        closed_paths=[],
+        verify_diagnostics=[
+            {
+                "severity": 3,
+                "message": (
+                    '__TOOLKIT_COMPILED_DECL__{"declaration_kind":"theorem",'
+                    '"declaration_name":"Finset.add_kneser","found":true,"index":0,'
+                    '"owner_module":"MiscYD.AddCombi.Kneser.Kneser",'
+                    '"signature":"∀ {α : Type}, True",'
+                    '"to_additive_sources":["Finset.mul_kneser"],"universe_count":1}'
+                ),
+            },
+            {
+                "severity": 3,
+                "message": (
+                    '__TOOLKIT_COMPILED_DECL__{"declaration_name":"Missing.target",'
+                    '"found":false,"index":1}'
+                ),
+            },
+        ],
+    )
+    service = LspAssistServiceImpl(
+        config=cfg,
+        lsp_client_manager=_FakeLspClientManager(client=fake_client),
+    )
+
+    response = service.run_compiled_declaration_batch(
+        LspCompiledDeclarationBatchRequest.from_dict(
+            {
+                "declarations": [
+                    {
+                        "module": "MiscYD.AddCombi.Kneser.Kneser",
+                        "declaration_name": "Finset.add_kneser",
+                    },
+                    {"module": "Missing.Module", "declaration_name": "Missing.target"},
+                ],
+                "include_to_additive_provenance": True,
+            }
+        )
+    )
+
+    assert response.success is False
+    assert response.success_count == 1
+    assert response.failure_count == 1
+    exact = response.items[0]
+    assert exact.success is True
+    assert exact.owner_module == "MiscYD.AddCombi.Kneser.Kneser"
+    assert exact.declaration_kind == "theorem"
+    assert exact.signature == "∀ {α : Type}, True"
+    assert exact.representation == "compiled_reference"
+    assert exact.reference_code == (
+        "theorem _root_.Finset.add_kneser := _root_.Finset.add_kneser"
+    )
+    assert exact.generation_kind == "to_additive"
+    assert exact.generator_declaration == "Finset.mul_kneser"
+    assert response.items[1].success is False
+    assert "not found" in (response.items[1].error_message or "")
+    assert fake_client.diag_timeouts == [15.0]
+    assert len(fake_client.closed_paths or []) == 1
+    assert list(tmp_path.glob("_mcp_compiled_decls_*.lean")) == []
+
+
+def test_lsp_assist_compiled_declaration_batch_keeps_identity_without_mathlib(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "lean-toolchain").write_text(
+        "leanprover/lean4:v4.32.0\n",
+        encoding="utf-8",
+    )
+    cfg = ToolkitConfig.from_dict(
+        {
+            "server": {"default_project_root": str(tmp_path)},
+            "groups": {"enabled_groups": ["lsp_assist"]},
+            "lsp_assist": {"enabled": True},
+        }
+    )
+    fake_client = _FakeLspClient(
+        file_content="",
+        target_uri=tmp_path.resolve().as_uri(),
+        verify_diagnostics=[
+            {
+                "severity": 3,
+                "message": (
+                    '__TOOLKIT_COMPILED_DECL__{"declaration_kind":"theorem",'
+                    '"declaration_name":"A.t","found":true,"index":0,'
+                    '"owner_module":"A","signature":"True",'
+                    '"to_additive_sources":[],"universe_count":0}'
+                ),
+            }
+        ],
+    )
+    service = LspAssistServiceImpl(
+        config=cfg,
+        lsp_client_manager=_FakeLspClientManager(client=fake_client),
+    )
+
+    response = service.run_compiled_declaration_batch(
+        LspCompiledDeclarationBatchRequest.from_dict(
+            {
+                "declarations": [{"module": "A", "declaration_name": "A.t"}],
+                "include_to_additive_provenance": True,
+            }
+        )
+    )
+
+    assert response.success is True
+    assert response.items[0].generation_kind is None
+    assert "provenance is unavailable" in (
+        response.items[0].provenance_error_message or ""
+    )
+
+
+def test_lsp_assist_compiled_declaration_batch_rejects_duplicate_exact_ref(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "lean-toolchain").write_text(
+        "leanprover/lean4:v4.32.0\n",
+        encoding="utf-8",
+    )
+    cfg = ToolkitConfig.from_dict(
+        {
+            "server": {"default_project_root": str(tmp_path)},
+            "groups": {"enabled_groups": ["lsp_assist"]},
+            "lsp_assist": {"enabled": True},
+        }
+    )
+    service = LspAssistServiceImpl(
+        config=cfg,
+        lsp_client_manager=_FakeLspClientManager(
+            client=_FakeLspClient(file_content="", target_uri=tmp_path.as_uri())
+        ),
+    )
+
+    response = service.run_compiled_declaration_batch(
+        LspCompiledDeclarationBatchRequest.from_dict(
+            {
+                "declarations": [
+                    {"module": "A", "declaration_name": "A.t"},
+                    {"module": "A", "declaration_name": "A.t"},
+                ]
+            }
+        )
+    )
+
+    assert response.success is False
+    assert "duplicate compiled declaration target" in (response.error_message or "")
 
 
 def test_lsp_assist_run_snippet_clamps_timeout_and_recycles_on_failure(tmp_path: Path) -> None:
