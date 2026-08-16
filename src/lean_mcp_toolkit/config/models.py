@@ -1265,7 +1265,7 @@ class LeanExploreBackendConfig:
     api_base_url: str = "https://www.leanexplore.com/api/v2"
     api_key_env: str = "LEANEXPLORE_API_KEY"
     api_timeout_seconds: int = 30
-    api_verify_on_startup: bool = False
+    api_verify_on_startup: bool = True
     api_health_path: str = "/health"
     api_trust_env: bool = True
     api_verify_ssl: bool = True
@@ -1302,7 +1302,7 @@ class LeanExploreBackendConfig:
             api_timeout_seconds=to_int(data.get("api_timeout_seconds"), default=30) or 30,
             api_verify_on_startup=to_bool(
                 data.get("api_verify_on_startup"),
-                default=False,
+                default=True,
             ),
             api_health_path=str(data.get("api_health_path") or "/health"),
             api_trust_env=to_bool(data.get("api_trust_env"), default=True),

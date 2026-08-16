@@ -151,6 +151,23 @@ def test_api_backend_search_get_and_metadata_verification(
     assert all(request["authorization"] == "Bearer test-secret" for request in requests)
 
 
+def test_api_backend_startup_validation_eagerly_checks_remote_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LEANEXPLORE_TEST_KEY", "test-secret")
+    with _remote_server() as (base_url, requests):
+        backend = _backend(base_url)
+
+        backend.validate_startup()
+        result = backend.search(query="Nat", limit=1, rerank_top=0, packages=None)
+
+    assert result.items[0].name == "Nat.succ"
+    assert [request["path"] for request in requests] == [
+        "/api/v2/health",
+        "/api/v2/search",
+    ]
+
+
 def test_api_backend_rejects_remote_lean_version_mismatch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -159,6 +176,20 @@ def test_api_backend_rejects_remote_lean_version_mismatch(
         backend = _backend(base_url, lean_version="4.32.0")
         with pytest.raises(RuntimeError, match="expected 4.32.0, got 4.28.0"):
             backend.search(query="Nat", limit=1, rerank_top=0, packages=("Mathlib",))
+
+
+def test_api_backend_startup_validation_rejects_unreachable_remote(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LEANEXPLORE_TEST_KEY", "test-secret")
+    backend = _backend(
+        "http://127.0.0.1:1/api/v2",
+        api_timeout_seconds=1,
+        api_retry_count=0,
+    )
+
+    with pytest.raises(RuntimeError, match="remote LeanExplore request failed"):
+        backend.validate_startup()
 
 
 def test_api_backend_retries_retryable_http_status(
@@ -182,3 +213,16 @@ def test_api_backend_requires_configured_token(monkeypatch: pytest.MonkeyPatch) 
     backend = _backend("http://127.0.0.1:1/api/v2")
     with pytest.raises(RuntimeError, match="missing API key environment variable"):
         backend.search(query="Nat", limit=1, rerank_top=0, packages=None)
+
+
+def test_api_backend_startup_validation_always_requires_configured_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("LEANEXPLORE_TEST_KEY", raising=False)
+    backend = _backend(
+        "http://127.0.0.1:1/api/v2",
+        api_verify_on_startup=False,
+    )
+
+    with pytest.raises(RuntimeError, match="missing API key environment variable"):
+        backend.validate_startup()

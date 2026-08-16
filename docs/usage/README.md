@@ -255,6 +255,12 @@ lean-mcp-toolkit serve \
   --config configs/lean_explore_remote_client.example.yaml
 ```
 
+The main Toolkit validates the configured credential before opening its
+transport. With the default `api_verify_on_startup: true`, it also checks the
+remote health endpoint, bearer authentication, readiness, and Lean version.
+Keep the secret in a machine-local environment file or service-manager secret;
+do not place a fixed token in a committed Toolkit configuration.
+
 Run only one service worker per GPU unless model sharing is provided outside the
 process. Multiple workers load duplicate embedding and reranker models.
 

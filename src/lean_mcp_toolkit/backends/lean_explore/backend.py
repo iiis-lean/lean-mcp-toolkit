@@ -54,6 +54,16 @@ class LeanExploreBackendAdapter(LeanExploreBackend):
                 close()
         self._backend = None
 
+    def validate_startup(self) -> None:
+        """Validate API-mode credentials and the configured remote endpoint."""
+
+        if self.backend_config.mode.strip().lower() != "api":
+            return
+        backend = self._get_backend()
+        validate = getattr(backend, "validate_startup", None)
+        if callable(validate):
+            validate()
+
     def _get_backend(self) -> LeanExploreBackend:
         if self._backend is not None:
             return self._backend

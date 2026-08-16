@@ -46,15 +46,18 @@ class LeanExploreApiBackend:
     def recycle(self) -> None:
         self.close()
 
+    def validate_startup(self) -> None:
+        """Fail before serving when required API configuration is unusable."""
+
+        self._configured_api_key()
+        if self.backend_config.api_verify_on_startup:
+            self._get_client()
+
     def _get_client(self) -> LeanExploreRemoteClient:
         if self._client is not None:
             return self._client
 
-        api_key = os.getenv(self.backend_config.api_key_env, "").strip()
-        if not api_key:
-            raise RuntimeError(
-                f"missing API key environment variable: {self.backend_config.api_key_env}"
-            )
+        api_key = self._configured_api_key()
         client = LeanExploreRemoteClient(
             backend_config=self.backend_config,
             api_key=api_key,
@@ -69,6 +72,14 @@ class LeanExploreApiBackend:
             self._metadata = metadata
         self._client = client
         return client
+
+    def _configured_api_key(self) -> str:
+        api_key = os.getenv(self.backend_config.api_key_env, "").strip()
+        if not api_key:
+            raise RuntimeError(
+                f"missing API key environment variable: {self.backend_config.api_key_env}"
+            )
+        return api_key
 
     def _validate_metadata(self, metadata: LeanExploreRemoteMetadata) -> None:
         if metadata.status.strip().lower() not in {"ok", "ready"}:

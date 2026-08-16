@@ -53,7 +53,7 @@ def test_default_diagnostics_config() -> None:
     assert cfg.backends.lean_explore.local_timeout_seconds == 30
     assert cfg.search_core.mathlib_lean_version == "4.28.0"
     assert cfg.backends.lean_explore.mode == "local"
-    assert cfg.backends.lean_explore.api_verify_on_startup is False
+    assert cfg.backends.lean_explore.api_verify_on_startup is True
     assert cfg.backends.lean_explore.api_trust_env is True
 
 

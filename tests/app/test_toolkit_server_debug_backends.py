@@ -31,6 +31,17 @@ class _FakeLeanInteractBackend:
     runtime_manager: _FakeLeanInteractRuntimeManager
 
 
+@dataclass(slots=True)
+class _FakeStartupBackend:
+    calls: int = 0
+    error: RuntimeError | None = None
+
+    def validate_startup(self) -> None:
+        self.calls += 1
+        if self.error is not None:
+            raise self.error
+
+
 def _build_server(tmp_path: Path) -> ToolkitServer:
     cfg = ToolkitConfig.from_dict({"server": {"default_project_root": str(tmp_path)}})
     return ToolkitServer(config=cfg, api_prefix="/api/v1")
@@ -58,6 +69,39 @@ def test_toolkit_server_can_recycle_cached_backends(tmp_path: Path) -> None:
     assert interact_payload["ok"] is True
     assert interact_payload["backend"] == "lean_interact"
     assert interact_manager.recycled_roots == [tmp_path.resolve()]
+
+
+def test_toolkit_server_runs_active_backend_startup_preflight(tmp_path: Path) -> None:
+    server = _build_server(tmp_path)
+    backend = _FakeStartupBackend()
+    ctx = BackendContext()
+    ctx.set(BackendKey.LEAN_EXPLORE_BACKEND, backend)
+    server._backend_context = ctx
+
+    server.run_startup_preflight()
+
+    assert backend.calls == 1
+
+
+def test_toolkit_server_aborts_before_transport_when_startup_preflight_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    server = _build_server(tmp_path)
+    backend = _FakeStartupBackend(error=RuntimeError("remote unavailable"))
+    ctx = BackendContext()
+    ctx.set(BackendKey.LEAN_EXPLORE_BACKEND, backend)
+    server._backend_context = ctx
+    monkeypatch.setattr(
+        ToolkitServer,
+        "run_unified",
+        lambda _self: pytest.fail("transport must not start"),
+    )
+
+    with pytest.raises(RuntimeError, match="remote unavailable"):
+        server.run()
+
+    assert backend.calls == 1
 
 
 def test_toolkit_server_recycle_reports_missing_backends(tmp_path: Path) -> None:

@@ -803,6 +803,7 @@ class ToolkitServer:
         return self._tool_view_leases.usage(view=name)
 
     def run(self) -> None:
+        self.run_startup_preflight()
         self.run_startup_warmup()
         mode = self.config.server.mode
         if mode == "http":
@@ -815,6 +816,14 @@ class ToolkitServer:
             self.run_unified()
             return
         raise ValueError(f"unsupported server mode: {mode}")
+
+    def run_startup_preflight(self) -> None:
+        """Validate active backends that declare fail-closed startup checks."""
+
+        backend = self._get_backend(BackendKey.LEAN_EXPLORE_BACKEND)
+        validate = getattr(backend, "validate_startup", None)
+        if callable(validate):
+            validate()
 
     def _close_value(self, value: Any) -> None:
         if value is None:
