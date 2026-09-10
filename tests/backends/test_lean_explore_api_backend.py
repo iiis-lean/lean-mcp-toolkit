@@ -18,6 +18,9 @@ def _remote_server(
     *,
     lean_version: str = "4.32.0",
     fail_search_attempts: int = 0,
+    auth_status: int = 200,
+    auth_ok: object = True,
+    auth_endpoint_available: bool = True,
 ) -> Iterator[tuple[str, list[dict[str, object]]]]:
     requests: list[dict[str, object]] = []
     remaining_failures = {"search": fail_search_attempts}
@@ -43,7 +46,22 @@ def _remote_server(
                     },
                 )
                 return
+            if parsed.path == "/api/v2/auth/check":
+                if not auth_endpoint_available:
+                    self._send(404, {"detail": "not found"})
+                    return
+                if self.headers.get("Authorization") != "Bearer test-secret":
+                    self._send(401, {"detail": "sensitive-auth-response"})
+                    return
+                if auth_status != 200:
+                    self._send(auth_status, {"detail": "sensitive-auth-response"})
+                    return
+                self._send(200, {"ok": auth_ok})
+                return
             if parsed.path == "/api/v2/search":
+                if self.headers.get("Authorization") != "Bearer test-secret":
+                    self._send(401, {"detail": "sensitive-auth-response"})
+                    return
                 if remaining_failures["search"] > 0:
                     remaining_failures["search"] -= 1
                     self._send(503, {"detail": "warming"})
@@ -58,9 +76,15 @@ def _remote_server(
                 )
                 return
             if parsed.path == "/api/v2/declarations/7":
+                if self.headers.get("Authorization") != "Bearer test-secret":
+                    self._send(401, {"detail": "sensitive-auth-response"})
+                    return
                 self._send(200, _record_payload())
                 return
             if parsed.path.startswith("/api/v2/declarations/"):
+                if self.headers.get("Authorization") != "Bearer test-secret":
+                    self._send(401, {"detail": "sensitive-auth-response"})
+                    return
                 self._send(404, {"detail": "not found"})
                 return
             self._send(404, {"detail": "not found"})
@@ -138,11 +162,12 @@ def test_api_backend_search_get_and_metadata_verification(
     assert missing is None
     assert [request["path"] for request in requests] == [
         "/api/v2/health",
+        "/api/v2/auth/check",
         "/api/v2/search",
         "/api/v2/declarations/7",
         "/api/v2/declarations/999",
     ]
-    assert requests[1]["query"] == {
+    assert requests[2]["query"] == {
         "q": ["successor"],
         "limit": ["3"],
         "rerank_top": ["50"],
@@ -164,18 +189,84 @@ def test_api_backend_startup_validation_eagerly_checks_remote_metadata(
     assert result.items[0].name == "Nat.succ"
     assert [request["path"] for request in requests] == [
         "/api/v2/health",
+        "/api/v2/auth/check",
         "/api/v2/search",
     ]
+
+
+@pytest.mark.parametrize("auth_status", [401, 403])
+def test_api_backend_rejects_authentication_without_retry_or_response_body(
+    monkeypatch: pytest.MonkeyPatch,
+    auth_status: int,
+) -> None:
+    monkeypatch.setenv("LEANEXPLORE_TEST_KEY", "test-secret")
+    with _remote_server(auth_status=auth_status) as (base_url, requests):
+        backend = _backend(
+            base_url,
+            api_retry_count=2,
+            api_retry_backoff_seconds=0.0,
+        )
+
+        with pytest.raises(RuntimeError, match="authentication failed") as exc_info:
+            backend.validate_startup()
+
+    assert "sensitive-auth-response" not in str(exc_info.value)
+    assert [request["path"] for request in requests] == [
+        "/api/v2/health",
+        "/api/v2/auth/check",
+    ]
+    assert backend._client is None
+    assert backend._metadata is None
+
+
+def test_api_backend_rejects_missing_authentication_endpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LEANEXPLORE_TEST_KEY", "test-secret")
+    with _remote_server(auth_endpoint_available=False) as (base_url, requests):
+        backend = _backend(base_url)
+
+        with pytest.raises(RuntimeError, match="authentication check endpoint was not found"):
+            backend.validate_startup()
+
+    assert [request["path"] for request in requests] == [
+        "/api/v2/health",
+        "/api/v2/auth/check",
+    ]
+    assert backend._client is None
+    assert backend._metadata is None
+
+
+def test_api_backend_rejects_invalid_authentication_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LEANEXPLORE_TEST_KEY", "test-secret")
+    with _remote_server(auth_ok=False) as (base_url, requests):
+        backend = _backend(base_url)
+
+        with pytest.raises(RuntimeError, match="authentication check response"):
+            backend.validate_startup()
+
+    assert [request["path"] for request in requests] == [
+        "/api/v2/health",
+        "/api/v2/auth/check",
+    ]
+    assert backend._client is None
+    assert backend._metadata is None
 
 
 def test_api_backend_rejects_remote_lean_version_mismatch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("LEANEXPLORE_TEST_KEY", "test-secret")
-    with _remote_server(lean_version="4.28.0") as (base_url, _requests):
+    with _remote_server(lean_version="4.28.0") as (base_url, requests):
         backend = _backend(base_url, lean_version="4.32.0")
         with pytest.raises(RuntimeError, match="expected 4.32.0, got 4.28.0"):
             backend.search(query="Nat", limit=1, rerank_top=0, packages=("Mathlib",))
+
+    assert [request["path"] for request in requests] == ["/api/v2/health"]
+    assert backend._client is None
+    assert backend._metadata is None
 
 
 def test_api_backend_startup_validation_rejects_unreachable_remote(
@@ -226,3 +317,19 @@ def test_api_backend_startup_validation_always_requires_configured_token(
 
     with pytest.raises(RuntimeError, match="missing API key environment variable"):
         backend.validate_startup()
+
+    monkeypatch.setenv("LEANEXPLORE_TEST_KEY", "wrong-secret")
+    with _remote_server() as (base_url, requests):
+        backend = _backend(
+            base_url,
+            api_verify_on_startup=False,
+            api_retry_count=2,
+        )
+
+        backend.validate_startup()
+        assert requests == []
+        with pytest.raises(RuntimeError, match="authentication failed") as exc_info:
+            backend.search(query="Nat", limit=1, rerank_top=0, packages=None)
+
+    assert "sensitive-auth-response" not in str(exc_info.value)
+    assert [request["path"] for request in requests] == ["/api/v2/search"]

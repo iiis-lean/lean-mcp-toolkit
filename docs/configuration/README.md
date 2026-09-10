@@ -167,10 +167,14 @@ backends:
 
 API mode always requires the environment variable named by `api_key_env` before
 the Toolkit starts serving. `api_verify_on_startup` defaults to `true`; when it
-is enabled, server startup also authenticates against the remote health endpoint
-and rejects an unavailable service, a non-ready status, or a `lean_version`
-different from `search_core.mathlib_lean_version`. Setting it to `false` skips
-only the remote health request; it does not make the credential optional.
+is enabled, server startup first reads the public health endpoint, rejects a
+non-ready status or a `lean_version` different from
+`search_core.mathlib_lean_version`, and then verifies the bearer credential at
+the protected `/api/v2/auth/check` endpoint. A missing auth-check endpoint,
+invalid response, or HTTP 401/403 fails startup; authentication failures are not
+retried. Setting `api_verify_on_startup` to `false` skips both startup probes but
+does not make the credential optional. The first protected operation then
+reports any credential failure.
 
 `api_trust_env=false` prevents inherited `HTTP_PROXY`, `HTTPS_PROXY`, and
 `ALL_PROXY` settings from intercepting a loopback SSH tunnel. Keep

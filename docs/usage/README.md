@@ -230,13 +230,16 @@ The service exposes:
 ```text
 GET /health
 GET /api/v2/health
+GET /api/v2/auth/check
 GET /api/v2/search
 GET /api/v2/declarations/{declaration_id}
 ```
 
-Search and declaration routes require the bearer token from
-`LEANEXPLORE_API_KEY`. The health response includes `index_id`, `lean_version`,
-and the detected Mathlib revision when available.
+The two health routes remain public and include `index_id`, `lean_version`, and
+the detected Mathlib revision when available. The auth-check, search, and
+declaration routes require the bearer token from `LEANEXPLORE_API_KEY`.
+`/api/v2/auth/check` returns only `{"ok": true}` and does not run a semantic
+search or expose service metadata.
 
 If the GPU host is reachable over SSH, forward its loopback service to the
 Toolkit host:
@@ -256,8 +259,12 @@ lean-mcp-toolkit serve \
 ```
 
 The main Toolkit validates the configured credential before opening its
-transport. With the default `api_verify_on_startup: true`, it also checks the
-remote health endpoint, bearer authentication, readiness, and Lean version.
+transport. With the default `api_verify_on_startup: true`, it checks public
+health, readiness, and Lean version before calling the protected auth-check
+endpoint. HTTP 401/403 is not retried, and a missing or invalid auth-check
+endpoint fails closed. Setting startup verification to `false` skips these
+probes but still requires the credential; the first protected operation then
+reports any authentication failure.
 Keep the secret in a machine-local environment file or service-manager secret;
 do not place a fixed token in a committed Toolkit configuration.
 

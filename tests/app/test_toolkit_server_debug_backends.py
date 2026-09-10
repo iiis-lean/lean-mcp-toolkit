@@ -104,6 +104,42 @@ def test_toolkit_server_aborts_before_transport_when_startup_preflight_fails(
     assert backend.calls == 1
 
 
+def test_toolkit_server_inactive_search_backend_does_not_require_api_credential(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("LEANEXPLORE_TEST_KEY", raising=False)
+    config = ToolkitConfig.from_dict(
+        {
+            "server": {
+                "mode": "unified",
+                "default_project_root": str(tmp_path),
+            },
+            "groups": {"enabled_groups": ["diagnostics"]},
+            "backends": {
+                "lean_explore": {
+                    "mode": "api",
+                    "api_key_env": "LEANEXPLORE_TEST_KEY",
+                    "api_verify_on_startup": True,
+                }
+            },
+        }
+    )
+    server = ToolkitServer.from_config(config)
+    assert server._backend_context is not None
+    assert server._backend_context.get(BackendKey.LEAN_EXPLORE_BACKEND) is None
+    transport_calls: list[bool] = []
+    monkeypatch.setattr(
+        ToolkitServer,
+        "run_unified",
+        lambda _self: transport_calls.append(True),
+    )
+
+    server.run()
+
+    assert transport_calls == [True]
+
+
 def test_toolkit_server_recycle_reports_missing_backends(tmp_path: Path) -> None:
     server = _build_server(tmp_path)
     server._backend_context = BackendContext()

@@ -265,8 +265,11 @@ lean-mcp-toolkit serve \
   --config configs/lean_explore_remote_client.example.yaml
 ```
 
-The remote adapter validates Lean-version metadata when configured to verify
-on startup. See [Remote LeanExplore Service](docs/usage/README.md#5-remote-leanexplore-service)
+With startup verification enabled, the remote adapter checks the public health
+metadata and Lean version, then calls the protected `/api/v2/auth/check`
+endpoint before the Toolkit opens its transport. The public health endpoint is
+not proof that the bearer credential is accepted. See
+[Remote LeanExplore Service](docs/usage/README.md#5-remote-leanexplore-service)
 for cache preparation, authentication, SSH forwarding, worker limits, and the
 currently supported index mappings.
 

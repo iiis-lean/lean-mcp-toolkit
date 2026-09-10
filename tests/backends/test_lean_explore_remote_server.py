@@ -84,6 +84,15 @@ def test_remote_server_search_get_auth_health_and_shutdown(
 
     with TestClient(app) as client:
         health = client.get("/api/v2/health")
+        auth_missing = client.get("/api/v2/auth/check")
+        auth_wrong = client.get(
+            "/api/v2/auth/check",
+            headers={"Authorization": "Bearer wrong-secret"},
+        )
+        auth_ok = client.get(
+            "/api/v2/auth/check",
+            headers={"Authorization": "Bearer test-secret"},
+        )
         unauthorized = client.get("/api/v2/search", params={"q": "successor"})
         search = client.get(
             "/api/v2/search",
@@ -111,6 +120,10 @@ def test_remote_server_search_get_auth_health_and_shutdown(
         "lean_version": "4.32.0",
         "mathlib_revision": "aae61ae084c21995ee248964a81e3750ad0db2db",
     }
+    assert auth_missing.status_code == 401
+    assert auth_wrong.status_code == 401
+    assert auth_ok.status_code == 200
+    assert auth_ok.json() == {"ok": True}
     assert unauthorized.status_code == 401
     assert search.status_code == 200
     assert search.json()["results"][0]["name"] == "Nat.succ"

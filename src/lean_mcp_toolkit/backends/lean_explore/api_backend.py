@@ -66,6 +66,7 @@ class LeanExploreApiBackend:
             try:
                 metadata = client.health()
                 self._validate_metadata(metadata)
+                client.check_auth()
             except Exception:
                 client.close()
                 raise

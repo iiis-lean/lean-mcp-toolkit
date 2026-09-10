@@ -122,6 +122,10 @@ def create_remote_server_app(
     def health() -> dict[str, str | None]:
         return _health_payload()
 
+    @app.get("/api/v2/auth/check", dependencies=[Depends(_authorize)])
+    def check_auth() -> dict[str, bool]:
+        return {"ok": True}
+
     @app.get("/api/v2/search", dependencies=[Depends(_authorize)])
     async def search(
         q: str = Query(..., min_length=1),

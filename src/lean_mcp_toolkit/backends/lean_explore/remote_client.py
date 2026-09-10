@@ -83,6 +83,18 @@ class LeanExploreRemoteClient:
             mathlib_revision=self._optional_str(payload.get("mathlib_revision")),
         )
 
+    def check_auth(self) -> None:
+        try:
+            payload = self._request_json("GET", "/auth/check")
+        except _RemoteNotFound as exc:
+            raise RuntimeError(
+                "remote LeanExplore authentication check endpoint was not found"
+            ) from exc
+        if payload.get("ok") is not True:
+            raise RuntimeError(
+                "remote LeanExplore authentication check response must contain `ok: true`"
+            )
+
     def close(self) -> None:
         self._opener = None
 
@@ -105,6 +117,11 @@ class LeanExploreRemoteClient:
                     body = response.read().decode("utf-8")
                     return self._decode_object(body)
             except urllib.error.HTTPError as exc:
+                if exc.code in {401, 403}:
+                    exc.close()
+                    raise RuntimeError(
+                        f"remote LeanExplore authentication failed with HTTP {exc.code}"
+                    ) from exc
                 body = exc.read().decode("utf-8", errors="replace")
                 if exc.code == 404:
                     raise _RemoteNotFound() from exc
