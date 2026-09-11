@@ -667,7 +667,8 @@ class DiagnosticsServiceImpl(DiagnosticsService):
         backend_reqs = tuple(
             DeclarationsInterfaceRequest(
                 project_root=options.project_root,
-                target_dot=module.dot,
+                target_rel_file=module.to_rel_file(),
+                module_dot=module.dot,
                 timeout_seconds=options.timeout_seconds,
             )
             for module in modules_for_extract
@@ -1025,7 +1026,8 @@ class DiagnosticsServiceImpl(DiagnosticsService):
             declarations_resp = self.declarations_manager.extract(
                 DeclarationsInterfaceRequest(
                     project_root=req.project_root,
-                    target_dot=req.module_dot,
+                    target_rel_file=LeanPath.from_dot(req.module_dot).to_rel_file(),
+                    module_dot=req.module_dot,
                     timeout_seconds=self.config.declarations.default_timeout_seconds,
                 )
             )

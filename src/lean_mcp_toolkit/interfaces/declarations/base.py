@@ -23,7 +23,8 @@ class DeclarationsInterfaceRequest:
     """Input for declaration extraction across backends."""
 
     project_root: Path
-    target_dot: str
+    target_rel_file: str
+    module_dot: str | None = None
     timeout_seconds: int | None = None
 
 

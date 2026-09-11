@@ -65,8 +65,9 @@ class _FakeDeclBackend:
             self.extract_calls = []
 
     def extract(self, req):
-        self.extract_calls.append(req.target_dot)
-        decls = self.by_module.get(req.target_dot, tuple())
+        target_dot = req.target_rel_file.removesuffix(".lean").replace("/", ".")
+        self.extract_calls.append(target_dot)
+        decls = self.by_module.get(target_dot, tuple())
         return DeclarationsBackendResponse(
             success=True,
             error_message=None,

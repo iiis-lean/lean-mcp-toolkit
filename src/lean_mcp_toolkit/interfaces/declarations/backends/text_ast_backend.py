@@ -7,7 +7,6 @@ Package/Summary surfaces, and declaration-driven lint helpers.
 
 from __future__ import annotations
 
-from ....backends.lean.path import LeanPath
 from ....backends.text_ast import parse_declarations
 from ..base import DeclarationsInterfaceRequest, DeclarationsInterfaceResponse
 from ..mappers import map_text_ast_declarations_to_items
@@ -31,9 +30,9 @@ class TextAstDeclarationsInterfaceBackend:
 
     def extract(self, req: DeclarationsInterfaceRequest) -> DeclarationsInterfaceResponse:
         try:
-            abs_file = (req.project_root / LeanPath.from_dot(req.target_dot).to_rel_file()).resolve()
+            abs_file = (req.project_root / req.target_rel_file).resolve()
             text = abs_file.read_text(encoding="utf-8")
-            parsed = parse_declarations(text=text, module_dot=req.target_dot)
+            parsed = parse_declarations(text=text, module_dot=req.module_dot or "")
             items = map_text_ast_declarations_to_items(
                 parsed.declarations,
                 include_value=self.include_value,

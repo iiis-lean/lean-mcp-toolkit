@@ -39,7 +39,7 @@ class LeanInteractDeclarationsInterfaceBackend:
         backend_resp = self.backend.extract(self._to_backend_req(req))
         items = self._map_items(
             project_root=req.project_root,
-            target_dot=req.target_dot,
+            target_rel_file=req.target_rel_file,
             raw_declarations=backend_resp.declarations,
         )
         return DeclarationsInterfaceResponse(
@@ -62,7 +62,7 @@ class LeanInteractDeclarationsInterfaceBackend:
                     error_message=backend_resp.error_message,
                     declarations=self._map_items(
                         project_root=req.project_root,
-                        target_dot=req.target_dot,
+                        target_rel_file=req.target_rel_file,
                         raw_declarations=backend_resp.declarations,
                     ),
                 )
@@ -72,7 +72,7 @@ class LeanInteractDeclarationsInterfaceBackend:
     def _to_backend_req(self, req: DeclarationsInterfaceRequest) -> DeclarationsBackendRequest:
         return DeclarationsBackendRequest(
             project_root=req.project_root,
-            target_dot=req.target_dot,
+            target_rel_file=req.target_rel_file,
             timeout_seconds=req.timeout_seconds,
         )
 
@@ -80,10 +80,13 @@ class LeanInteractDeclarationsInterfaceBackend:
         self,
         *,
         project_root: Path,
-        target_dot: str,
+        target_rel_file: str,
         raw_declarations: tuple[object, ...],
     ) -> tuple[DeclarationItem, ...]:
-        source_lines = self._load_source_lines(project_root=project_root, target_dot=target_dot)
+        source_lines = self._load_source_lines(
+            project_root=project_root,
+            target_rel_file=target_rel_file,
+        )
         return map_lean_raw_declarations_to_items(
             raw_declarations,
             source_lines=source_lines,
@@ -91,10 +94,8 @@ class LeanInteractDeclarationsInterfaceBackend:
         )
 
     @staticmethod
-    def _load_source_lines(*, project_root: Path, target_dot: str) -> list[str] | None:
-        from ....backends.lean.path import LeanPath
-
-        source_file = project_root / LeanPath.from_dot(target_dot).to_rel_file()
+    def _load_source_lines(*, project_root: Path, target_rel_file: str) -> list[str] | None:
+        source_file = project_root / target_rel_file
         try:
             return source_file.read_text(encoding="utf-8").splitlines()
         except Exception:

@@ -289,7 +289,7 @@ def test_lean_interact_backend_returns_raw_declarations_and_reuses_server(
 
     req = DeclarationsBackendRequest(
         project_root=tmp_path,
-        target_dot="A.B",
+        target_rel_file="A/B.lean",
         timeout_seconds=12,
     )
     first = backend.extract(req)
@@ -338,7 +338,7 @@ def test_lean_interact_backend_omits_optional_config_values_when_unset(
     resp = backend.extract(
         DeclarationsBackendRequest(
             project_root=tmp_path,
-            target_dot="A.B",
+            target_rel_file="A/B.lean",
             timeout_seconds=None,
         )
     )
@@ -370,7 +370,7 @@ def test_lean_interact_backend_auto_maps_project_lean_version_to_repl_rev(
     resp = backend.extract(
         DeclarationsBackendRequest(
             project_root=tmp_path,
-            target_dot="A.B",
+            target_rel_file="A/B.lean",
             timeout_seconds=None,
         )
     )
@@ -392,7 +392,7 @@ def test_lean_interact_backend_uses_auto_server_when_enabled(monkeypatch, tmp_pa
     resp = backend.extract(
         DeclarationsBackendRequest(
             project_root=tmp_path,
-            target_dot="A.B",
+            target_rel_file="A/B.lean",
             timeout_seconds=None,
         )
     )
@@ -413,7 +413,7 @@ def test_lean_interact_backend_uses_server_pool_by_default(monkeypatch, tmp_path
     resp = backend.extract(
         DeclarationsBackendRequest(
             project_root=tmp_path,
-            target_dot="A.B",
+            target_rel_file="A/B.lean",
             timeout_seconds=7,
         )
     )
@@ -444,8 +444,16 @@ def test_lean_interact_backend_extract_batch_uses_pool_batch(monkeypatch, tmp_pa
 
     responses = backend.extract_batch(
         (
-            DeclarationsBackendRequest(project_root=tmp_path, target_dot="A.B", timeout_seconds=9),
-            DeclarationsBackendRequest(project_root=tmp_path, target_dot="A.C", timeout_seconds=9),
+            DeclarationsBackendRequest(
+                project_root=tmp_path,
+                target_rel_file="A/B.lean",
+                timeout_seconds=9,
+            ),
+            DeclarationsBackendRequest(
+                project_root=tmp_path,
+                target_rel_file="A/C.lean",
+                timeout_seconds=9,
+            ),
         )
     )
 
@@ -459,6 +467,64 @@ def test_lean_interact_backend_extract_batch_uses_pool_batch(monkeypatch, tmp_pa
     assert _FakeLeanServerPool.last_run_batch["timeout_per_cmd"] == 9.0
 
 
+def test_lean_interact_backend_preserves_hidden_relative_file(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _reset_fakes()
+    backend = LeanInteractDeclarationsBackend(
+        toolchain_config=ToolchainConfig(),
+        backend_config=LeanInteractBackendConfig(use_server_pool=False),
+    )
+    monkeypatch.setattr(backend.runtime_manager, "_load_lean_interact", lambda: _fake_module_dict())
+
+    resp = backend.extract(
+        DeclarationsBackendRequest(
+            project_root=tmp_path,
+            target_rel_file=".lean_constellation/source/lean/Hidden.lean",
+        )
+    )
+
+    assert resp.success is True
+    assert _FakeLeanServer.last_run is not None
+    assert (
+        _FakeLeanServer.last_run["file_command"].path
+        == ".lean_constellation/source/lean/Hidden.lean"
+    )
+
+
+def test_lean_interact_backend_batch_preserves_hidden_relative_files(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _reset_fakes()
+    backend = LeanInteractDeclarationsBackend(
+        toolchain_config=ToolchainConfig(),
+        backend_config=LeanInteractBackendConfig(),
+    )
+    monkeypatch.setattr(backend.runtime_manager, "_load_lean_interact", lambda: _fake_module_dict())
+
+    responses = backend.extract_batch(
+        (
+            DeclarationsBackendRequest(
+                project_root=tmp_path,
+                target_rel_file=".hidden/One.lean",
+            ),
+            DeclarationsBackendRequest(
+                project_root=tmp_path,
+                target_rel_file=".hidden/Two.lean",
+            ),
+        )
+    )
+
+    assert all(resp.success for resp in responses)
+    assert _FakeLeanServerPool.last_run_batch is not None
+    assert [req.path for req in _FakeLeanServerPool.last_run_batch["requests"]] == [
+        ".hidden/One.lean",
+        ".hidden/Two.lean",
+    ]
+
+
 def test_lean_interact_backend_close_delegates_to_runtime_manager(monkeypatch, tmp_path: Path) -> None:
     _reset_fakes()
     backend = LeanInteractDeclarationsBackend(
@@ -470,7 +536,7 @@ def test_lean_interact_backend_close_delegates_to_runtime_manager(monkeypatch, t
     resp = backend.extract(
         DeclarationsBackendRequest(
             project_root=tmp_path,
-            target_dot="A.B",
+            target_rel_file="A/B.lean",
             timeout_seconds=None,
         )
     )
@@ -495,7 +561,7 @@ def test_lean_interact_backend_returns_structured_failure_for_lean_error(
     resp = backend.extract(
         DeclarationsBackendRequest(
             project_root=tmp_path,
-            target_dot="A.B",
+            target_rel_file="A/B.lean",
             timeout_seconds=None,
         )
     )
@@ -529,7 +595,7 @@ def test_lean_interact_backend_returns_structured_failure_for_response_errors(
     resp = backend.extract(
         DeclarationsBackendRequest(
             project_root=tmp_path,
-            target_dot="A.B",
+            target_rel_file="A/B.lean",
             timeout_seconds=None,
         )
     )
@@ -560,7 +626,7 @@ def test_lean_interact_backend_includes_exception_type_for_empty_message(
     resp = backend.extract(
         DeclarationsBackendRequest(
             project_root=tmp_path,
-            target_dot="A.B",
+            target_rel_file="A/B.lean",
             timeout_seconds=None,
         )
     )
@@ -581,7 +647,7 @@ def test_lean_interact_backend_recycles_runtime_on_timeout(monkeypatch, tmp_path
     resp = backend.extract(
         DeclarationsBackendRequest(
             project_root=tmp_path,
-            target_dot="A.B",
+            target_rel_file="A/B.lean",
             timeout_seconds=5,
         )
     )
@@ -608,8 +674,16 @@ def test_lean_interact_backend_recycles_batch_runtime_on_timeout(
 
     responses = backend.extract_batch(
         (
-            DeclarationsBackendRequest(project_root=tmp_path, target_dot="A.B", timeout_seconds=5),
-            DeclarationsBackendRequest(project_root=tmp_path, target_dot="A.C", timeout_seconds=5),
+            DeclarationsBackendRequest(
+                project_root=tmp_path,
+                target_rel_file="A/B.lean",
+                timeout_seconds=5,
+            ),
+            DeclarationsBackendRequest(
+                project_root=tmp_path,
+                target_rel_file="A/C.lean",
+                timeout_seconds=5,
+            ),
         )
     )
 

@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 from ...backends.declarations import DeclarationsBackend
-from ...backends.lean.path import LeanPath, resolve_project_root
+from ...backends.lean.path import resolve_project_root
 from ...backends.lsp import LeanLSPClientManager
 from ...config import ToolkitConfig
 from ...contracts.declarations import (
@@ -30,7 +30,7 @@ from ...interfaces.declarations.backends import (
     TextAstDeclarationsInterfaceBackend,
 )
 from ...tool_audit import audit_stage, get_current_audit_recorder
-from .paths import normalize_single_target_to_dot
+from .paths import normalize_single_target
 
 
 @dataclass(slots=True)
@@ -62,13 +62,14 @@ class DeclarationsServiceImpl(DeclarationsService):
         try:
             with audit_stage("resolve_target"):
                 project_root = self._resolve_project_root(req.project_root)
-                target_dot = normalize_single_target_to_dot(
+                target = normalize_single_target(
                     project_root=project_root,
                     target=req.target,
                 )
                 recorder = get_current_audit_recorder()
                 if recorder is not None:
-                    recorder.set_attr("target_dot", target_dot)
+                    recorder.set_attr("target_rel_file", target.relative_file)
+                    recorder.set_attr("module_dot", target.module_dot)
         except Exception as exc:
             return DeclarationExtractResponse(
                 success=False,
@@ -79,7 +80,8 @@ class DeclarationsServiceImpl(DeclarationsService):
 
         interface_req = DeclarationsInterfaceRequest(
             project_root=project_root,
-            target_dot=target_dot,
+            target_rel_file=target.relative_file,
+            module_dot=target.module_dot,
             timeout_seconds=self.config.declarations.default_timeout_seconds,
         )
         with audit_stage(
@@ -98,11 +100,11 @@ class DeclarationsServiceImpl(DeclarationsService):
         try:
             with audit_stage("resolve_target"):
                 project_root = self._resolve_project_root(req.project_root)
-                source_dot = normalize_single_target_to_dot(
+                source_target = normalize_single_target(
                     project_root=project_root,
                     target=req.source_file,
                 )
-                source_rel = LeanPath.from_dot(source_dot).to_rel_file()
+                source_rel = source_target.relative_file
         except Exception as exc:
             return DeclarationLocateResponse(
                 success=False,
@@ -294,15 +296,10 @@ class DeclarationsServiceImpl(DeclarationsService):
         target_abs: Path,
         candidate: dict,
     ) -> DeclarationItem | None:
-        try:
-            target_dot = LeanPath.from_abs_file(target_abs, project_root).dot
-        except Exception:
-            return None
-
         extracted = self.extract(
             DeclarationExtractRequest(
                 project_root=str(project_root),
-                target=target_dot,
+                target=str(target_abs),
             )
         )
         if not extracted.success or not extracted.declarations:

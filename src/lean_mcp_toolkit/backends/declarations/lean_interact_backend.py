@@ -6,7 +6,6 @@ from typing import Any
 
 from ...config import LeanInteractBackendConfig, ToolchainConfig
 from ..lean_interact_runtime import LeanInteractRuntimeManager
-from ..lean.path import LeanPath
 from .base import DeclarationsBackendRequest, DeclarationsBackendResponse
 
 
@@ -33,8 +32,7 @@ class LeanInteractDeclarationsBackend:
         self.runtime_manager.close()
 
     def extract(self, req: DeclarationsBackendRequest) -> DeclarationsBackendResponse:
-        rel_file = LeanPath.from_dot(req.target_dot).to_rel_file()
-        return self._extract_rel_file(req=req, rel_file=rel_file)
+        return self._extract_rel_file(req=req, rel_file=req.target_rel_file)
 
     def extract_batch(
         self,
@@ -44,7 +42,7 @@ class LeanInteractDeclarationsBackend:
             return tuple()
         requests = tuple(
             self.runtime_manager.make_file_command(
-                rel_file=LeanPath.from_dot(req.target_dot).to_rel_file(),
+                rel_file=req.target_rel_file,
                 declarations=True,
             )
             for req in reqs

@@ -19,7 +19,7 @@ else:  # pragma: no cover - runtime typing fallback when lean_interact is absent
 @dataclass(slots=True, frozen=True)
 class DeclarationsBackendRequest:
     project_root: Path
-    target_dot: str
+    target_rel_file: str
     timeout_seconds: int | None = None
 
 

@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from lean_mcp_toolkit.backends.declarations import (
     DeclarationsBackendRequest,
     DeclarationsBackendResponse,
@@ -85,17 +87,20 @@ class _FakeBackend:
 class _FakeLspClient:
     def __init__(self, target_uri: str = "file:///tmp/project/A/B.lean") -> None:
         self.last_opened: str | None = None
+        self.last_content_path: str | None = None
+        self.last_declarations_path: str | None = None
         self.target_uri = target_uri
 
     def open_file(self, rel_path: str) -> None:
         self.last_opened = rel_path
 
     def get_file_content(self, rel_path: str) -> str:
-        _ = rel_path
+        self.last_content_path = rel_path
         return "import A.B\n\n#check foo\n"
 
     def get_declarations(self, rel_path: str, line: int, column: int):
-        _ = rel_path, line, column
+        self.last_declarations_path = rel_path
+        _ = line, column
         return [
             {
                 "targetUri": self.target_uri,
@@ -154,8 +159,80 @@ def test_declarations_extract_normalizes_target_and_calls_backend(tmp_path: Path
     assert resp.declarations[0].value == ":= by trivial"
     assert resp.declarations[0].docstring == "/-- foo doc -/"
     assert backend.last_req is not None
-    assert backend.last_req.target_dot == "A.B"
+    assert backend.last_req.target_rel_file == "A/B.lean"
     assert backend.last_req.timeout_seconds == 15
+
+
+@pytest.mark.parametrize("target_kind", ["relative", "absolute", "dot"])
+def test_declarations_extract_preserves_regular_target_compatibility(
+    tmp_path: Path,
+    target_kind: str,
+) -> None:
+    target_file = tmp_path / "A" / "B.lean"
+    _write(target_file, "theorem foo : True := by trivial\n")
+    target = {
+        "relative": "A/B.lean",
+        "absolute": str(target_file.resolve()),
+        "dot": "A.B",
+    }[target_kind]
+    backend = _FakeBackend()
+    cfg = ToolkitConfig.from_dict(
+        {
+            "server": {"default_project_root": str(tmp_path)},
+            "declarations": {"default_backend": "lean_interact"},
+        }
+    )
+    svc = DeclarationsServiceImpl(config=cfg, backends={"lean_interact": backend})
+
+    resp = svc.extract(DeclarationExtractRequest.from_dict({"target": target}))
+
+    assert resp.success is True
+    assert backend.last_req is not None
+    assert backend.last_req.target_rel_file == "A/B.lean"
+
+
+def test_declarations_extract_preserves_hidden_relative_file_target(tmp_path: Path) -> None:
+    hidden_file = tmp_path / ".lean_constellation" / "source" / "lean" / "Hidden.lean"
+    _write(hidden_file, "theorem foo : True := by trivial\n")
+    backend = _FakeBackend()
+    cfg = ToolkitConfig.from_dict(
+        {
+            "server": {"default_project_root": str(tmp_path)},
+            "declarations": {"default_backend": "lean_interact"},
+        }
+    )
+    svc = DeclarationsServiceImpl(config=cfg, backends={"lean_interact": backend})
+
+    resp = svc.extract(
+        DeclarationExtractRequest.from_dict(
+            {"target": ".lean_constellation/source/lean/Hidden.lean"}
+        )
+    )
+
+    assert resp.success is True
+    assert backend.last_req is not None
+    assert backend.last_req.target_rel_file == ".lean_constellation/source/lean/Hidden.lean"
+
+
+def test_declarations_extract_preserves_hidden_absolute_file_target(tmp_path: Path) -> None:
+    hidden_file = tmp_path / ".lean_constellation" / "source" / "lean" / "Hidden.lean"
+    _write(hidden_file, "theorem foo : True := by trivial\n")
+    backend = _FakeBackend()
+    cfg = ToolkitConfig.from_dict(
+        {
+            "server": {"default_project_root": str(tmp_path)},
+            "declarations": {"default_backend": "lean_interact"},
+        }
+    )
+    svc = DeclarationsServiceImpl(config=cfg, backends={"lean_interact": backend})
+
+    resp = svc.extract(
+        DeclarationExtractRequest.from_dict({"target": str(hidden_file.resolve())})
+    )
+
+    assert resp.success is True
+    assert backend.last_req is not None
+    assert backend.last_req.target_rel_file == ".lean_constellation/source/lean/Hidden.lean"
 
 
 def test_declarations_extract_accepts_nested_project_root(tmp_path: Path) -> None:
@@ -275,6 +352,38 @@ def test_declarations_locate_matches_declaration_content(tmp_path: Path) -> None
     assert lsp_client.last_opened == "A/B.lean"
 
 
+@pytest.mark.parametrize("source_kind", ["relative", "absolute"])
+def test_declarations_locate_preserves_hidden_source_file_path(
+    tmp_path: Path,
+    source_kind: str,
+) -> None:
+    hidden_rel = ".lean_constellation/source/lean/Hidden.lean"
+    hidden_file = tmp_path / hidden_rel
+    _write(hidden_file, "#check foo\n")
+    source_file = hidden_rel if source_kind == "relative" else str(hidden_file.resolve())
+    lsp_client = _FakeLspClient(target_uri=(tmp_path / "A" / "B.lean").resolve().as_uri())
+    lsp_manager = _FakeLspClientManager(lsp_client)
+    cfg = ToolkitConfig.from_dict({"server": {"default_project_root": str(tmp_path)}})
+    svc = DeclarationsServiceImpl(
+        config=cfg,
+        lsp_client_manager=lsp_manager,  # type: ignore[arg-type]
+    )
+
+    resp = svc.locate(
+        DeclarationLocateRequest.from_dict(
+            {
+                "source_file": source_file,
+                "symbol": "foo",
+            }
+        )
+    )
+
+    assert resp.success is True
+    assert lsp_client.last_opened == hidden_rel
+    assert lsp_client.last_content_path == hidden_rel
+    assert lsp_client.last_declarations_path == hidden_rel
+
+
 def test_text_ast_declarations_normalize_kind_signature_and_ranges(tmp_path: Path) -> None:
     _write(
         tmp_path / "A" / "B.lean",
@@ -381,3 +490,20 @@ def test_text_ast_declarations_qualify_relative_dotted_names_inside_namespace(tm
     structure_decl, dotted_decl = resp.declarations
     assert structure_decl.name == "A.B.Box"
     assert dotted_decl.name == "A.B.Box.size"
+
+
+def test_text_ast_declarations_read_hidden_relative_file(tmp_path: Path) -> None:
+    hidden_rel = ".lean_constellation/source/lean/Hidden.lean"
+    _write(tmp_path / hidden_rel, "namespace Hidden\n\ntheorem kept : True := by trivial\n")
+    cfg = ToolkitConfig.from_dict(
+        {
+            "server": {"default_project_root": str(tmp_path)},
+            "declarations": {"default_backend": "text_ast"},
+        }
+    )
+    svc = DeclarationsServiceImpl(config=cfg)
+
+    resp = svc.extract(DeclarationExtractRequest.from_dict({"target": hidden_rel}))
+
+    assert resp.success is True
+    assert [decl.name for decl in resp.declarations] == ["Hidden.kept"]
