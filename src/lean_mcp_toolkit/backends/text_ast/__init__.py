@@ -10,7 +10,13 @@ It is used to accelerate checks where text-level information is sufficient.
 
 from .axiom_decls import collect_axiom_declarations
 from .declarations import parse_declarations
-from .models import ParsedLeanModule, TextAstDeclaration, TextAstSorry
+from .models import (
+    ParsedLeanModule,
+    TextAstCommandIssue,
+    TextAstCoverage,
+    TextAstDeclaration,
+    TextAstSorry,
+)
 from .no_sorry import collect_sorries
 
 __all__ = [
@@ -18,6 +24,8 @@ __all__ = [
     "collect_sorries",
     "parse_declarations",
     "ParsedLeanModule",
+    "TextAstCommandIssue",
+    "TextAstCoverage",
     "TextAstDeclaration",
     "TextAstSorry",
 ]

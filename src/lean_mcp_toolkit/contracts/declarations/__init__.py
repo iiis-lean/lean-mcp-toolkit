@@ -5,6 +5,8 @@ from .extract import (
     DeclarationExtractResponse,
     DeclarationItem,
     DeclarationPosition,
+    DeclarationSourceDiagnostics,
+    DeclarationUnrecognizedCommand,
 )
 from .locate import (
     DeclarationLocateRange,
@@ -17,6 +19,8 @@ __all__ = [
     "DeclarationExtractResponse",
     "DeclarationItem",
     "DeclarationPosition",
+    "DeclarationSourceDiagnostics",
+    "DeclarationUnrecognizedCommand",
     "DeclarationLocateRequest",
     "DeclarationLocateRange",
     "DeclarationLocateResponse",

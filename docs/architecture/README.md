@@ -132,6 +132,12 @@ full elaboration is not required. It is currently used to support:
 - declaration extraction
 - direct axiom declaration checks
 
+Declaration extraction recognizes common declaration modifiers, leading
+attributes, and declarations nested directly in `mutual` commands. Its result
+includes source-command classification coverage and the location of
+unrecognized top-level commands. This coverage is a parser diagnostic, not a
+claim about Lean elaboration, canonical names, or semantic dependencies.
+
 ## Tool Naming
 
 Tools are documented by canonical names, but visible aliases depend on:
@@ -148,4 +154,3 @@ than from a hard-coded static list.
 - [../usage/README.md](../usage/README.md)
 - [../tool_catalog/tool_reference.md](../tool_catalog/tool_reference.md)
 - [../configuration/README.md](../configuration/README.md)
-

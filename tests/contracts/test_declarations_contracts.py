@@ -6,6 +6,8 @@ from lean_mcp_toolkit.contracts.declarations import (
     DeclarationLocateRequest,
     DeclarationLocateResponse,
     DeclarationPosition,
+    DeclarationSourceDiagnostics,
+    DeclarationUnrecognizedCommand,
 )
 
 
@@ -39,6 +41,20 @@ def test_declaration_extract_response_roundtrip() -> None:
         error_message=None,
         total_declarations=1,
         declarations=(item,),
+        source_diagnostics=DeclarationSourceDiagnostics(
+            backend="text_ast",
+            total_top_level_commands=2,
+            classified_top_level_commands=1,
+            classification_ratio=0.5,
+            unrecognized_commands=(
+                DeclarationUnrecognizedCommand(
+                    line=12,
+                    column=0,
+                    head="custom_command",
+                    source="custom_command x",
+                ),
+            ),
+        ),
     )
     dumped = resp.to_dict()
     loaded = DeclarationExtractResponse.from_dict(dumped)
@@ -48,6 +64,9 @@ def test_declaration_extract_response_roundtrip() -> None:
     assert loaded.declarations[0].name == "Math.Topology.Basic.foo"
     assert loaded.declarations[0].decl_start_pos is not None
     assert loaded.declarations[0].decl_start_pos.line == 10
+    assert loaded.source_diagnostics is not None
+    assert loaded.source_diagnostics.backend == "text_ast"
+    assert loaded.source_diagnostics.unrecognized_commands[0].line == 12
 
 
 def test_declaration_extract_response_markdown() -> None:

@@ -48,7 +48,7 @@ The `Source` and `Original name / upstream reference` columns follow these rules
 
 | Capability | Backend | Default | Source | Original name / upstream reference | Notes |
 |---|---|---|---|---|---|
-| `declarations.extract` | `text_ast` | Yes | Local implementation, informed by LongCat-Flash-Prover design ideas |  | Fast text/AST extraction; source-oriented. |
+| `declarations.extract` | `text_ast` | Yes | Local implementation, informed by LongCat-Flash-Prover design ideas |  | Fast source-oriented extraction with modifiers, attributes, direct `mutual` members, and explicit top-level command classification diagnostics. |
 | `declarations.extract` | `lean_interact` | No | LeanInteract runtime |  | Uses LeanInteract-backed extraction. |
 | `declarations.extract` | `simple_lean` | No | Local implementation |  | Lightweight Lean-oriented compatibility backend. |
 
@@ -140,3 +140,4 @@ first user request.
 - MCP-visible aliases and CLI command paths depend on naming mode and enabled groups.
 - Selected capabilities support multiple backends; see [../configuration/README.md](../configuration/README.md) for the relevant configuration fields.
 - `text_ast` is a toolkit-owned lightweight backend informed by LongCat-Flash-Prover design ideas, but it is not a direct code import of that project.
+- `text_ast` classification coverage reports recognized source command starts. It does not measure semantic declaration recall and does not replace Lean parsing or elaboration.

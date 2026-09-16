@@ -60,15 +60,43 @@ class TextAstSorry:
 
 
 @dataclass(slots=True, frozen=True)
+class TextAstCommandIssue:
+    """One top-level command that the lightweight parser could not classify."""
+
+    line: int
+    column: int
+    head: str
+    source: str
+
+
+@dataclass(slots=True, frozen=True)
+class TextAstCoverage:
+    """Source-command classification coverage, not Lean semantic coverage."""
+
+    total_top_level_commands: int = 0
+    classified_top_level_commands: int = 0
+    unrecognized_commands: tuple[TextAstCommandIssue, ...] = field(default_factory=tuple)
+
+    @property
+    def classification_ratio(self) -> float:
+        if self.total_top_level_commands == 0:
+            return 1.0
+        return self.classified_top_level_commands / self.total_top_level_commands
+
+
+@dataclass(slots=True, frozen=True)
 class ParsedLeanModule:
     """Parsed text/AST view of one Lean module."""
 
     declarations: tuple[TextAstDeclaration, ...] = field(default_factory=tuple)
     alias_exports: tuple[str, ...] = field(default_factory=tuple)
+    coverage: TextAstCoverage = field(default_factory=TextAstCoverage)
 
 
 __all__ = [
     "ParsedLeanModule",
+    "TextAstCommandIssue",
+    "TextAstCoverage",
     "TextAstDeclaration",
     "TextAstPosition",
     "TextAstSorry",

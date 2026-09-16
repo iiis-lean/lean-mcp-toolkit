@@ -10,9 +10,14 @@ inputs have different semantics:
 
 from __future__ import annotations
 
-from ...contracts.declarations import DeclarationItem, DeclarationPosition
+from ...contracts.declarations import (
+    DeclarationItem,
+    DeclarationPosition,
+    DeclarationSourceDiagnostics,
+    DeclarationUnrecognizedCommand,
+)
 from ...groups.declarations.mappers import map_raw_declarations_to_items
-from ...backends.text_ast.models import TextAstDeclaration
+from ...backends.text_ast.models import TextAstCoverage, TextAstDeclaration
 
 
 def map_text_ast_declarations_to_items(
@@ -52,6 +57,26 @@ def map_lean_raw_declarations_to_items(
     )
 
 
+def map_text_ast_coverage(coverage: TextAstCoverage) -> DeclarationSourceDiagnostics:
+    """Expose source classification without claiming semantic coverage."""
+
+    return DeclarationSourceDiagnostics(
+        backend="text_ast",
+        total_top_level_commands=coverage.total_top_level_commands,
+        classified_top_level_commands=coverage.classified_top_level_commands,
+        classification_ratio=coverage.classification_ratio,
+        unrecognized_commands=tuple(
+            DeclarationUnrecognizedCommand(
+                line=issue.line,
+                column=issue.column,
+                head=issue.head,
+                source=issue.source,
+            )
+            for issue in coverage.unrecognized_commands
+        ),
+    )
+
+
 def _map_pos(pos: object) -> DeclarationPosition | None:
     """Convert backend-specific position objects into contract positions."""
     if pos is None:
@@ -65,5 +90,6 @@ def _map_pos(pos: object) -> DeclarationPosition | None:
 
 __all__ = [
     "map_lean_raw_declarations_to_items",
+    "map_text_ast_coverage",
     "map_text_ast_declarations_to_items",
 ]

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from ....backends.text_ast import parse_declarations
 from ..base import DeclarationsInterfaceRequest, DeclarationsInterfaceResponse
-from ..mappers import map_text_ast_declarations_to_items
+from ..mappers import map_text_ast_coverage, map_text_ast_declarations_to_items
 
 
 class TextAstDeclarationsInterfaceBackend:
@@ -41,6 +41,7 @@ class TextAstDeclarationsInterfaceBackend:
                 success=True,
                 error_message=None,
                 declarations=items,
+                source_diagnostics=map_text_ast_coverage(parsed.coverage),
             )
         except Exception as exc:
             return DeclarationsInterfaceResponse(

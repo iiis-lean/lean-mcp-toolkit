@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
-from ...contracts.declarations import DeclarationItem
+from ...contracts.declarations import DeclarationItem, DeclarationSourceDiagnostics
 
 
 @dataclass(slots=True, frozen=True)
@@ -48,6 +48,7 @@ class DeclarationsInterfaceResponse:
     success: bool
     error_message: str | None = None
     declarations: tuple[DeclarationItem, ...] = field(default_factory=tuple)
+    source_diagnostics: DeclarationSourceDiagnostics | None = None
 
 
 class DeclarationsInterfaceBackend(Protocol):

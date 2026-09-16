@@ -163,6 +163,30 @@ def test_declarations_extract_normalizes_target_and_calls_backend(tmp_path: Path
     assert backend.last_req.timeout_seconds == 15
 
 
+def test_declarations_extract_text_ast_returns_source_diagnostics(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "A" / "B.lean",
+        "namespace A\ncustom_command x\nprivate theorem ok : True := by trivial\nend A\n",
+    )
+    cfg = ToolkitConfig.from_dict(
+        {
+            "server": {"default_project_root": str(tmp_path)},
+            "declarations": {"default_backend": "text_ast"},
+        }
+    )
+    svc = DeclarationsServiceImpl(config=cfg, backends={})
+
+    resp = svc.extract(DeclarationExtractRequest.from_dict({"target": "A/B.lean"}))
+
+    assert resp.success is True
+    assert [decl.name for decl in resp.declarations] == ["A.ok"]
+    assert resp.source_diagnostics is not None
+    assert resp.source_diagnostics.backend == "text_ast"
+    assert resp.source_diagnostics.total_top_level_commands == 4
+    assert resp.source_diagnostics.classified_top_level_commands == 3
+    assert resp.source_diagnostics.unrecognized_commands[0].head == "custom_command"
+
+
 @pytest.mark.parametrize("target_kind", ["relative", "absolute", "dot"])
 def test_declarations_extract_preserves_regular_target_compatibility(
     tmp_path: Path,

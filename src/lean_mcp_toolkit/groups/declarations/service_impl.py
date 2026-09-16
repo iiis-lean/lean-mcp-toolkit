@@ -94,6 +94,7 @@ class DeclarationsServiceImpl(DeclarationsService):
             error_message=interface_resp.error_message,
             total_declarations=len(interface_resp.declarations),
             declarations=interface_resp.declarations,
+            source_diagnostics=interface_resp.source_diagnostics,
         )
 
     def locate(self, req: DeclarationLocateRequest) -> DeclarationLocateResponse:
