@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 
-def mask_comments_and_strings(text: str) -> str:
-    """Replace comments/strings with spaces while preserving newlines and length."""
+def mask_comments_and_strings(text: str, *, mask_strings: bool = True) -> str:
+    """Mask comments and optionally strings, preserving newlines and length."""
 
     chars = list(text)
     i = 0
@@ -16,7 +16,7 @@ def mask_comments_and_strings(text: str) -> str:
         ch = chars[i]
 
         if in_string:
-            if ch != "\n":
+            if mask_strings and ch != "\n":
                 chars[i] = " "
             if escaped:
                 escaped = False
@@ -59,7 +59,8 @@ def mask_comments_and_strings(text: str) -> str:
             continue
 
         if ch == '"':
-            chars[i] = " "
+            if mask_strings:
+                chars[i] = " "
             in_string = True
             escaped = False
             i += 1

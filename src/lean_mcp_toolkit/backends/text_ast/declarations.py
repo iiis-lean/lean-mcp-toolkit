@@ -142,6 +142,7 @@ def parse_declarations(*, text: str, module_dot: str) -> ParsedLeanModule:
     masked = mask_comments_and_strings(text)
     lines = text.splitlines()
     masked_lines = masked.splitlines()
+    comment_masked_lines = mask_comments_and_strings(text, mask_strings=False).splitlines()
     scopes: list[_Scope] = []
     alias_exports: list[str] = []
     pending_doc: _PendingDoc | None = None
@@ -176,6 +177,12 @@ def parse_declarations(*, text: str, module_dot: str) -> ParsedLeanModule:
                 )
             )
         )
+
+        if stripped.startswith("/-!") and at_command_indent:
+            # Module/section documentation is not part of the preceding proof.
+            command_boundaries.append(line_idx)
+            pending_doc = None
+            pending_prefix_start = None
 
         if stripped.startswith("/--") and at_command_indent:
             doc_lines = [original]
@@ -340,14 +347,21 @@ def parse_declarations(*, text: str, module_dot: str) -> ParsedLeanModule:
                 next_start = boundary_idx
                 break
         end_exclusive = next_start
-        while end_exclusive > decl.body_start_idx and not lines[end_exclusive - 1].strip():
+        while end_exclusive > decl.body_start_idx and not comment_masked_lines[end_exclusive - 1].strip():
             end_exclusive -= 1
 
+        end_line_idx = max(decl.body_start_idx, end_exclusive - 1)
+        end_col = len(comment_masked_lines[end_line_idx].rstrip())
         declaration_lines = lines[decl.body_start_idx:end_exclusive]
+        if declaration_lines:
+            declaration_lines[-1] = declaration_lines[-1][:end_col]
         if declaration_lines:
             declaration_lines[0] = declaration_lines[0][decl.keyword_column:]
         declaration_text = "\n".join(declaration_lines).rstrip()
-        block_text = "\n".join(lines[decl.full_start_idx:end_exclusive]).rstrip()
+        block_lines = lines[decl.full_start_idx:end_exclusive]
+        if block_lines:
+            block_lines[-1] = block_lines[-1][:end_col]
+        block_text = "\n".join(block_lines).rstrip()
         header = declaration_lines[0].strip() if declaration_lines else ""
         signature, value = _split_signature_and_value(
             kind=decl.kind,
@@ -355,8 +369,6 @@ def parse_declarations(*, text: str, module_dot: str) -> ParsedLeanModule:
             header=header,
             body=declaration_text,
         )
-        end_line_idx = max(decl.body_start_idx, end_exclusive - 1)
-        end_col = len(lines[end_line_idx]) if end_line_idx < len(lines) else 0
         declarations.append(
             TextAstDeclaration(
                 name=decl.full_name,
@@ -494,17 +506,45 @@ def _split_signature_and_value(
     header: str,
     body: str,
 ) -> tuple[str | None, str | None]:
-    if ":=" in body:
-        left, right = body.split(":=", 1)
-        return _normalize_signature(kind=kind, short_name=short_name, text=left), (
-            f":= {right.strip()}".strip() or None
-        )
-    if " where" in body:
-        left, right = body.split(" where", 1)
-        return _normalize_signature(kind=kind, short_name=short_name, text=left), (
-            f"where{right}".strip() or None
-        )
-    return _normalize_signature(kind=kind, short_name=short_name, text=header), None
+    # Split only at a top-level delimiter and keep the exact original suffix.
+    # Normalizing whitespace here makes source range recovery fail for term
+    # proofs whose body starts on the next line.
+    masked = mask_comments_and_strings(body)
+    depth = 0
+    quoted_name = False
+    pending_bindings = 0
+    for index, char in enumerate(masked):
+        if char == '«':
+            quoted_name = True
+        if quoted_name:
+            if char == '»':
+                quoted_name = False
+            continue
+        if char in '([{⦃':
+            depth += 1
+        elif char in ')]}⦄':
+            depth = max(0, depth - 1)
+        if depth:
+            continue
+        if (char.isalpha() and (index == 0 or not (masked[index - 1].isalnum() or masked[index - 1] == '_'))
+                and re.match(r'(?:letI|let|haveI|have)\b', masked[index:])):
+            pending_bindings += 1
+        if masked.startswith(':=', index) and pending_bindings:
+            pending_bindings -= 1
+            continue
+        is_where = (masked.startswith('where', index)
+                    and (index == 0 or masked[index - 1].isspace())
+                    and (index + 5 == len(masked) or masked[index + 5].isspace()))
+        line_start = masked.rfind('\n', 0, index) + 1 if char == '|' else 0
+        is_equation = (kind in {'def', 'abbrev', 'instance', 'theorem', 'lemma'} and char == '|'
+                       and index + 1 < len(masked) and masked[index + 1].isspace()
+                       and not masked[line_start:index].strip()
+                       and re.match(r'\|\s+[^|\n]*=>', masked[index:]) is not None
+                       and re.search(r'\bmatch\b', masked[:index]) is None)
+        if masked.startswith(':=', index) or is_where or is_equation:
+            return (_normalize_signature(kind=kind, short_name=short_name, text=body[:index]),
+                    body[index:].rstrip())
+    return _normalize_signature(kind=kind, short_name=short_name, text=body), None
 
 
 def _normalize_kind(kind: str) -> str:

@@ -140,4 +140,5 @@ first user request.
 - MCP-visible aliases and CLI command paths depend on naming mode and enabled groups.
 - Selected capabilities support multiple backends; see [../configuration/README.md](../configuration/README.md) for the relevant configuration fields.
 - `text_ast` is a toolkit-owned lightweight backend informed by LongCat-Flash-Prover design ideas, but it is not a direct code import of that project.
+- `text_ast` preserves exact value suffixes (including newlines), skips nested/comment/string assignment markers when splitting signatures, recognizes line-based definition/theorem equation bodies, and excludes trailing comments from declaration ranges. Statement-level `let` assignments are distinguished from the declaration value delimiter. These are source rules, not an elaborated syntax tree.
 - `text_ast` classification coverage reports recognized source command starts. It does not measure semantic declaration recall and does not replace Lean parsing or elaboration.
